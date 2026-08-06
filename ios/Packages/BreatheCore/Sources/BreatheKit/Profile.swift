@@ -85,9 +85,10 @@ public struct Profile: Sendable, Equatable, Codable {
     /// Why they are here, in their own words. Empty is the normal state.
     public var intentNote: String
 
-    /// How long a note may be, matching the limit the server enforces. Held here
-    /// so the field can stop accepting characters rather than letting someone
-    /// write past the point where saving would fail.
+    /// How long a note may be, in Unicode scalars — the unit the server's
+    /// validation and the database `CHECK` both count. Held here so the field
+    /// can stop accepting input rather than letting someone write past the
+    /// point where saving would fail.
     public static let maxIntentNoteLength = 500
 
     /// A profile of unanswered questions — what a person has before onboarding,

@@ -43,10 +43,17 @@ public final class OnboardingModel {
     /// Clamped to the length the server accepts, here rather than in the text
     /// field: the rule belongs to the answer, not to one way of typing it, and
     /// the app target has no test bundle to pin it in.
+    ///
+    /// Counted in Unicode scalars, not `Character`s, because that is what the
+    /// server's validation and the column `CHECK` both count: a grapheme-cluster
+    /// count would pass a note of multi-scalar emoji that the server then
+    /// rejects, leaving the profile retrying its sync forever.
     public var intentNote = "" {
         didSet {
-            if intentNote.count > Profile.maxIntentNoteLength {
-                intentNote = String(intentNote.prefix(Profile.maxIntentNoteLength))
+            let scalars = intentNote.unicodeScalars
+            if scalars.count > Profile.maxIntentNoteLength {
+                let end = scalars.index(scalars.startIndex, offsetBy: Profile.maxIntentNoteLength)
+                intentNote = String(scalars[..<end])
             }
         }
     }

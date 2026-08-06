@@ -103,6 +103,22 @@ struct OnboardingFlowTests {
         #expect(model.profile.intentNote.count == Profile.maxIntentNoteLength)
     }
 
+    /// The limit counts Unicode scalars because the server and the database do.
+    /// A grapheme count would wave through a note of multi-scalar emoji — one
+    /// 👨‍👩‍👧 is five scalars — that the server then rejects, leaving the profile
+    /// retrying its sync forever.
+    @Test("The note limit counts what the server counts")
+    func clampsTheIntentNoteByUnicodeScalars() {
+        let store = ProfileStore(profiles: RecordingWriter(), defaults: defaults("note-scalars"))
+        let model = OnboardingModel(store: store)
+        let family = "👨‍👩‍👧"
+
+        model.intentNote = String(repeating: family, count: 150)
+
+        #expect(model.intentNote.unicodeScalars.count <= Profile.maxIntentNoteLength)
+        #expect(model.intentNote.count < 150, "the clamp fired before 150 graphemes")
+    }
+
     /// The offline promise, and the reason the completion flag is local: the
     /// person is through the flow and into the app, and the answers are waiting
     /// to be sent rather than lost.
