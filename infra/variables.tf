@@ -5,9 +5,9 @@ variable "region" {
 }
 
 variable "instance_type" {
-  description = "Graviton (arm64) instance — the Dockerfile builds linux/arm64. t4g.micro carries API + Postgres + Caddy comfortably at V1 scale; bump here if it stops."
+  description = "Graviton (arm64) instance — the Dockerfile builds linux/arm64. t4g.small's 2 GiB is the smallest that leaves Postgres real headroom next to the API and Caddy; micro's 1 GiB does not. Bump here if it stops being enough."
   type        = string
-  default     = "t4g.micro"
+  default     = "t4g.small"
 }
 
 variable "ssh_public_key" {

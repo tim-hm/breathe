@@ -16,6 +16,15 @@ data "aws_subnets" "default" {
   }
 }
 
+# The instance and its data volume must land in the same availability zone, and
+# the subnet is what decides. Reading the AZ off the subnet rather than off the
+# instance is load-bearing: it lets the volume be built before the instance, so
+# the instance's cloud-init can name the volume it is waiting for. The other
+# direction is a dependency cycle.
+data "aws_subnet" "selected" {
+  id = data.aws_subnets.default.ids[0]
+}
+
 data "aws_ami" "ubuntu" {
   most_recent = true
   # Canonical's AWS publisher account.
@@ -103,6 +112,14 @@ resource "aws_iam_role_policy" "write_backups" {
   policy = data.aws_iam_policy_document.write_backups.json
 }
 
+# Break-glass. SSH is the only other way in, and the situations worth planning
+# for — a lost key, a security group edited into a corner, a box that boots but
+# does not finish cloud-init — are exactly the ones where SSH is what broke.
+resource "aws_iam_role_policy_attachment" "ssm" {
+  role       = aws_iam_role.api.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
 resource "aws_iam_instance_profile" "api" {
   name = "breathe-api"
   role = aws_iam_role.api.name
@@ -121,7 +138,7 @@ module "instance" {
 
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
-  subnet_id              = data.aws_subnets.default.ids[0]
+  subnet_id              = data.aws_subnet.selected.id
   vpc_security_group_ids = [module.security_group.security_group_id]
   key_name               = aws_key_pair.admin.key_name
   iam_instance_profile   = aws_iam_instance_profile.api.name
@@ -129,19 +146,56 @@ module "instance" {
   user_data = templatefile("${path.module}/cloud-init.yaml", {
     backup_bucket = module.backups.s3_bucket_id
     region        = var.region
+    # Nitro ignores the /dev/sdf attachment name and enumerates volumes as
+    # unpredictable /dev/nvme*n1, but udev also names each one by its EBS volume
+    # ID — with the dash stripped, because that is what the NVMe serial field
+    # holds. Resolving the path here rather than probing for it on the box means
+    # first boot looks for one exact device instead of guessing.
+    data_device = "/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_${replace(aws_ebs_volume.data.id, "-", "")}"
   })
 
   # cloud-init formats and mounts the data volume by label on first boot; a
   # user_data change must not silently rebuild the box out from under it.
   user_data_replace_on_change = false
+
+  # The module's volume_tags apply to every volume attached to the instance,
+  # including the data volume, which is a separate resource carrying its own
+  # Name. Left on, the two rewrite that tag past each other and every plan shows
+  # a change that no apply ever settles — which is how operators learn to skim
+  # plans instead of reading them.
+  enable_volume_tags = false
+
+  # IMDSv2 only — an unauthenticated metadata endpoint is reachable from any
+  # SSRF in anything the box runs, and it hands out the instance profile's
+  # credentials. hop_limit 2 rather than the default 1 because the containers sit
+  # one network hop away behind Docker's bridge, and the backup cron's
+  # `aws s3 cp` reads its credentials from exactly this endpoint.
+  metadata_options = {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 2
+  }
+
+  # The AMI's own default is 8 GiB and unencrypted. 8 GiB does not survive
+  # `docker save | docker load` cycles accumulating images alongside the build
+  # cache. Both attributes are ForceNew, so they are cheap now and cost an
+  # instance replacement later.
+  root_block_device = {
+    size      = 20
+    type      = "gp3"
+    encrypted = true
+  }
 }
 
 # Postgres data lives here, not on the root volume, so replacing the instance
 # replaces nothing that matters.
 resource "aws_ebs_volume" "data" {
-  availability_zone = module.instance.availability_zone
+  availability_zone = data.aws_subnet.selected.availability_zone
   size              = var.data_volume_gb
   type              = "gp3"
+  # Every row the product has, at rest. ForceNew, so turning it on later means
+  # snapshot, restore, reattach — not an edit.
+  encrypted = true
 
   tags = {
     Name = "breathe-data"

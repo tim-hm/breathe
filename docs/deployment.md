@@ -6,10 +6,13 @@ One Graviton EC2 instance running the API, Postgres, and Caddy under Docker Comp
 
 ```text
 infra/            OpenTofu root module — the AWS resources
+infra/bootstrap/  applied once, before everything — the state bucket and the IAM user
 infra/box/        what runs on the instance — compose.yaml + Caddyfile, rsynced by deploy
 infra/cloud-init.yaml   first-boot setup — Docker, the data volume, the backup cron
 Dockerfile        one image, both workspace binaries (api + migrate)
 ```
+
+The public hostname is **`cadence.holmie.xyz`**, named in `infra/box/Caddyfile`. `holmie.xyz` is registered at **Porkbun** and served by Porkbun's nameservers, so its records are edited there — nothing in `infra/` manages DNS, and the `elastic_ip` output is what the A record points at.
 
 The instance is disposable; the things worth keeping live elsewhere:
 
@@ -23,15 +26,42 @@ The public entrance is Caddy on 443 (80 redirects and answers ACME challenges), 
 
 The container gets exactly the two variables `crates/api/src/config.rs` reads: `BREATHE_ENV=production` (JSON logs, no permissive CORS) and `DATABASE_URL` (assembled in `infra/box/compose.yaml` from the generated password). Anything more belongs in config.rs as a derivation, per CLAUDE.md §1.4.
 
+## Identity and state
+
+Two AWS profiles, and the split is the point:
+
+| Profile   | Who                         | May run                                           |
+| :-------- | :-------------------------- | :------------------------------------------------ |
+| `holmie`  | the account root            | `infra:bootstrap:*`, once, and nothing else       |
+| `breathe` | the `breathe-tofu` IAM user | everything: `infra:plan`, `infra:apply`, `deploy` |
+
+The mise tasks pin `AWS_PROFILE` themselves, so neither is something to remember or export.
+
+State lives in the S3 bucket `infra/bootstrap` creates — versioned, encrypted, private, TLS-only, and `prevent_destroy`. Locking is OpenTofu's S3-native `use_lockfile`; the DynamoDB table older Terraform documentation calls for does not exist and is not needed.
+
+`infra/bootstrap` keeps **local** state, because it builds the bucket the other root stores state in. Losing that file is not an incident: it manages one bucket and one IAM user, both named, both re-importable in two commands.
+
+## Bootstrap (once per AWS account)
+
+1. `mise run infra:bootstrap:init`, then `mise run infra:bootstrap:apply` — creates the state bucket and the `breathe-tofu` IAM user. This is the only step that runs as the account root.
+2. Mint the user's credential. Tofu deliberately does not, because the provider would write the secret into a state file in plaintext:
+
+   ```sh
+   aws iam create-access-key --user-name breathe-tofu --profile holmie
+   ```
+
+3. Put it in `~/.aws/credentials` under `[breathe]`, with a matching `[profile breathe]` (`region = eu-west-2`) in `~/.aws/config`.
+4. Delete the **root** access key in the IAM console. Root keys cannot be scoped, and an audit cannot tell one use of them from another — replacing them is the entire reason step 1 exists.
+
 ## First launch (deliberate, in order)
 
-1. `mise run infra:init` — downloads providers and modules; touches nothing.
+1. Bootstrap, above.
 2. Create `infra/terraform.tfvars` (gitignored) with `ssh_public_key`, and `admin_cidr` if your IP is stable.
-3. AWS credentials in the shell (`AWS_PROFILE` or SSO), then `mise run infra:plan` — read the plan.
-4. `mise run infra:apply`.
-5. Point the A record for the hostname in `infra/box/Caddyfile` at the `elastic_ip` output. Do this before the first deploy: Caddy requests its certificate on first boot, and issuance fails (then retries with backoff) until the name resolves.
+3. `mise run infra:init` — downloads providers and modules, and reaches the S3 backend.
+4. `mise run infra:plan` — read the plan — then `mise run infra:apply`.
+5. At Porkbun, point `cadence.holmie.xyz` at the `elastic_ip` output with an `A` record. Do this before the first deploy: Caddy requests its certificate on first boot, and issuance fails (then retries with backoff) until the name resolves.
 6. `mise run deploy` — builds the arm64 image locally, ships it over SSH (`docker save | docker load`, no registry), rsyncs `infra/box/`, runs `migrate` as a one-shot container, brings the stack up.
-7. `curl https://<hostname>/health` → `{"status":"ok"}`.
+7. `curl https://cadence.holmie.xyz/health` → `{"status":"ok"}`, and `/about` for the commit now serving.
 
 Every subsequent release is step 6 alone.
 
@@ -48,5 +78,7 @@ Restores into the live database; for a from-scratch rebuild, apply migrations fi
 
 - **Postgres in Docker, not RDS.** At V1 scale RDS buys nothing a dump schedule doesn't, and costs more than the instance itself. The graduation path is a `DATABASE_URL` change and one restore — take it when backups stop being an acceptable recovery story, not before.
 - **No registry.** `docker save | ssh docker load` is the whole supply chain while there is one box. A registry earns its place when there are two, or when CI deploys.
-- **Local OpenTofu state.** Acceptable while one person applies from one machine; `infra/versions.tf` records the move to S3-backed state (OpenTofu's native locking, no DynamoDB) the day that stops being true.
+- **S3 state, no DynamoDB.** OpenTofu locks against S3 itself (`use_lockfile`), so the lock table every Terraform tutorial provisions is dead weight. `infra/bootstrap` keeps local state only because it creates the bucket.
+- **An IAM user, not SSO, and not least privilege.** One account and one operator do not justify standing up Identity Center. `AdministratorAccess` because this user's only job is applying a module that creates IAM roles, buckets, EC2 and EBS — scoping it would mean enumerating every service the module might ever grow into, and the enumeration would be stale immediately. The security this buys is not a smaller blast radius; it is a credential that can be rotated and revoked, which a root key cannot.
+- **Provenance via build arg.** `.dockerignore` excludes `.git`, so `build.rs` cannot read the commit inside a container. `deploy` passes it as `GIT_COMMIT_HASH`, and `build.rs` prefers that over git — otherwise `/about` reports `"unknown"` in the one environment where the question matters.
 - **The box self-heals but is not monitored.** `restart: unless-stopped` covers crashes; nothing yet pages anyone. M10's launch-readiness milestone owns real monitoring.

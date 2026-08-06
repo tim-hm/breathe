@@ -7,7 +7,12 @@ FROM rust:1.96-slim-bookworm AS build
 
 # protoc: build.rs runs prost-build, which needs the binary from the
 # environment — the same reason mise pins it in .mise.toml.
-RUN apt-get update && apt-get install -y --no-install-recommends protobuf-compiler \
+#
+# libprotobuf-dev alongside it because Debian splits the well-known types out of
+# protobuf-compiler: without it, /usr/include/google/protobuf/timestamp.proto
+# does not exist and every proto importing it fails to compile. mise's protoc
+# bundles its own include directory, so this gap appears only here.
+RUN apt-get update && apt-get install -y --no-install-recommends protobuf-compiler libprotobuf-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
@@ -16,6 +21,14 @@ COPY . .
 # The committed .sqlx cache stands in for a live database, exactly as it does
 # for `mise run check` — a Docker build must never need Postgres.
 ENV SQLX_OFFLINE=true
+
+# What `/about` reports as the running commit. `.dockerignore` excludes `.git`,
+# so build.rs cannot read it here; `mise run deploy` passes it in. Defaulted
+# empty rather than required, because a bare `docker build .` is a legitimate
+# thing to do and build.rs degrades to "unknown" on its own.
+ARG GIT_COMMIT_HASH=""
+ENV BUILD_GIT_COMMIT_HASH=$GIT_COMMIT_HASH
+
 RUN cargo build --release -p api -p migrate
 
 FROM debian:bookworm-slim
