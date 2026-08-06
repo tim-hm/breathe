@@ -6,7 +6,11 @@ import Foundation
 /// carries an `UNSPECIFIED` case the wire format can always produce, and every
 /// view that switched over it would need a branch for a value that means
 /// "the server and this app disagree". Decoding resolves that once, here.
-public enum TechniqueGoal: Sendable, CaseIterable {
+///
+/// The raw value exists so a goal can be written down: the answers someone gives
+/// at onboarding are stored locally as JSON, and a synthesised case name is not
+/// a key that should survive a refactor.
+public enum TechniqueGoal: String, Sendable, CaseIterable, Codable {
     case calm
     case sleep
     case energy

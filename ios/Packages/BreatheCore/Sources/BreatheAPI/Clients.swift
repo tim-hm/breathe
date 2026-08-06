@@ -4,14 +4,27 @@ import Foundation
 /// Builds the generated service clients against a configured backend.
 ///
 /// The transport is fixed here rather than at each call site: every client must
-/// agree on protocol and codec, and the one place that is guaranteed is the
-/// place they are all constructed.
+/// agree on protocol, codec, and the identity header, and the one place that is
+/// guaranteed is the place they are all constructed.
 public enum BreatheClients {
-    public static func techniqueService(baseURL: URL) -> Breathe_V1_TechniqueServiceClient {
-        Breathe_V1_TechniqueServiceClient(client: protocolClient(baseURL: baseURL))
+    public static func techniqueService(
+        baseURL: URL,
+        userId: @escaping @Sendable () -> UUID?
+    ) -> Breathe_V1_TechniqueServiceClient {
+        Breathe_V1_TechniqueServiceClient(client: protocolClient(baseURL: baseURL, userId: userId))
     }
 
-    private static func protocolClient(baseURL: URL) -> ProtocolClient {
+    public static func profileService(
+        baseURL: URL,
+        userId: @escaping @Sendable () -> UUID?
+    ) -> Breathe_V1_ProfileServiceClient {
+        Breathe_V1_ProfileServiceClient(client: protocolClient(baseURL: baseURL, userId: userId))
+    }
+
+    private static func protocolClient(
+        baseURL: URL,
+        userId: @escaping @Sendable () -> UUID?
+    ) -> ProtocolClient {
         ProtocolClient(
             config: ProtocolClientConfig(
                 host: baseURL.absoluteString,
@@ -23,7 +36,11 @@ public enum BreatheClients {
                 networkProtocol: .grpcWeb,
                 // Binary protobuf. `JSONCodec` is the library default and would
                 // silently disagree with the server's content type.
-                codec: ProtoCodec()
+                codec: ProtoCodec(),
+                // Applied to every client, including the catalogue's: the server
+                // creates a person's row on the first RPC of any kind, so the
+                // identity has to travel on the public calls too.
+                interceptors: [InterceptorFactory { _ in IdentityInterceptor(userId: userId) }]
             )
         )
     }

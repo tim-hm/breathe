@@ -23,8 +23,11 @@ public protocol TechniqueReading: Sendable {
 public struct TechniqueRepository: TechniqueReading {
     private let client: Breathe_V1_TechniqueServiceClient
 
-    public init(baseURL: URL) {
-        client = BreatheClients.techniqueService(baseURL: baseURL)
+    /// Takes the identity even though the catalogue is public: the server
+    /// creates a person's row on the first RPC of any kind, and this is the
+    /// first one the app makes.
+    public init(baseURL: URL, identity: any UserIdentityStore) {
+        client = BreatheClients.techniqueService(baseURL: baseURL, userId: identity.userId)
     }
 
     public func listTechniques() async throws -> [Technique] {
