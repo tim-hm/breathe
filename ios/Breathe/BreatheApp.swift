@@ -17,6 +17,11 @@ struct BreatheApp: App {
     /// reason — the journey tab reads them with no network at all.
     private let scores: any BoltScoreRecording = FileBoltScoreStore()
 
+    /// Hands the identity above to the watch app, which never mints one of its
+    /// own. Composed here because the pairing belongs to the install rather
+    /// than to any screen, and because this is where the identity already is.
+    private let watch: WatchLink
+
     /// In the environment rather than passed down, because the cue picker on the
     /// detail screen and the session that reads the setting are not adjacent.
     @State private var settings = SessionSettings()
@@ -43,9 +48,15 @@ struct BreatheApp: App {
     /// before the sync it starts has finished.
     @State private var journey: JourneyModel
 
+    /// Watched so the watch's copy of the identity and the personal best is
+    /// refreshed on every foreground, rather than only on the launch that built
+    /// this scene.
+    @Environment(\.scenePhase) private var scenePhase
+
     init() {
         let identity = identity
         let baseURL = AppConfiguration.apiBaseURL
+        watch = WatchLink(identity: identity, scores: scores)
 
         let techniques = CachedTechniqueRepository(
             caching: TechniqueRepository(baseURL: baseURL, identity: identity)
@@ -112,6 +123,10 @@ struct BreatheApp: App {
             // while it was unreachable.
             // Concurrently: neither depends on the other, and the journey drain
             // should not wait out a profile request's timeout to start.
+            .onChange(of: scenePhase, initial: true) { _, phase in
+                guard phase == .active else { return }
+                watch.push()
+            }
             .task {
                 async let profile: Void = profiles.syncIfNeeded()
                 async let sessions: Void = journey.sync()

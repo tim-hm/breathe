@@ -125,6 +125,17 @@ targets:
         # identity and its own catalogue cache (roadmap M9), so a session on the
         # wrist must not stall waiting for a phone that is in another room.
         WKRunsIndependentlyOfCompanionApp: true
+        # What lets a session keep cueing with the wrist down and the screen
+        # dim: without this key `WKExtendedRuntimeSession.start()` fails with
+        # `notApprovedToStartSession` and the haptics stop the moment the app
+        # is no longer frontmost. `mindfulness` is the type for silent
+        # meditation — a guided breath is exactly that, and it grants an hour,
+        # comfortably past the longest technique in the catalogue. Only one of
+        # the extended-runtime types may be declared, so this is a choice
+        # rather than a list: `self-care` is for brief health activities and
+        # would cap the session shorter.
+        WKBackgroundModes:
+          - mindfulness
         # Both keys carry the same meaning as on the phone target above: the
         # narrow cleartext exemption for a dev backend on the LAN, and the
         # string iOS shows in the local-network prompt.
