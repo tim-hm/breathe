@@ -26,10 +26,15 @@ struct SuggestedForYouView: View {
     }
 
     var body: some View {
-        Group {
-            if let guidance = model.guidance, !suggested(from: guidance).isEmpty {
+        // Resolved once per pass rather than per reference: it walks the
+        // catalogue for each recommendation, and the body re-evaluates on every
+        // model change.
+        let suggestion = resolved
+
+        return Group {
+            if let suggestion {
                 Section {
-                    ForEach(suggested(from: guidance), id: \.technique.id) { item in
+                    ForEach(suggestion.rows) { item in
                         NavigationLink(value: item.technique) {
                             row(technique: item.technique, reason: item.reason)
                         }
@@ -41,7 +46,7 @@ struct SuggestedForYouView: View {
                         .foregroundStyle(Theme.Ink.primary)
                         .textCase(nil)
                 } footer: {
-                    Text(caption(for: guidance.source))
+                    Text(caption(for: suggestion.source))
                         .font(.footnote)
                         .foregroundStyle(Theme.Ink.secondary)
                 }
@@ -76,16 +81,45 @@ struct SuggestedForYouView: View {
         }
     }
 
-    /// Resolves slugs against the catalogue, dropping any that do not match.
+    /// The rows to draw, or nil where there is nothing to say — which covers
+    /// loading, an unreachable server, and guidance whose every slug this build
+    /// is too old to know.
     ///
-    /// The server has already validated them, so this drops nothing in
-    /// practice — but a client holding a catalogue older than the server's is a
-    /// real state, and a row that navigates nowhere is worse than no row.
-    private func suggested(from guidance: Guidance) -> [(technique: Technique, reason: String)] {
-        guidance.recommendations.compactMap { recommendation in
-            techniques
-                .first { $0.slug == recommendation.techniqueSlug }
-                .map { ($0, recommendation.reason) }
+    /// Slugs are resolved against the catalogue the list already holds. The
+    /// server validates them before answering, so this drops nothing in
+    /// practice; a client holding an older catalogue is a real state, though,
+    /// and a row that navigates nowhere is worse than no row.
+    private var resolved: Suggestion? {
+        guard case let .loaded(guidance) = model.state else { return nil }
+
+        let rows: [Suggestion.Row] = guidance.recommendations.compactMap { recommendation in
+            guard let technique = techniques.first(where: {
+                $0.slug == recommendation.techniqueSlug
+            }) else {
+                return nil
+            }
+            return Suggestion.Row(technique: technique, reason: recommendation.reason)
+        }
+
+        return rows.isEmpty ? nil : Suggestion(rows: rows, source: guidance.source)
+    }
+}
+
+/// The strip's resolved contents.
+///
+/// A named type rather than a tuple: SwiftUI's type checker gives up on a
+/// labelled-tuple property of this shape, and the rows need an identity for
+/// `ForEach` anyway.
+private struct Suggestion {
+    struct Row: Identifiable {
+        let technique: Technique
+        let reason: String
+
+        var id: String {
+            technique.id
         }
     }
+
+    let rows: [Row]
+    let source: GuidanceSource
 }

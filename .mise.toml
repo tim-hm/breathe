@@ -304,7 +304,7 @@ depends = ["dev:db"]
 # `--no-capture` because the printed answer *is* the result. No key in the
 # environment is a skip, not a failure.
 env = { CARGO_TARGET_DIR = "{{env.CHECK_TARGET_DIR}}" }
-run = "cargo nextest run -p api --test e2e --run-ignored only -E 'test(/^smoke_/)' --no-capture"
+run = "cargo nextest run -p api --test e2e --run-ignored only -E 'test(/::smoke_/)' --no-capture"
 
 [tasks."test:swift"]
 dir = "{{config_root}}/ios"
