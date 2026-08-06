@@ -23,6 +23,7 @@ jobs:
       - uses: jdx/mise-action@v2
       - run: mise run check:rs
       - run: mise run check:proto
+      - run: mise run check:text
       - run: mise run check:md
       - run: mise run check:doc-links
 

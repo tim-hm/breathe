@@ -10,9 +10,7 @@ disallowed-methods = [
   { path = "chrono::Local::now", reason = "All times are UTC. Use chrono::Utc::now()." },
 ]
 
-disallowed-types = [
-  { path = "chrono::Local", reason = "All times are UTC. Use chrono::Utc." },
-]
+disallowed-types = [{ path = "chrono::Local", reason = "All times are UTC. Use chrono::Utc." }]
 
 # `unwrap_used` / `expect_used` / `panic` are denied in production paths (see
 # Cargo.toml). Tests are the one place where panicking *is* the failure

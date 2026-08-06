@@ -42,10 +42,10 @@ Pick any iPhone simulator and press ⌘R. You should see four techniques, served
 
 ## Ports
 
-| Service | Port | Notes |
-| :-- | :-- | :-- |
-| API | 18100 | gRPC-Web and JSON on the same listener |
-| PostgreSQL | 18101 | `mise run db:psql` to query it |
+| Service    | Port  | Notes                                  |
+| :--------- | :---- | :------------------------------------- |
+| API        | 18100 | gRPC-Web and JSON on the same listener |
+| PostgreSQL | 18101 | `mise run db:psql` to query it         |
 
 **breathe owns 18100–18199.** Every port this repo uses comes from that block, and nothing else on the machine should claim it — one range means one thing to remember and one thing to check.
 
@@ -59,20 +59,20 @@ mise run fmt        # 2. format
 mise run check      # 3. full validation
 ```
 
-`mise run check` covers Rust, protobuf, markdown, and doc links. It deliberately excludes `check:swift` and `test:swift`, which need the Xcode toolchain — run those yourself when touching `ios/`.
+`mise run check` covers Rust, protobuf, doc links, and the formatting of everything that is not Rust or Swift — markdown, YAML, JSON, and TOML all go through `vp` (`check:text`), with `check:md` layering markdown's own rules on top. It deliberately excludes `check:swift` and `test:swift`, which need the Xcode toolchain — run those yourself when touching `ios/`.
 
-CI (`.github/workflows/checks.yml`) runs the formatting and lint subset on every push to `main` and every pull request: `check:rs`, `check:proto`, `check:md`, and `check:doc-links` on Linux, plus `check:swift` on macOS. Tests and the drift checks (`check:sqlx`, `check:generated`) remain local — CI has neither a database nor BSR access — so the full gate is still `mise run check` before committing.
+CI (`.github/workflows/checks.yml`) runs the formatting and lint subset on every push to `main` and every pull request: `check:rs`, `check:proto`, `check:text`, `check:md`, and `check:doc-links` on Linux, plus `check:swift` on macOS. Tests and the drift checks (`check:sqlx`, `check:generated`) remain local — CI has neither a database nor BSR access — so the full gate is still `mise run check` before committing.
 
 ## Common tasks
 
-| Intent | Command |
-| :-- | :-- |
-| Wipe and rebuild the database | `mise run dev:db:reset` |
-| Query the database | `echo 'select * from techniques;' \| mise run db:psql` |
-| Change the technique catalogue | Edit `crates/migrate/src/seed.rs`, then `mise run migrate` |
-| Change the API contract | Edit `proto/breathe/v1/…`, then `mise run generate` |
-| Add a Swift file | Create it under `ios/Breathe/`; `mise run ios:gen` picks it up |
-| Build the app headlessly | `mise run ios:build` |
+| Intent                         | Command                                                        |
+| :----------------------------- | :------------------------------------------------------------- |
+| Wipe and rebuild the database  | `mise run dev:db:reset`                                        |
+| Query the database             | `echo 'select * from techniques;' \| mise run db:psql`         |
+| Change the technique catalogue | Edit `crates/migrate/src/seed.rs`, then `mise run migrate`     |
+| Change the API contract        | Edit `proto/breathe/v1/…`, then `mise run generate`            |
+| Add a Swift file               | Create it under `ios/Breathe/`; `mise run ios:gen` picks it up |
+| Build the app headlessly       | `mise run ios:build`                                           |
 
 ## Things that will bite you
 

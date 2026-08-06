@@ -23,6 +23,13 @@ buf = "latest"
 protoc = "latest"
 lychee = "latest"
 "npm:markdownlint-cli2" = "0.23.2"
+# Vite+'s formatter (oxfmt), the same tool `connect` formats with. Pinned for the
+# same reason markdownlint-cli2 is: its output is committed, so a version bump
+# reformats the tree and fails `check` for everyone who has not bumped yet.
+vp = "0.2.8"
+# Backs `web:serve` (`pnpm dlx serve`). pnpm, not npm, is the package runner of
+# choice for JS tooling here.
+pnpm = "latest"
 
 "cargo:cargo-nextest" = "latest"
 "cargo:cargo-watch" = "latest"
@@ -116,13 +123,31 @@ run = "cargo sqlx prepare --workspace -- --all-targets"
 
 [tasks.fmt]
 description = "Format everything"
-run = ["mise run fmt:rs", "mise run fmt:swift"]
+run = ["mise run fmt:rs", "mise run fmt:swift", "mise run fmt:text"]
 
 [tasks."fmt:rs"]
 run = "cargo fmt"
 
 [tasks."fmt:swift"]
 run = "swiftformat ios --config ios/.swiftformat"
+
+[tasks."fmt:text"]
+description = "Format everything that is not Rust or Swift (markdown, YAML, JSON, TOML)"
+# vp is Vite+'s formatter, the same one `connect` uses. Markdown is what we were
+# missing; getting YAML and TOML with it is the reason there is one task here
+# rather than three tools.
+#
+# `proseWrap: "never"` in vite.config.ts is the load-bearing setting: a paragraph
+# is one physical line and the reader's editor decides where it breaks. It also
+# keeps tables compact rather than column-aligned, which is the trade — aligned
+# tables reflow every row when one cell changes.
+#
+# vp refuses to run outside a JS workspace, which is the only reason the root
+# package.json exists — it declares no dependencies and installs nothing. The
+# vite.config.ts next to it is vp's config file, not a Vite app; it deliberately
+# omits the `defineConfig` import `vp fmt --init` generates, because resolving it
+# would mean installing an npm dependency tree to configure a formatter.
+run = "vp fmt"
 
 [tasks.fix]
 description = "Auto-fix formatting and the lint findings that are mechanically fixable"
@@ -131,6 +156,8 @@ run = [
   "cargo clippy --workspace --all-targets --fix --allow-dirty --allow-staged",
   "mise run fmt",
   "swiftlint --fix --config ios/.swiftlint.yml ios",
+  # After `fmt`, so the linter's fixes land on already-formatted markdown rather
+  # than being reflowed out from under it.
   "markdownlint-cli2 --fix",
 ]
 
@@ -146,24 +173,17 @@ description = "Full validation (the gate)"
 depends = [
   "check:proto",
   "check:generated",
+  "check:text",
   "check:md",
   "check:doc-links",
   "check:deps",
 ]
-run = [
-  "mise run check:rs",
-  "mise run check:sqlx",
-  "mise run test:rs",
-  "mise run test:e2e",
-]
+run = ["mise run check:rs", "mise run check:sqlx", "mise run test:rs", "mise run test:e2e"]
 
 [tasks."check:rs"]
 description = "Validate Rust (fmt + clippy)"
 env = { CARGO_TARGET_DIR = "{{env.CHECK_TARGET_DIR}}" }
-run = [
-  "cargo fmt -- --check",
-  "cargo clippy --workspace --all-targets -- -D warnings",
-]
+run = ["cargo fmt -- --check", "cargo clippy --workspace --all-targets -- -D warnings"]
 
 [tasks."check:sqlx"]
 description = "Assert the committed .sqlx cache matches the queries in the tree"
@@ -176,17 +196,14 @@ dir = "{{config_root}}/proto"
 # An unresolvable `main` fails closed rather than skipping: a skip-on-missing
 # branch would also skip on a detached-HEAD CI checkout, a shallow clone, or a
 # fork — exactly the places the breaking-change check matters most.
-run = [
-  "buf lint",
-  """
+run = ["buf lint", """
   if git -C .. rev-parse --verify --quiet main >/dev/null; then
     buf breaking --against '../.git#branch=main,subdir=proto'
   else
     echo 'check:proto: cannot resolve `main`, refusing to skip the breaking-change check' >&2
     exit 1
   fi
-  """,
-]
+  """]
 
 [tasks."check:swift"]
 description = "Validate Swift (format + lint)"
@@ -195,7 +212,15 @@ run = [
   "swiftlint lint --strict --config ios/.swiftlint.yml ios",
 ]
 
+[tasks."check:text"]
+description = "Assert markdown, YAML, JSON, and TOML are formatted"
+run = "vp fmt --check"
+
 [tasks."check:md"]
+description = "Lint markdown rules a formatter has no opinion about"
+# Separate from check:text because the scopes genuinely differ: vp owns
+# whitespace and table shape across four formats, markdownlint owns heading
+# levels, link style, and bare URLs in markdown alone.
 run = "markdownlint-cli2"
 
 [tasks."check:doc-links"]
@@ -246,6 +271,13 @@ run = "cargo nextest run -p api --test e2e"
 [tasks."test:swift"]
 dir = "{{config_root}}/ios"
 run = "swift test --package-path Packages/BreatheCore"
+
+# web
+
+[tasks."web:serve"]
+description = "Serve the marketing one-pager locally"
+# 18102: next free port in the 18100–18199 block (API 18100, Postgres 18101).
+run = "pnpm dlx serve --listen 18102 {{config_root}}/web"
 
 # ios
 

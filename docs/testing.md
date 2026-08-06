@@ -1,7 +1,6 @@
 # Testing
 
-> Write tests. Not too many. Mostly integration.
-> — Guillermo Rauch
+> Write tests. Not too many. Mostly integration. — Guillermo Rauch
 
 Each clause is doing work:
 
@@ -16,7 +15,7 @@ Each clause is doing work:
 - **Thin wrappers.** If the function's whole body is a call to something else, the test asserts that Rust can call a function.
 - **Framework behaviour.** axum routing, SwiftUI layout, and sqlx connection pooling are tested by their authors.
 
-Ask instead: *if this broke, would anything else notice?* If a compile error, a failing query, or a visibly broken screen would catch it first, the test is redundant.
+Ask instead: _if this broke, would anything else notice?_ If a compile error, a failing query, or a visibly broken screen would catch it first, the test is redundant.
 
 ## What is worth testing
 
@@ -33,7 +32,7 @@ Every one covers a decision that is invisible in the code and expensive to redis
 
 ## Conventions
 
-**Rust** — inline `#[cfg(test)] mod tests` at the bottom of the file under test. Names are declarative sentences (`doubles_embedded_quotes`), and a `///` doc comment states the regression the test guards when that isn't obvious from the name. `clippy.toml` re-allows `unwrap`/`expect`/`panic` inside tests, where panicking *is* the reporting mechanism.
+**Rust** — inline `#[cfg(test)] mod tests` at the bottom of the file under test. Names are declarative sentences (`doubles_embedded_quotes`), and a `///` doc comment states the regression the test guards when that isn't obvious from the name. `clippy.toml` re-allows `unwrap`/`expect`/`panic` inside tests, where panicking _is_ the reporting mechanism.
 
 **Swift** — Swift Testing, in each package's `Tests/`. `@Suite` and `@Test` carry prose descriptions, because those strings are what a failure prints.
 
@@ -43,11 +42,11 @@ Swift tests run on the **host**, not a simulator — every package declares a ma
 
 `crates/api/tests/e2e/` drives the router `main.rs` serves, over a real Postgres. It is the only place the whole slice is exercised at once: rows in Postgres → repository → service → tonic → gRPC-Web framing → a decoded protobuf message.
 
-**The disposable database.** Each test calls `TestDatabase::create("<name>")`, which derives its connection from `DATABASE_URL` by *replacing* the database with `breathe_test_<name>`. The dev database is therefore unreachable from here by construction, not by convention — these tests drop wholesale. Creation drops any previous instance and re-migrates, so a failing test leaves its database behind for post-mortem inspection and the next run reclaims it. cargo-nextest runs each test in its own process, which is what makes one database per test the natural unit.
+**The disposable database.** Each test calls `TestDatabase::create("<name>")`, which derives its connection from `DATABASE_URL` by _replacing_ the database with `breathe_test_<name>`. The dev database is therefore unreachable from here by construction, not by convention — these tests drop wholesale. Creation drops any previous instance and re-migrates, so a failing test leaves its database behind for post-mortem inspection and the next run reclaims it. cargo-nextest runs each test in its own process, which is what makes one database per test the natural unit.
 
-**Why `oneshot` rather than a listener.** The harness drives the assembled `Router` directly through `tower::ServiceExt::oneshot`. The layer stack under test — `GrpcWebLayer`, CORS, tonic's routes — *is* the server's behaviour; binding a port would add hyper, a background task, and a shutdown race in order to test code we don't own.
+**Why `oneshot` rather than a listener.** The harness drives the assembled `Router` directly through `tower::ServiceExt::oneshot`. The layer stack under test — `GrpcWebLayer`, CORS, tonic's routes — _is_ the server's behaviour; binding a port would add hyper, a background task, and a shutdown race in order to test code we don't own.
 
-**Why the real gRPC-Web framing.** `harness::call_grpc_web` writes the length-prefixed frame and parses the trailer frame by hand, exactly as the Swift client does. gRPC-Web reports call outcomes in trailers, so a *failed* call still returns HTTP 200 — a harness that called `service::list_techniques` directly could never catch an error that fails to reach the client.
+**Why the real gRPC-Web framing.** `harness::call_grpc_web` writes the length-prefixed frame and parses the trailer frame by hand, exactly as the Swift client does. gRPC-Web reports call outcomes in trailers, so a _failed_ call still returns HTTP 200 — a harness that called `service::list_techniques` directly could never catch an error that fails to reach the client.
 
 The four tests and what they pin:
 
