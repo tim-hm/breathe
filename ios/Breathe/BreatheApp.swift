@@ -62,11 +62,12 @@ struct BreatheApp: App {
                     HomeView(model: catalogue, sessions: sessions)
                 }
                 Tab("Techniques", systemImage: "square.grid.2x2") {
-                    TechniqueListView(
-                        model: catalogue,
-                        foundations: foundations,
-                        sessions: sessions
-                    )
+                    TechniqueListView(model: catalogue, sessions: sessions)
+                }
+                Tab("The basics", systemImage: "book") {
+                    NavigationStack {
+                        FoundationsView(model: foundations)
+                    }
                 }
                 Tab("Settings", systemImage: "gearshape") {
                     SettingsView()

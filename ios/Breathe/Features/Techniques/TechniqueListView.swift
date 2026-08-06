@@ -10,7 +10,6 @@ import SwiftUI
 /// load.
 struct TechniqueListView: View {
     let model: TechniqueListModel
-    let foundations: FoundationsModel
     let sessions: any SessionRecording
 
     var body: some View {
@@ -18,13 +17,6 @@ struct TechniqueListView: View {
             content
                 .paletteGround()
                 .navigationTitle("Techniques")
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        NavigationLink("The basics") {
-                            FoundationsView(model: foundations)
-                        }
-                    }
-                }
                 .navigationDestination(for: Technique.self) { technique in
                     TechniqueDetailView(technique: technique, sessions: sessions)
                 }
