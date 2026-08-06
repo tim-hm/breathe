@@ -178,6 +178,20 @@ public extension TechniqueGoal {
         case .focus: "Focus"
         }
     }
+
+    /// The goal as the person would say it — the home screen's entry points
+    /// ("I want to calm down"), where `title` is the badge's noun. First
+    /// person on purpose: choosing an outcome you want is a more assertive
+    /// start than reading a category label.
+    var intent: String {
+        switch self {
+        case .calm: "I want to calm down"
+        case .sleep: "I want to go to sleep"
+        case .energy: "I want more energy"
+        case .reset: "I want to reset"
+        case .focus: "I want to focus"
+        }
+    }
 }
 
 public extension PhaseKind {

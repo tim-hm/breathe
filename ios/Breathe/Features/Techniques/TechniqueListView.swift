@@ -14,6 +14,15 @@ struct TechniqueListView: View {
     /// every session in the app writes to the one store.
     private let sessions: any SessionRecording
 
+    @Environment(SessionSettings.self) private var settings
+
+    /// Recorded history, oldest first, feeding the hero card. Refreshed on
+    /// appear as well as on load, because a session finished on the pushed
+    /// detail screen has changed what "begin again" should offer by the time
+    /// the person pops back.
+    @State private var history: [SessionRecord] = []
+    @State private var started: StartedSession?
+
     init(
         model: TechniqueListModel,
         foundations: FoundationsModel,
@@ -40,7 +49,16 @@ struct TechniqueListView: View {
                     TechniqueDetailView(technique: technique, sessions: sessions)
                 }
         }
-        .task { await model.load() }
+        .task {
+            await model.load()
+            history = await sessions.recordedSessions()
+        }
+        .onAppear {
+            Task { history = await sessions.recordedSessions() }
+        }
+        .fullScreenCover(item: $started) { session in
+            SessionView(model: session.model)
+        }
     }
 
     @ViewBuilder
@@ -50,11 +68,26 @@ struct TechniqueListView: View {
             ProgressView()
 
         case let .loaded(techniques):
-            List(techniques) { technique in
-                NavigationLink(value: technique) {
-                    TechniqueRow(technique: technique)
+            List {
+                if let suggestion = suggestion(from: techniques) {
+                    heroSection(for: suggestion)
                 }
-                .listRowBackground(Color.clear)
+
+                ForEach(goals(in: techniques), id: \.self) { goal in
+                    Section {
+                        ForEach(techniques.filter { $0.goal == goal }) { technique in
+                            NavigationLink(value: technique) {
+                                TechniqueRow(technique: technique)
+                            }
+                            .listRowBackground(Color.clear)
+                        }
+                    } header: {
+                        Text(goal.intent)
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(Theme.Ink.primary)
+                            .textCase(nil)
+                    }
+                }
             }
             .listStyle(.plain)
 
@@ -70,6 +103,88 @@ struct TechniqueListView: View {
             }
         }
     }
+
+    private func heroSection(for suggestion: HomeSuggestion) -> some View {
+        // Dialled here for the same reason the detail screen dials before
+        // Begin: the card's shape line and the session it starts must both
+        // describe what will actually play.
+        let dialled = suggestion.technique
+            .dialled(with: settings.overrides(for: suggestion.technique))
+
+        return Section {
+            HeroCard(prompt: suggestion.prompt, technique: dialled) {
+                started = StartedSession(
+                    model: SessionModel(
+                        technique: dialled,
+                        cues: SessionCues(mode: settings.cueMode),
+                        recorder: sessions
+                    )
+                )
+            }
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+        }
+    }
+
+    private func suggestion(from techniques: [Technique]) -> HomeSuggestion? {
+        HomeSuggestion.make(
+            techniques: techniques,
+            history: history,
+            hour: Calendar.current.component(.hour, from: .now)
+        )
+    }
+
+    /// The goals present in the catalogue, in the fixed calm-first order of
+    /// the enum — stable across loads, so sections never reshuffle under a
+    /// person who has learned where sleep lives.
+    private func goals(in techniques: [Technique]) -> [TechniqueGoal] {
+        TechniqueGoal.allCases.filter { goal in
+            techniques.contains { $0.goal == goal }
+        }
+    }
+}
+
+/// The one suggestion above the catalogue: the person's last exercise, or the
+/// time of day's. One Begin on it starts the session directly — the card is a
+/// shortcut past the detail screen, whose dials stay a tap away in the list.
+private struct HeroCard: View {
+    let prompt: String
+    /// Already dialled by the caller.
+    let technique: Technique
+    let begin: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.close) {
+            Text(prompt)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(technique.goal.accent)
+
+            Text(technique.name)
+                .font(.title2.weight(.semibold))
+
+            Text("\(technique.shapeDescription) · about \(inWords(technique.plannedDuration))")
+                .font(.footnote)
+                .foregroundStyle(Theme.Ink.secondary)
+
+            Button(action: begin) {
+                Text("Begin")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, Theme.Spacing.close)
+                    // The ground, so the label inverts with the fill — same
+                    // rationale as the detail screen's Begin.
+                    .foregroundStyle(Theme.Surface.ground)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(technique.goal.accent)
+        }
+        .padding(Theme.Spacing.standard)
+        .background(Theme.Surface.raised, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
+    }
+
+    private func inWords(_ duration: Duration) -> String {
+        duration.formatted(.units(allowed: [.minutes, .seconds], width: .abbreviated))
+    }
 }
 
 private struct TechniqueRow: View {
@@ -77,38 +192,43 @@ private struct TechniqueRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.close) {
-            HStack(spacing: Theme.Spacing.close) {
-                Text(technique.name)
-                    .font(.headline)
-                Spacer()
-                GoalBadge(goal: technique.goal)
-            }
+            Text(technique.name)
+                .font(.headline)
 
             Text(technique.summary)
                 .font(.subheadline)
                 .foregroundStyle(Theme.Ink.secondary)
 
-            Text(shapeDescription)
+            Text(technique.shapeDescription)
                 .font(.caption)
                 .foregroundStyle(Theme.Ink.tertiary)
         }
         .padding(.vertical, Theme.Spacing.close)
     }
+}
 
+private extension Technique {
     /// "8 cycles · 16s each", or "3 rounds · you end the holds". The shape of
     /// the technique at a glance, which is what someone choosing between nine of
     /// them actually needs — and the staged ones are a different proposition
     /// from the cyclic ones, so they say so.
-    private var shapeDescription: String {
-        guard !technique.isStaged, let stage = technique.stages.first else {
-            let rounds = technique.recommendedRounds
-            let unit = rounds == 1 ? "round" : "rounds"
-            return technique.hasOpenEndedStage
-                ? "\(rounds) \(unit) · you end the holds"
-                : "\(rounds) \(unit) · \(technique.stages.count) stages"
+    var shapeDescription: String {
+        guard !isStaged, let stage = stages.first else {
+            let unit = recommendedRounds == 1 ? "round" : "rounds"
+            return hasOpenEndedStage
+                ? "\(recommendedRounds) \(unit) · you end the holds"
+                : "\(recommendedRounds) \(unit) · \(stages.count) stages"
         }
 
         let seconds = stage.cycleDuration.components.seconds
         return "\(stage.cycles) cycles · \(seconds)s each"
     }
+}
+
+/// Wraps the model so `fullScreenCover(item:)` has something `Identifiable` to
+/// present. The identity is the presentation's, not the session's — a new tap on
+/// Begin is a new session, and this is what makes that unambiguous.
+private struct StartedSession: Identifiable {
+    let id = UUID()
+    let model: SessionModel
 }
