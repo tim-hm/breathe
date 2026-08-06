@@ -4,10 +4,10 @@ import SwiftUI
 /// The marketing site's orb, idling on home: a filled dot inside two rings,
 /// breathing whether or not anyone has begun.
 ///
-/// It breathes like a person at rest — ten breaths a minute, and only a few
-/// points of travel. Ambience, not instruction: the session orb swells to
-/// be followed, this one moves just enough to feel alive, and anything
-/// bigger or slower reads as a demonstration the person hasn't asked for.
+/// It breathes like a person at rest — ten breaths a minute, with enough
+/// travel that the expansion reads as a breath rather than a shimmer.
+/// Ambience, not instruction: the session orb swells to be followed; this
+/// one only has to be unmistakably alive.
 struct AmbientOrb: View {
     /// The wheel's current goal accent, so the orb takes the colour of what
     /// the person is about to do.
@@ -27,11 +27,11 @@ struct AmbientOrb: View {
             ZStack {
                 Circle()
                     .stroke(accent.opacity(0.15), lineWidth: 1)
-                    .scaleEffect(0.95 + 0.05 * breath)
+                    .scaleEffect(0.92 + 0.08 * breath)
 
                 Circle()
                     .stroke(accent.opacity(0.3), lineWidth: 1)
-                    .scaleEffect(0.76 + 0.05 * breath)
+                    .scaleEffect(0.73 + 0.08 * breath)
 
                 Circle()
                     .fill(
@@ -42,7 +42,7 @@ struct AmbientOrb: View {
                             endRadius: 82
                         )
                     )
-                    .scaleEffect(0.52 + 0.05 * breath)
+                    .scaleEffect(0.50 + 0.08 * breath)
             }
         }
         .frame(width: 176, height: 176)
