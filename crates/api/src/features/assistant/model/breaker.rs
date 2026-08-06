@@ -4,8 +4,7 @@
 //! handles "the model did not answer" by falling back, so a breaker that
 //! answers `Unavailable` needs no new branch anywhere. It also means the
 //! breaker wraps the scripted test double exactly as it wraps the real client,
-//! which is
-//! how the trip-and-recover behaviour is testable at all.
+//! which is how the trip-and-recover behaviour is testable at all.
 //!
 //! In-process and per-instance. One box serves this app, so a shared breaker
 //! would be a Redis dependency bought to coordinate a single process with
