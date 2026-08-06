@@ -38,6 +38,11 @@ struct BreatheApp: App {
     /// The basics, shared the same way — reference data loaded once.
     @State private var foundations: FoundationsModel
 
+    /// The standing appointments, backed by local notifications. Composed here
+    /// so the store outlives the Settings tab that edits it — the notifications
+    /// have to stay honest whether or not the screen is ever opened.
+    @State private var schedules = ScheduleStore(notifier: NotificationScheduler())
+
     /// Totals, streaks, and the boards. Local-first: everything it shows about
     /// this person is folded from the two stores above, so the tab is complete
     /// before the sync it starts has finished.
@@ -92,7 +97,7 @@ struct BreatheApp: App {
                     }
                 }
                 Tab("Settings", systemImage: "gearshape") {
-                    SettingsView()
+                    SettingsView(schedules: schedules, catalogue: catalogue)
                 }
             }
             .tint(Theme.Accent.brand)
