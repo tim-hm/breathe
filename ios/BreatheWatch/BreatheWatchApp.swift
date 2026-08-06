@@ -56,7 +56,7 @@ struct BreatheWatchApp: App {
     var body: some Scene {
         WindowGroup {
             NavigationStack {
-                TechniqueListView(model: catalogue, sessions: sessions, journey: journey)
+                TechniqueCarouselView(model: catalogue, sessions: sessions, journey: journey)
             }
             .tint(Theme.Accent.brand)
             // In the environment rather than passed down: the only screen that

@@ -19,6 +19,11 @@ struct SafetyNote: View {
                     .foregroundStyle(Theme.Accent.caution)
                 Text(note)
                     .foregroundStyle(Theme.Ink.secondary)
+                    // A caution is the one thing on this screen that may not be
+                    // truncated, and a `Text` beside an icon in a card that
+                    // sizes to its content will otherwise take one line and an
+                    // ellipsis.
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .font(.caption2)
             // One VoiceOver element: the icon says nothing the words do not.
