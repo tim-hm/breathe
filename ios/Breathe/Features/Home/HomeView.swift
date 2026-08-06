@@ -125,7 +125,7 @@ struct HomeView: View {
             }
         }
         .padding(.horizontal, Theme.Spacing.standard)
-        .padding(.bottom, Theme.Spacing.standard)
+        .padding(.bottom, Theme.Spacing.loose)
     }
 
     /// The site's wordmark, in the site's voice: serif, letterspaced, quiet.
@@ -156,11 +156,16 @@ struct HomeView: View {
                 ForEach(goals, id: \.self) { goal in
                     Text(goal.intentObject)
                         .font(.title2.weight(.semibold))
+                        // The wheel sizes its rows — and the selection pill —
+                        // to the tallest row's content, so this padding is
+                        // what makes the pill more than a snug ring around
+                        // the text.
+                        .padding(.vertical, Theme.Spacing.close)
                         .tag(goal)
                 }
             }
             .pickerStyle(.wheel)
-            .frame(width: 205, height: 132)
+            .frame(width: 235, height: 160)
         }
         // The detent click a hardware wheel would give: one tick per option as
         // the spin passes it. Skipped for the settle on launch — that is the
