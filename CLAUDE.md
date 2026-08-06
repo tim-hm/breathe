@@ -42,6 +42,7 @@ All breathe ports live in **18100–18199** (API 18100, Postgres 18101). See [do
 
 ### Where code lives
 
+- **Router assembly** — `crates/api/src/lib.rs`. `main.rs` is process startup only; everything else is library so `tests/e2e/` drives the same stack a deployment serves.
 - **AppState** — `crates/api/src/state.rs`, shared as `Arc<AppState>`.
 - **Features** — `crates/api/src/features/<name>/` with `handlers/`, `service.rs`, `repository.rs`, `types.rs`, `errors.rs`.
 - **gRPC registration** — `crates/api/src/grpc.rs`. **HTTP routes** — `crates/api/src/http/mod.rs`. Both are single aggregation points.
@@ -68,7 +69,7 @@ This rule has teeth: a shell that has visited the sibling `connect` repo exports
 | Rebuild the DB from scratch | `mise run dev:db:reset` |
 | Generate + open the Xcode project | `mise run ios:gen` / `mise run ios:open` |
 | Build the app headlessly | `mise run ios:build` |
-| Tests | `mise run test` (`test:rs`, `test:swift`) |
+| Tests | `mise run test` (`test:rs`, `test:e2e`, `test:swift`) |
 
 **Before committing** — three commands, in this order:
 
@@ -84,5 +85,6 @@ mise run check      # 3. Full validation
 
 Philosophy and patterns in [docs/testing.md](docs/testing.md).
 
-- **Rust** — inline `#[cfg(test)] mod tests` at the bottom of the file under test. Runner is cargo-nextest via `mise run test:rs`.
+- **Rust unit** — inline `#[cfg(test)] mod tests` at the bottom of the file under test. Runner is cargo-nextest via `mise run test:rs`, which is scoped to lib and bin targets so it needs no database.
+- **Rust integration** — `crates/api/tests/e2e/`, via `mise run test:e2e`. Drives the production router over a disposable `breathe_test_<name>` database, one per test, using real gRPC-Web framing. Never point these at the dev database; the harness makes that structurally impossible and it should stay that way.
 - **Swift** — Swift Testing, in `ios/Packages/BreatheCore/Tests/`. Runs on the host (the package declares a macOS platform for exactly this reason), so no simulator is needed.

@@ -29,9 +29,21 @@ tonic-reflection = "0.14"
 # iOS client actually talks to — see docs/transport.md for why the Swift client
 # uses gRPC-Web rather than the Connect protocol.
 tonic-web = "0.14"
+# Dev-only: `tower::ServiceExt::oneshot` drives a router in tests without a
+# listener.
+tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.7", features = ["cors", "trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# What a deployment ships (`mise run build:release`). Thin LTO buys most of
+# fat LTO's cross-crate inlining at a fraction of the link time, and stripping
+# symbols roughly halves the binary. `panic = "abort"` is deliberately absent:
+# it would turn any handler panic into whole-process death, where unwinding
+# loses only the offending task.
+[profile.release]
+lto = "thin"
+strip = "symbols"
 
 # Lints are declared once here and inherited by every crate via
 # `[lints] workspace = true`. Levels, not config values — the settings these
@@ -60,8 +72,9 @@ todo = "warn"
 unimplemented = "warn"
 
 # Panicking paths. A panic in a request handler takes out the task and returns
-# no useful error to the client; the typed-error path (see crates/api/src/errors.rs)
-# is always available instead. clippy.toml re-allows all three inside tests.
+# no useful error to the client; the typed-error path (see
+# crates/api/src/features/technique/errors.rs) is always available instead.
+# clippy.toml re-allows all three inside tests.
 expect_used = "warn"
 panic = "warn"
 unwrap_used = "warn"
@@ -82,6 +95,11 @@ use_self = "warn"
 # features/technique/, a `TechniqueError` type is the clearest available name
 # even though the module is already called `technique`.
 module_name_repetitions = "allow"
+# `pub` in these crates means "reachable from the binary and from `tests/`", not
+# "published API" — both members set `publish = false`. `#[must_use]` earns its
+# keep by warning a consumer who cannot see the implementation, and there is no
+# such consumer here.
+must_use_candidate = "allow"
 # Doc comments here explain *why*, per CLAUDE.md §1.2. Demanding a
 # `# Errors` section on every fallible function produces restatement, which
 # that same policy tells us to delete.

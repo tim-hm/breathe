@@ -68,7 +68,7 @@ const TECHNIQUES: &[TechniqueSeed] = &[
     },
 ];
 
-pub(crate) async fn run(pool: &PgPool) -> Result<()> {
+pub async fn run(pool: &PgPool) -> Result<()> {
     let mut tx = pool
         .begin()
         .await

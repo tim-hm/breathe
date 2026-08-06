@@ -6,8 +6,8 @@
 --maxwidth 100
 --indent 4
 
-# Matches the Rust side's import grouping: third-party and first-party modules in
-# one alphabetised block, so a diff never turns on where an import landed.
+# Third-party and first-party modules in one alphabetised block, so a diff never
+# turns on where an import landed.
 --importgrouping alphabetized
 
 --wraparguments before-first

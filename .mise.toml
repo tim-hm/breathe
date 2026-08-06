@@ -1,8 +1,12 @@
 # The single entry point for every repo operation. See CLAUDE.md §3: run things
 # through `mise run <task>`, never the raw `cargo`/`buf`/`sqlx` equivalent — the
 # tasks encode the env (SQLX_OFFLINE, DATABASE_URL, CARGO_TARGET_DIR) that those
-# commands need to behave the same way here, in a fresh clone, and in CI.
+# commands need to behave the same way here, in a fresh clone, and in CI
+# (.github/workflows/checks.yml, which runs the lint/format subset).
 
+# Tools ride `latest` on purpose — a deliberate nudge to keep the toolchain
+# current. The exceptions are pinned because something committed depends on the
+# exact version.
 [tools]
 # Must precede the cargo:* entries so mise's cargo backend installs prebuilt
 # binaries instead of compiling each tool from source.
@@ -13,6 +17,9 @@ cargo-binstall = "latest"
 rust = "1.96"
 
 buf = "latest"
+# Load-bearing despite buf handling Swift generation: crates/api/build.rs runs
+# prost-build, which needs a `protoc` binary from the environment (nothing in
+# the dependency tree vendors one).
 protoc = "latest"
 lychee = "latest"
 "npm:markdownlint-cli2" = "0.23.2"
@@ -26,10 +33,11 @@ lychee = "latest"
 "cargo:sqlx-cli" = "0.9"
 
 # iOS toolchain. Xcode itself is not installable by mise — docs/contributing.md
-# covers that step.
-xcodegen = "latest"
-swiftlint = "latest"
-swiftformat = "latest"
+# covers that step. `os` keeps CI's Linux runner from failing on tools that only
+# ship macOS builds.
+xcodegen = { version = "latest", os = ["macos"] }
+swiftlint = { version = "latest", os = ["macos"] }
+swiftformat = { version = "latest", os = ["macos"] }
 
 [env]
 # Global so every cargo invocation reads the committed .sqlx cache rather than
@@ -80,6 +88,11 @@ run = "cargo run -p migrate"
 description = "Query the local database (SQL on stdin)"
 run = "docker compose exec -T db psql -U postgres -d breathe"
 
+[tasks."build:release"]
+description = "Build the API release binary (what a deployment ships)"
+env = { CARGO_TARGET_DIR = "{{env.CHECK_TARGET_DIR}}" }
+run = "cargo build --release -p api"
+
 # generate: everything derived from a source of truth elsewhere
 
 [tasks.generate]
@@ -121,10 +134,12 @@ run = [
   "markdownlint-cli2 --fix",
 ]
 
-# check: read-only validation. `check` is the gate — it is what must pass.
+# check: validation. `check` is the gate — it is what must pass. Read-only with
+# one exception: check:generated regenerates the committed Swift in place before
+# diffing, so a dirty Generated/ directory gets rewritten.
 
 [tasks.check]
-description = "Full validation (read-only)"
+description = "Full validation (the gate)"
 # The Rust tasks share one cargo artifact lock, so running them concurrently just
 # stalls on "Blocking waiting for file lock" — they are serialised in `run` while
 # everything genuinely independent fans out through `depends`.
@@ -135,7 +150,12 @@ depends = [
   "check:doc-links",
   "check:deps",
 ]
-run = ["mise run check:rs", "mise run check:sqlx", "mise run test:rs"]
+run = [
+  "mise run check:rs",
+  "mise run check:sqlx",
+  "mise run test:rs",
+  "mise run test:e2e",
+]
 
 [tasks."check:rs"]
 description = "Validate Rust (fmt + clippy)"
@@ -153,18 +173,13 @@ run = "cargo sqlx prepare --workspace --check -- --all-targets"
 [tasks."check:proto"]
 description = "Lint the protobuf contract and check it for breaking changes against main"
 dir = "{{config_root}}/proto"
-# The only condition that legitimately skips the breaking-change check is "this
-# repository has no commits yet", tested directly with `rev-parse HEAD`. Testing
-# for a local `main` branch instead would also skip on a detached-HEAD CI
-# checkout, a shallow clone, or a fork — exactly the places the check matters
-# most — so an unresolvable `main` over a non-empty history fails closed.
-# Delete this guard once the first commit lands.
+# An unresolvable `main` fails closed rather than skipping: a skip-on-missing
+# branch would also skip on a detached-HEAD CI checkout, a shallow clone, or a
+# fork — exactly the places the breaking-change check matters most.
 run = [
   "buf lint",
   """
-  if ! git -C .. rev-parse HEAD >/dev/null 2>&1; then
-    echo 'check:proto: repository has no commits yet — breaking-change check not applicable'
-  elif git -C .. rev-parse --verify --quiet main >/dev/null; then
+  if git -C .. rev-parse --verify --quiet main >/dev/null; then
     buf breaking --against '../.git#branch=main,subdir=proto'
   else
     echo 'check:proto: cannot resolve `main`, refusing to skip the breaking-change check' >&2
@@ -193,10 +208,6 @@ description = "Assert the committed Swift protobuf matches proto/"
 # regenerate, compare, fail on drift. Needed because the Xcode build never runs
 # buf, so a .proto edit committed without `mise run generate:proto` surfaces much
 # later as a confusing Swift compile error.
-#
-# `git diff` only sees tracked files, so this is vacuous until the generated
-# Swift is committed for the first time — same bootstrap caveat as the
-# breaking-change check above, and it resolves the same way.
 run = [
   "mise run generate:proto",
   "git diff --exit-code -- ios/Packages/BreatheCore/Sources/BreatheAPI/Generated",
@@ -213,11 +224,24 @@ run = "cargo machete --with-metadata"
 
 [tasks.test]
 description = "Run every test suite"
-run = ["mise run test:rs", "mise run test:swift"]
+run = ["mise run test:rs", "mise run test:e2e", "mise run test:swift"]
 
 [tasks."test:rs"]
+description = "Rust unit tests — no database, no network"
+# Scoped to lib and bin targets so this stays the fast inner-loop suite. The
+# integration tests live in their own target and need Postgres; `test:e2e` runs
+# those.
 env = { CARGO_TARGET_DIR = "{{env.CHECK_TARGET_DIR}}" }
-run = "cargo nextest run --workspace"
+run = "cargo nextest run --workspace --lib --bins"
+
+[tasks."test:e2e"]
+description = "Integration tests: the real router over a disposable database"
+depends = ["dev:db"]
+# Each test creates and migrates its own `breathe_test_<name>` database, so they
+# neither share state nor touch the development one. nextest runs each test in
+# its own process, which is what makes per-test databases the natural unit.
+env = { CARGO_TARGET_DIR = "{{env.CHECK_TARGET_DIR}}" }
+run = "cargo nextest run -p api --test e2e"
 
 [tasks."test:swift"]
 dir = "{{config_root}}/ios"
@@ -239,4 +263,6 @@ run = "open {{config_root}}/ios/Breathe.xcodeproj"
 description = "Build the app for the simulator without opening Xcode"
 depends = ["ios:gen"]
 dir = "{{config_root}}/ios"
-run = "xcodebuild -project Breathe.xcodeproj -scheme Breathe -destination 'platform=iOS Simulator,name=iPhone 17' build"
+# The generic destination builds without naming a device, so this works on any
+# machine regardless of which simulators its Xcode happens to have installed.
+run = "xcodebuild -project Breathe.xcodeproj -scheme Breathe -destination 'generic/platform=iOS Simulator' build"

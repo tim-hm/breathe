@@ -19,10 +19,14 @@ crates/api/src/features/technique/
 
 # Swift
 ios/Breathe/Features/Techniques/
-  TechniqueListView.swift   TechniqueListModel.swift
+  TechniqueListView.swift
+ios/Packages/BreatheCore/Sources/BreatheKit/
+  TechniqueListModel.swift
 ```
 
 A developer can understand — or delete — a feature by looking in one place.
+
+Swift splits one layer further than Rust: the view stays in the app feature directory, but its observable model lives in `BreatheKit`. The app target has no test bundle — package tests are the only tests that run on the host — so a model in the app target would be structurally untestable.
 
 ## The layering contract
 
@@ -78,7 +82,7 @@ All Swift library code lives in **one** SwiftPM package, `ios/Packages/BreatheCo
 | Target | Product? | Role | May depend on |
 | :-- | :-- | :-- | :-- |
 | `BreatheAPI` | **no** | Generated protobuf + the Connect client factory | Connect, SwiftProtobuf |
-| `BreatheKit` | yes | Domain models and repositories | `BreatheAPI` |
+| `BreatheKit` | yes | Domain models, observable feature models, and repositories | `BreatheAPI` |
 | `BreatheUI` | yes | Design tokens and shared components | nothing |
 | `Breathe` (app) | — | Features, composition root | `BreatheKit`, `BreatheUI` |
 
@@ -99,10 +103,14 @@ Choose structure from a feature's actual complexity. Don't impose it preemptivel
 
 ## Test Placement
 
-Tests are colocated with their source in both languages — no separate test trees.
+Unit tests are colocated with their source in both languages.
 
 - **Rust** — inline `#[cfg(test)] mod tests` at the bottom of the file under test.
 - **Swift** — `ios/Packages/BreatheCore/Tests/<Target>Tests/`, which is where SwiftPM requires them.
+
+Integration tests are the exception, because they belong to no single file: `crates/api/tests/e2e/` mirrors the feature layout one level up — `technique.rs` for the feature, `health.rs` for the JSON surface, `harness.rs` for the shared machinery. Cargo treats `tests/e2e/main.rs` as one target, so all of them compile into a single binary rather than one per file.
+
+This is why `crates/api` has a `lib.rs` at all. An integration test cannot reach into a binary crate, so `main.rs` holds process startup and nothing else, and the router it serves is assembled in `lib.rs` where the harness can build the same one.
 
 ## Invariants
 
