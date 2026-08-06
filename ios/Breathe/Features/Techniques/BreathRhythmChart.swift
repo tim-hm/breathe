@@ -92,7 +92,11 @@ struct BreathRhythmChart: View {
     /// than words because four segments share one row.
     @ViewBuilder
     private func hintCaptions(of rhythm: BreathRhythm, hints: [[String?]]?) -> some View {
-        if let hints {
+        // All labels or none: the counts match today because the rhythm draws
+        // one segment per phase per stage, but that is a drawing judgement,
+        // not a contract — and a silently truncating zip would mislabel the
+        // chart the day it changes.
+        if let hints, hints.flatMap(\.self).count == rhythm.segments.count {
             let labelled = zip(rhythm.segments, hints.flatMap(\.self))
 
             GeometryReader { geometry in

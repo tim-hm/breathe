@@ -6,10 +6,11 @@ import SwiftUI
 ///
 /// One decision on the screen — the intent wheel — under the brand's own
 /// breathing orb. Everything else lives in the tab bar's other tabs; the only
-/// extras here are the technique the wheel resolves to and a repeat shortcut
-/// for the person's last exercise. The wheel wakes up on the hour's goal and
-/// offers the technique this person last used towards it, which is as much
-/// context as an on-device rule should claim before M6.
+/// extra here is the technique the wheel resolves to. The wheel wakes up
+/// where it was last left — the hour's goal decides only the very first
+/// launch — and offers the technique this person last used towards that
+/// goal, which is as much context as an on-device rule should claim
+/// before M6.
 struct HomeView: View {
     /// The catalogue the composition root owns and every tab shares.
     let model: TechniqueListModel
@@ -38,7 +39,7 @@ struct HomeView: View {
                 }
         }
         .task {
-            await model.load()
+            await model.loadIfNeeded()
             settleGoal()
         }
         .onAppear {
@@ -60,6 +61,18 @@ struct HomeView: View {
         case .loading:
             ProgressView()
 
+        // A healthy server with nothing seeded would otherwise render the
+        // orb, the wheel with no options, and no Begin — a dead screen with
+        // no way out but relaunch.
+        case let .loaded(techniques) where techniques.isEmpty:
+            ContentUnavailableView {
+                Label("The catalogue is empty", systemImage: "wind")
+            } description: {
+                Text("The server answered, but with no techniques in it.")
+            } actions: {
+                retryButton
+            }
+
         case let .loaded(techniques):
             loaded(techniques)
 
@@ -69,12 +82,16 @@ struct HomeView: View {
             } description: {
                 Text(message)
             } actions: {
-                Button("Try again") {
-                    Task {
-                        await model.load()
-                        settleGoal()
-                    }
-                }
+                retryButton
+            }
+        }
+    }
+
+    private var retryButton: some View {
+        Button("Try again") {
+            Task {
+                await model.load()
+                settleGoal()
             }
         }
     }

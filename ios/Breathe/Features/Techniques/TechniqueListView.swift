@@ -21,13 +21,9 @@ struct TechniqueListView: View {
                     TechniqueDetailView(technique: technique, sessions: sessions)
                 }
         }
-        // Home usually loads the catalogue first, but this tab must not depend
-        // on ever having visited it.
-        .task {
-            if case .loading = model.state {
-                await model.load()
-            }
-        }
+        // Home usually starts the shared load first, but this tab must not
+        // depend on ever having visited it.
+        .task { await model.loadIfNeeded() }
     }
 
     @ViewBuilder
@@ -35,6 +31,19 @@ struct TechniqueListView: View {
         switch model.state {
         case .loading:
             ProgressView()
+
+        // Same guard as home: an empty catalogue is an answer worth naming,
+        // not a blank list.
+        case let .loaded(techniques) where techniques.isEmpty:
+            ContentUnavailableView {
+                Label("The catalogue is empty", systemImage: "wind")
+            } description: {
+                Text("The server answered, but with no techniques in it.")
+            } actions: {
+                Button("Try again") {
+                    Task { await model.load() }
+                }
+            }
 
         case let .loaded(techniques):
             List {

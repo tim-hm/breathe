@@ -125,11 +125,12 @@ struct SessionView: View {
             let beat = model.timeline.beat(at: elapsed)
 
             VStack(spacing: Theme.Spacing.loose) {
-                BreathVisual(beat: beat, elapsed: elapsed, accent: model.technique.goal.accent)
-                    .accessibilityHidden(true)
+                breathVisual(beat: beat, elapsed: elapsed)
 
-                // Under Just the visuals the orb carries the session alone;
-                // VoiceOver still announces every phase either way.
+                // Under Just the visuals the words leave the screen, not the
+                // accessibility tree — the orb above then carries them, so a
+                // VoiceOver user can always re-read the phase, not only catch
+                // its announcement.
                 if settings.guidance == .full {
                     VStack(spacing: Theme.Spacing.close) {
                         Text(beat?.kind.instruction ?? "")
@@ -186,7 +187,12 @@ struct SessionView: View {
                         .monospacedDigit()
                         .foregroundStyle(Theme.Ink.secondary)
                 }
-                .accessibilityElement(children: .combine)
+                // Explicit label and value rather than combined children, so
+                // VoiceOver reads "Hold, lungs empty — 1:23" at every guidance
+                // level, including the one that hides the instruction text.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(model.currentBeat?.kind.spokenInstruction ?? "")
+                .accessibilityValue(model.holdElapsed.formatted(.time(pattern: .minuteSecond)))
 
                 Button("I'm ready") {
                     model.release()
@@ -238,6 +244,31 @@ struct SessionView: View {
         return "\(max(Int(remaining.rounded(.up)), 1))"
     }
 
+    /// The session's one moving picture, with its accessibility role decided
+    /// by guidance: under full the text block beside it speaks for the phase
+    /// and the orb stays decorative; under Just the visuals the orb is the
+    /// only phase display there is, so it carries the label itself.
+    @ViewBuilder
+    private func breathVisual(beat: SessionTimeline.Beat?, elapsed: Duration) -> some View {
+        let visual = BreathVisual(beat: beat, elapsed: elapsed, accent: model.technique.goal.accent)
+
+        if settings.guidance == .full {
+            visual.accessibilityHidden(true)
+        } else {
+            visual
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(spokenPhase(for: beat))
+                .accessibilityValue(secondsRemaining(in: beat, at: elapsed))
+        }
+    }
+
+    /// "Breathe in, left nostril" — the phase as VoiceOver should say it.
+    private func spokenPhase(for beat: SessionTimeline.Beat?) -> String {
+        guard let beat else { return "" }
+        guard let hint = hint(for: beat) else { return beat.kind.spokenInstruction }
+        return "\(beat.kind.spokenInstruction), \(hint.lowercased())"
+    }
+
     /// The hint for `beat` — "Left nostril" — or nil for an unhinted phase.
     private func hint(for beat: SessionTimeline.Beat?) -> String? {
         guard let beat, let hints,
@@ -255,11 +286,6 @@ struct SessionView: View {
     /// quieter screen is not the same as hearing nothing.
     private func announceCurrentPhase() {
         guard let beat = model.currentBeat else { return }
-        let instruction = if let hint = hint(for: beat) {
-            "\(beat.kind.spokenInstruction), \(hint.lowercased())"
-        } else {
-            beat.kind.spokenInstruction
-        }
-        AccessibilityNotification.Announcement(instruction).post()
+        AccessibilityNotification.Announcement(spokenPhase(for: beat)).post()
     }
 }
