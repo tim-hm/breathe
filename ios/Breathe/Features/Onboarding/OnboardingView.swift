@@ -177,9 +177,9 @@ struct OnboardingView: View {
     /// The dial whose default is silence.
     ///
     /// `Never` is listed first and is already selected, so leaving the screen
-    /// untouched is the private answer. The footnote owns up to the system
-    /// prompt: anything but Never means iOS will ask about notifications, and
-    /// nobody should meet that dialog unwarned.
+    /// untouched is the private answer. The footnote owns up to both
+    /// consequences of moving it: a reminder appears in Settings, and iOS asks
+    /// about notifications — nobody should meet either unwarned.
     private var reminders: some View {
         question(
             "Want a nudge?",
@@ -197,8 +197,10 @@ struct OnboardingView: View {
             }
 
             Text("Never is the default, and it stays that way unless you move it. "
-                + "Pick a nudge and the app will ask for iOS notification "
-                + "permission — that's the only permission it ever requests.")
+                + "Pick a nudge and we'll set a reminder up for you — change it, "
+                + "or let it go, in Settings whenever you like. iOS will ask for "
+                + "notification permission; that's the only permission the app "
+                + "ever requests.")
                 .font(.footnote)
                 .foregroundStyle(Theme.Ink.tertiary)
                 .padding(.top, Theme.Spacing.close)
