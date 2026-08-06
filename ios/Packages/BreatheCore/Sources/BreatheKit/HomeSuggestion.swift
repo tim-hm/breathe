@@ -1,27 +1,12 @@
 import Foundation
 
-/// The home screen's context rules: which exercise to offer again, and which
-/// goal the intent wheel wakes up pointing at.
+/// The home screen's context rules: which goal the intent wheel wakes up
+/// pointing at on a first launch, and which technique a goal resolves to.
 ///
 /// Deliberately the modest, on-device placeholder for M6's personalisation —
 /// fixed rules, no learning. Pure on purpose: the hour arrives as an argument
 /// rather than a clock read, so every rule is testable at any time of day.
 public enum HomeSuggestion {
-    /// The technique of the most recent session that is still in the
-    /// catalogue. Sessions outlive catalogue entries, so a retired slug is
-    /// skipped in favour of the session before it; nil means nothing to offer.
-    public static func lastExercise(
-        techniques: [Technique],
-        history: [SessionRecord]
-    ) -> Technique? {
-        for record in history.reversed() {
-            if let technique = techniques.first(where: { $0.slug == record.techniqueSlug }) {
-                return technique
-            }
-        }
-        return nil
-    }
-
     /// The goal a given local hour reaches for. Boundaries are round numbers,
     /// not science: mornings wake up, working hours focus, evenings wind
     /// down, and everything after ten is about sleep.

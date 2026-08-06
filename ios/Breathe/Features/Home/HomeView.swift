@@ -108,10 +108,6 @@ struct HomeView: View {
             }
 
             Spacer()
-
-            if let last = HomeSuggestion.lastExercise(techniques: techniques, history: history) {
-                repeatRow(last)
-            }
         }
         .padding(Theme.Spacing.standard)
     }
@@ -184,21 +180,6 @@ struct HomeView: View {
         .tint(technique.goal.accent)
     }
 
-    /// The last exercise, as one quiet line rather than a second big button —
-    /// there is only one Begin on this screen, and this is a shortcut past
-    /// the wheel for someone repeating themselves. Drawn in secondary ink
-    /// rather than its goal's accent for the same reason: two prominent
-    /// colours on one screen make neither of them the way in.
-    private func repeatRow(_ technique: Technique) -> some View {
-        Button {
-            begin(technique)
-        } label: {
-            Label("\(technique.name) again", systemImage: "arrow.clockwise")
-                .font(.subheadline)
-                .foregroundStyle(Theme.Ink.secondary)
-        }
-    }
-
     /// Starts `technique` as this person dialled it — the same resolution the
     /// detail screen's Begin makes, so the two cannot start different sessions.
     private func begin(_ technique: Technique) {
@@ -219,21 +200,26 @@ struct HomeView: View {
 
     /// Reads the wheel's state, and never writes a goal the catalogue cannot
     /// serve — a `Picker` whose selection is absent from its options renders
-    /// blank.
+    /// blank. Every spin is remembered, which is the whole of the app's
+    /// repeat functionality: come back and the wheel is where you left it.
     private func wheelBinding(over goals: [TechniqueGoal]) -> Binding<TechniqueGoal> {
         Binding(
             get: { goal.flatMap { goals.contains($0) ? $0 : nil } ?? goals.first ?? .calm },
-            set: { goal = $0 }
+            set: {
+                goal = $0
+                settings.lastGoal = $0
+            }
         )
     }
 
-    /// Points the wheel at the hour's goal, or at whatever the catalogue has
-    /// if it has nothing for that hour.
+    /// Points the wheel where it last sat, falling back to the hour's goal on
+    /// a first launch — and to whatever the catalogue has if it serves
+    /// neither.
     private func settleGoal() {
         guard case let .loaded(techniques) = model.state else { return }
         let available = goals(in: techniques)
         let hour = Calendar.current.component(.hour, from: .now)
-        let wanted = HomeSuggestion.goal(forHour: hour)
+        let wanted = settings.lastGoal ?? HomeSuggestion.goal(forHour: hour)
 
         goal = available.contains(wanted) ? wanted : available.first
     }

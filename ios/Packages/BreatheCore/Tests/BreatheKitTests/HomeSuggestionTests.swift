@@ -4,8 +4,8 @@ import Testing
 
 /// The home screen's rules are trivial to eyeball and easy to get quietly
 /// wrong: an off-by-one hour boundary points the wheel at bellows breath at
-/// bedtime, and a retired technique's slug in the history must not sink the
-/// repeat offer entirely.
+/// bedtime, and a goal the catalogue stopped serving must still resolve to
+/// something Begin can start.
 @Suite("Choosing what the home screen leads with")
 struct HomeSuggestionTests {
     private func technique(slug: String, goal: TechniqueGoal) -> Technique {
@@ -38,36 +38,6 @@ struct HomeSuggestionTests {
             technique(slug: "bellows", goal: .energy),
             technique(slug: "coherent", goal: .focus),
         ]
-    }
-
-    @Test("The most recent session's technique is offered again")
-    func mostRecentWins() {
-        let last = HomeSuggestion.lastExercise(
-            techniques: catalogue,
-            history: [session(slug: "box"), session(slug: "478")]
-        )
-
-        #expect(last == technique(slug: "478", goal: .sleep))
-    }
-
-    @Test("A retired technique is skipped in favour of the session before it")
-    func retiredSlugFallsBack() {
-        let last = HomeSuggestion.lastExercise(
-            techniques: catalogue,
-            history: [session(slug: "box"), session(slug: "retired-technique")]
-        )
-
-        #expect(last == technique(slug: "box", goal: .calm))
-    }
-
-    @Test("No resolvable history means no offer")
-    func noHistoryNoOffer() {
-        #expect(HomeSuggestion.lastExercise(techniques: catalogue, history: []) == nil)
-        #expect(HomeSuggestion.lastExercise(
-            techniques: catalogue,
-            history: [session(slug: "retired-technique")]
-        ) == nil)
-        #expect(HomeSuggestion.lastExercise(techniques: [], history: [session(slug: "box")]) == nil)
     }
 
     @Test("The wheel offers what this person last used towards the goal")

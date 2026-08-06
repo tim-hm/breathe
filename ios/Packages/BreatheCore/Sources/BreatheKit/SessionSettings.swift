@@ -65,6 +65,7 @@ public enum SessionGuidance: String, Sendable, CaseIterable, Identifiable {
 public final class SessionSettings {
     private static let cueModeKey = "session.cueMode"
     private static let guidanceKey = "session.guidance"
+    private static let lastGoalKey = "home.lastGoal"
     private static let overridesKey = "session.techniqueOverrides"
 
     public var cueMode: SessionCueMode {
@@ -73,6 +74,14 @@ public final class SessionSettings {
 
     public var guidance: SessionGuidance {
         didSet { defaults.set(guidance.rawValue, forKey: Self.guidanceKey) }
+    }
+
+    /// Where the intent wheel last sat, restored on the next launch — the
+    /// home screen remembers what this person wanted rather than guessing
+    /// again. Nil until the wheel is first moved; the time-of-day rule covers
+    /// that first launch.
+    public var lastGoal: TechniqueGoal? {
+        didSet { defaults.set(lastGoal?.rawValue, forKey: Self.lastGoalKey) }
     }
 
     /// Every technique the person has dialled, keyed by slug — the key the
@@ -95,6 +104,8 @@ public final class SessionSettings {
             .flatMap(SessionCueMode.init(rawValue:)) ?? .hapticsAndAudio
         guidance = defaults.string(forKey: Self.guidanceKey)
             .flatMap(SessionGuidance.init(rawValue:)) ?? .full
+        lastGoal = defaults.string(forKey: Self.lastGoalKey)
+            .flatMap(TechniqueGoal.init(rawValue:))
         overridesBySlug = defaults.data(forKey: Self.overridesKey)
             .flatMap { try? JSONDecoder().decode([String: TechniqueOverrides].self, from: $0) }
             // Unreadable stored preferences are dropped rather than repaired:
