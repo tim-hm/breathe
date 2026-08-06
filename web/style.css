@@ -14,7 +14,7 @@
   --serif: "Iowan Old Style", "Palatino Nova", Palatino, Georgia, serif;
   --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
 
-  /* One breath cycle: 4s out, 4s hold, 4s in, 4s hold (box breathing). */
+  /* One breath cycle: 4s in, 4s hold, 4s out, 4s hold (box breathing). */
   --cycle: 16s;
 }
 
@@ -111,9 +111,10 @@ p + p {
 }
 
 /* The orb — the page's one moment of motion. One box-breathing cycle:
-   a filled dot swells to full size on the exhale, holds there while the color
-   shifts, shrinks back to the dot on the inhale, and holds again. The rings
-   travel with it, collapsing into the dot so only one circle remains. */
+   a filled dot swells to full size on the inhale (lungs filling, matching the
+   app's BreathVisual), holds there while the color shifts, shrinks back to the
+   dot on the exhale, and holds again. The rings travel with it, collapsing
+   into the dot so only one circle remains. */
 
 .orb {
   position: relative;
@@ -158,9 +159,9 @@ p + p {
 
 /* Shared timeline for all three circles:
    0%        dot — everything collapsed
-   0→25%     exhale — expand to full
+   0→25%     inhale — expand to full
    25→50%    hold — full size, color shifts to --hold
-   50→75%    inhale — shrink back to the dot
+   50→75%    exhale — shrink back to the dot
    75→100%   hold — dot, color shifts again */
 
 @keyframes core-breathe {
@@ -283,7 +284,7 @@ p + p {
   color: var(--hold);
 }
 
-.phase-in {
+.phase-out {
   animation-delay: calc(var(--cycle) * 0.5);
 }
 
@@ -324,7 +325,7 @@ p + p {
     opacity: 0.4;
   }
 
-  .phase-out {
+  .phase-in {
     opacity: 1;
   }
 }
