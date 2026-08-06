@@ -112,19 +112,20 @@ struct HomeView: View {
 
             intentWheel(over: goals(in: techniques))
 
-            // Begin acts on what the wheel says, and the technique row is a
-            // footnote to both. The top padding keeps a thumb finishing a
-            // spin from landing on the button.
+            // The reading order is the doing order: what you want (wheel),
+            // what that resolves to (link), then Begin — which terminates the
+            // screen, with nothing beneath it for the tab bar to crowd. The
+            // top padding keeps a thumb finishing a spin off the link.
             if let chosen {
                 VStack(spacing: Theme.Spacing.standard) {
-                    beginButton(chosen)
                     chosenTechnique(chosen)
+                    beginButton(chosen)
                 }
-                .padding(.top, Theme.Spacing.loose)
+                .padding(.top, Theme.Spacing.standard)
             }
         }
         .padding(.horizontal, Theme.Spacing.standard)
-        .padding(.bottom, Theme.Spacing.close)
+        .padding(.bottom, Theme.Spacing.standard)
     }
 
     /// The site's wordmark, in the site's voice: serif, letterspaced, quiet.
