@@ -41,6 +41,9 @@ public struct Technique: Sendable, Identifiable, Equatable {
     /// The cycle, in play order. Never empty — `TechniqueRepository` rejects a
     /// technique without phases rather than handing a view an empty loop.
     public let phases: [Phase]
+    /// The curated default number of cycles for a session. At least one; a
+    /// person's own preference overrides it for the session they are starting.
+    public let recommendedCycles: Int
 
     public init(
         id: String,
@@ -48,7 +51,8 @@ public struct Technique: Sendable, Identifiable, Equatable {
         name: String,
         summary: String,
         goal: TechniqueGoal,
-        phases: [Phase]
+        phases: [Phase],
+        recommendedCycles: Int
     ) {
         self.id = id
         self.slug = slug
@@ -56,6 +60,7 @@ public struct Technique: Sendable, Identifiable, Equatable {
         self.summary = summary
         self.goal = goal
         self.phases = phases
+        self.recommendedCycles = recommendedCycles
     }
 
     /// How long one full cycle takes.

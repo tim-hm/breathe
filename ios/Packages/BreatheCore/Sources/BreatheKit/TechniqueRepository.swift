@@ -56,13 +56,25 @@ extension Technique {
             )
         }
 
+        // Zero is the proto default, so it is what a server that predates the
+        // field sends. Treating it as a decode failure rather than substituting
+        // a guess keeps the same rule the enums follow: a value this app cannot
+        // represent — and a session of no cycles is one — never becomes a
+        // silent default.
+        guard proto.recommendedCycles >= 1 else {
+            throw TechniqueRepositoryError.malformedResponse(
+                "technique `\(proto.slug)` recommends no cycles"
+            )
+        }
+
         try self.init(
             id: proto.id,
             slug: proto.slug,
             name: proto.name,
             summary: proto.summary,
             goal: goal,
-            phases: proto.phases.map(Phase.init(proto:))
+            phases: proto.phases.map(Phase.init(proto:)),
+            recommendedCycles: Int(proto.recommendedCycles)
         )
     }
 }

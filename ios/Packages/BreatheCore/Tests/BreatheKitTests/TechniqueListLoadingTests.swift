@@ -22,7 +22,8 @@ struct TechniqueListLoadingTests {
             name: slug,
             summary: "",
             goal: .calm,
-            phases: [Phase(kind: .inhale, duration: .milliseconds(4000))]
+            phases: [Phase(kind: .inhale, duration: .milliseconds(4000))],
+            recommendedCycles: 8
         )
     }
 

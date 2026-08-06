@@ -7,7 +7,8 @@ import Testing
 struct TechniqueDecodingTests {
     private func protoTechnique(
         goal: Breathe_V1_TechniqueGoal = .calm,
-        phases: [Breathe_V1_Phase] = [phase(.inhale, 4000), phase(.exhale, 4000)]
+        phases: [Breathe_V1_Phase] = [phase(.inhale, 4000), phase(.exhale, 4000)],
+        recommendedCycles: UInt32 = 8
     ) -> Breathe_V1_Technique {
         var technique = Breathe_V1_Technique()
         technique.id = "id"
@@ -16,6 +17,7 @@ struct TechniqueDecodingTests {
         technique.summary = "Four equal counts."
         technique.goal = goal
         technique.phases = phases
+        technique.recommendedCycles = recommendedCycles
         return technique
     }
 
@@ -34,6 +36,18 @@ struct TechniqueDecodingTests {
         #expect(technique.goal == .calm)
         #expect(technique.phases.count == 2)
         #expect(technique.cycleDuration == .milliseconds(8000))
+        #expect(technique.recommendedCycles == 8)
+    }
+
+    /// Zero is the proto default, so it is what a server predating the field
+    /// sends — and a session of no cycles has nothing to play. Same rule as the
+    /// enums: a value the app cannot represent fails decoding rather than
+    /// quietly becoming a guess.
+    @Test("A technique recommending no cycles is rejected")
+    func rejectsAZeroCycleCount() {
+        #expect(throws: TechniqueRepositoryError.self) {
+            try Technique(proto: protoTechnique(recommendedCycles: 0))
+        }
     }
 
     /// The proto zero value is reachable from any server, including one running
