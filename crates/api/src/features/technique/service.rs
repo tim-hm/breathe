@@ -13,6 +13,9 @@ use super::types::{PhaseKind, TechniqueGoal};
 use crate::proto::breathe::v1 as pb;
 
 pub async fn list_techniques(pool: &PgPool) -> Result<pb::ListTechniquesResponse, TechniqueError> {
+    // Three sequential reads rather than a `try_join!` of them: the saving is two
+    // loopback round-trips on a call each client makes once at launch, and the
+    // cost is three pool connections per request instead of one.
     let techniques = repository::list_techniques(pool).await?;
     let stages = repository::list_all_stages(pool).await?;
     let phases = repository::list_all_phases(pool).await?;

@@ -62,7 +62,7 @@ struct SessionView: View {
             header
 
             Spacer()
-            if showsHold {
+            if model.isInHold {
                 hold
             } else {
                 breathGuide
@@ -136,16 +136,11 @@ struct SessionView: View {
     /// this is: the timer counts up, and the button is the only thing that ends
     /// it. No target, no record, no encouragement to go longer — a maximal hold
     /// is the one thing this app will not ask anyone for.
-    /// A paused retention is still a retention: the hold keeps the screen, or
-    /// the breath guide would take over and show a countdown from a length this
-    /// beat does not really have.
-    private var showsHold: Bool {
-        model.status == .holding
-            || (model.status == .paused && model.currentBeat?.isOpenEnded == true)
-    }
-
+    /// A second a tick, not a frame a tick: inside a hold the plan is frozen, so
+    /// the orb holds still and the only thing moving on this screen is a timer
+    /// counting whole seconds.
     private var hold: some View {
-        TimelineView(.animation(paused: model.status != .holding)) { _ in
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
             VStack(spacing: Theme.Spacing.loose) {
                 BreathVisual(
                     beat: model.currentBeat,
@@ -155,7 +150,7 @@ struct SessionView: View {
                 .accessibilityHidden(true)
 
                 VStack(spacing: Theme.Spacing.close) {
-                    Text("Hold, lungs empty")
+                    Text(model.currentBeat?.kind.spokenInstruction ?? "")
                         .font(.title2.weight(.medium))
                     Text(model.holdElapsed.formatted(.time(pattern: .minuteSecond)))
                         .font(.system(.largeTitle, design: .rounded).weight(.light))

@@ -13,14 +13,18 @@ struct TechniqueDetailView: View {
 
     var body: some View {
         @Bindable var settings = settings
+        // Derived once per pass and handed down: `dialled` walks the stored
+        // preferences and rebuilds every stage, which is not work to repeat for
+        // each section of one screen.
+        let dialled = technique.dialled(with: settings.overrides(for: technique))
 
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.loose) {
                 header
                 SafetyNote(technique: technique)
-                sessionShape
-                lengthControl
-                advanced
+                sessionShape(of: dialled)
+                lengthControl(of: dialled)
+                advanced(of: dialled)
 
                 Picker("Cues", selection: $settings.cueMode) {
                     ForEach(SessionCueMode.allCases) { mode in
@@ -29,7 +33,7 @@ struct TechniqueDetailView: View {
                 }
                 .pickerStyle(.segmented)
 
-                beginButton
+                beginButton(playing: dialled)
             }
             .padding(Theme.Spacing.standard)
         }
@@ -39,8 +43,6 @@ struct TechniqueDetailView: View {
             SessionView(model: session.model)
         }
     }
-
-    // MARK: - What the person is choosing
 
     private var header: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.close) {
@@ -53,9 +55,9 @@ struct TechniqueDetailView: View {
 
     /// The session, spelled out stage by stage. Someone deciding whether they
     /// have the patience for a seven-second hold should be able to see it first.
-    private var sessionShape: some View {
+    private func sessionShape(of dialled: Technique) -> some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.standard) {
-            ForEach(Array(playedStages.enumerated()), id: \.offset) { index, stage in
+            ForEach(Array(dialled.stages.enumerated()), id: \.offset) { index, stage in
                 VStack(alignment: .leading, spacing: Theme.Spacing.close) {
                     Text(stageTitle(index: index, stage: stage))
                         .font(.subheadline.weight(.semibold))
@@ -77,37 +79,32 @@ struct TechniqueDetailView: View {
     /// One control, chosen by shape: a cyclic technique is dialled in cycles, a
     /// staged one in rounds. The other lives under Advanced, where someone who
     /// wants both can find it.
-    private var lengthControl: some View {
+    private func lengthControl(of dialled: Technique) -> some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.close) {
-            if technique.stages.count > 1 {
+            if technique.isStaged {
                 Stepper(value: roundsBinding, in: TechniqueOverrides.roundRange) {
-                    Text(dialled.rounds == 1 ? "1 round" : "\(dialled.rounds) rounds")
+                    Text(dialled.recommendedRounds == 1 ? "1 round"
+                        : "\(dialled.recommendedRounds) rounds")
                         .font(.headline)
                 }
             } else {
-                let cycles = dialled.stageCycles[0]
-                Stepper(value: cyclesBinding(stage: 0), in: TechniqueOverrides.cycleRange) {
-                    Text(cycles == 1 ? "1 cycle" : "\(cycles) cycles")
-                        .font(.headline)
-                }
+                cyclesStepper(of: dialled, stage: 0).font(.headline)
             }
 
-            Text(lengthDescription)
+            Text(lengthDescription(of: dialled))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
     }
 
-    // MARK: - Advanced
-
     /// Simple by default, deep on demand: the dials are real, they are bounded
     /// by the ranges the catalogue seeds, and they are one tap out of the way.
-    private var advanced: some View {
+    private func advanced(of dialled: Technique) -> some View {
         DisclosureGroup("Advanced") {
             VStack(alignment: .leading, spacing: Theme.Spacing.loose) {
-                ForEach(Array(playedStages.enumerated()), id: \.offset) { index, stage in
+                ForEach(Array(dialled.stages.enumerated()), id: \.offset) { index, stage in
                     VStack(alignment: .leading, spacing: Theme.Spacing.close) {
-                        if technique.stages.count > 1 {
+                        if technique.isStaged {
                             Text(stageTitle(index: index, stage: stage))
                                 .font(.subheadline.weight(.semibold))
                         }
@@ -119,13 +116,8 @@ struct TechniqueDetailView: View {
                             phaseDial(stage: index, phase: phaseIndex, of: phase)
                         }
 
-                        if technique.stages.count > 1, !stage.openEnded {
-                            Stepper(
-                                value: cyclesBinding(stage: index),
-                                in: TechniqueOverrides.cycleRange
-                            ) {
-                                Text("\(stage.cycles) cycles")
-                            }
+                        if technique.isStaged, !stage.openEnded {
+                            cyclesStepper(of: dialled, stage: index)
                         }
                     }
                 }
@@ -139,6 +131,13 @@ struct TechniqueDetailView: View {
             .padding(.top, Theme.Spacing.close)
         }
         .tint(technique.goal.accent)
+    }
+
+    private func cyclesStepper(of dialled: Technique, stage: Int) -> some View {
+        let cycles = dialled.stages[stage].cycles
+        return Stepper(value: cyclesBinding(stage: stage), in: TechniqueOverrides.cycleRange) {
+            Text(cycles == 1 ? "1 cycle" : "\(cycles) cycles")
+        }
     }
 
     @ViewBuilder
@@ -159,13 +158,11 @@ struct TechniqueDetailView: View {
         }
     }
 
-    private var beginButton: some View {
+    private func beginButton(playing dialled: Technique) -> some View {
         Button {
             started = StartedSession(
                 model: SessionModel(
-                    technique: technique,
-                    stages: playedStages,
-                    rounds: dialled.rounds,
+                    technique: dialled,
                     cues: SessionCues(mode: settings.cueMode),
                     recorder: sessions
                 )
@@ -180,32 +177,26 @@ struct TechniqueDetailView: View {
         .tint(technique.goal.accent)
     }
 
-    // MARK: - The dialled technique
-
-    /// The person's own settings, or the catalogue's where they have none.
-    /// Read through `settings` on every access rather than copied into `@State`:
-    /// one source of truth, and every turn of a dial is already saved.
-    private var dialled: TechniqueOverrides {
-        settings.overrides(for: technique) ?? technique.curatedOverrides
-    }
-
-    private var playedStages: [Stage] {
-        technique.stages(applying: dialled)
+    /// The person's own settings, or the catalogue's where they have none —
+    /// resolved through the technique, so a preference whose shape no longer
+    /// matches it can never be indexed by the dials below.
+    private var stored: TechniqueOverrides {
+        technique.resolving(settings.overrides(for: technique))
     }
 
     private func update(_ change: (inout TechniqueOverrides) -> Void) {
-        var overrides = dialled
+        var overrides = stored
         change(&overrides)
         settings.setOverrides(overrides, for: technique)
     }
 
     private var roundsBinding: Binding<Int> {
-        Binding(get: { dialled.rounds }, set: { rounds in update { $0.rounds = rounds } })
+        Binding(get: { stored.rounds }, set: { rounds in update { $0.rounds = rounds } })
     }
 
     private func cyclesBinding(stage: Int) -> Binding<Int> {
         Binding(
-            get: { dialled.stageCycles[stage] },
+            get: { stored.stageCycles[stage] },
             set: { cycles in update { $0.stageCycles[stage] = cycles } }
         )
     }
@@ -214,17 +205,15 @@ struct TechniqueDetailView: View {
     /// displays and half a second is the smallest move worth making by hand.
     private func durationBinding(stage: Int, phase: Int) -> Binding<Double> {
         Binding(
-            get: { Double(dialled.phaseDurationsMs[stage][phase]) / 1000 },
+            get: { Double(stored.phaseDurationsMs[stage][phase]) / 1000 },
             set: { seconds in
                 update { $0.phaseDurationsMs[stage][phase] = Int((seconds * 1000).rounded()) }
             }
         )
     }
 
-    // MARK: - Copy
-
     private func stageTitle(index: Int, stage: Stage) -> String {
-        guard technique.stages.count > 1 else { return "One cycle" }
+        guard technique.isStaged else { return "One cycle" }
 
         let position = "Stage \(index + 1)"
         if stage.openEnded {
@@ -233,14 +222,14 @@ struct TechniqueDetailView: View {
         return stage.cycles == 1 ? position : "\(position) — \(stage.cycles) cycles"
     }
 
-    private var lengthDescription: String {
-        let planned = SessionTimeline(stages: playedStages, rounds: dialled.rounds).totalDuration
+    private func lengthDescription(of dialled: Technique) -> String {
+        let planned = inWords(dialled.plannedDuration)
 
         if technique.hasOpenEndedStage {
-            return "Around \(inWords(planned)), depending on how long your holds run. "
+            return "Around \(planned), depending on how long your holds run. "
                 + "However many rounds you do is the practice."
         }
-        return "About \(inWords(planned)). However many you do is the practice."
+        return "About \(planned). However many you do is the practice."
     }
 
     /// "In 1.5s" — short enough to sit four across a phone, and precise enough

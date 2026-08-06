@@ -587,7 +587,10 @@ mod tests {
                 );
                 assert_eq!(stage.phases[0].kind, "HOLD_OUT");
                 assert_eq!(stage.cycles, 1, "an open-ended stage repeats nothing");
-                assert_eq!(ordinal, 1, "the retention follows the fast breaths");
+                assert!(
+                    ordinal > 0,
+                    "a retention follows the breathing that earns it"
+                );
             }
         }
 

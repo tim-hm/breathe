@@ -4,9 +4,10 @@ use tonic::Status;
 
 #[derive(Debug, thiserror::Error)]
 pub enum TechniqueError {
-    /// A technique with no phase rows. The foreign key and the seed's own
-    /// invariant make this unreachable, so reaching it means the schema changed
-    /// under the read path — surfaced as `internal`, not silently dropped.
+    /// A technique with no stages, or a stage with no phases. The foreign keys
+    /// and the seed's own invariants make both unreachable, so reaching one
+    /// means the schema changed under the read path — surfaced as `internal`,
+    /// not silently dropped.
     #[error("{0}")]
     Inconsistent(String),
 

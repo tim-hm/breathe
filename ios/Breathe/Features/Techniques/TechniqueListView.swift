@@ -5,8 +5,9 @@ import SwiftUI
 struct TechniqueListView: View {
     @State private var model: TechniqueListModel
 
-    /// Built here rather than passed in because the basics screen is reachable
-    /// only from this one, and it loads on its own the first time it appears.
+    /// Handed down like everything else from the composition root, and held for
+    /// the life of the app: the basics are seeded reference data, so the model
+    /// keeps them across pushes of the screen rather than refetching.
     private let foundations: FoundationsModel
 
     /// Handed down from the composition root and passed to each session, so
@@ -29,24 +30,16 @@ struct TechniqueListView: View {
                 .navigationTitle("Breathe")
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
-                        NavigationLink("The basics", value: Destination.foundations)
+                        NavigationLink("The basics") {
+                            FoundationsView(model: foundations)
+                        }
                     }
                 }
                 .navigationDestination(for: Technique.self) { technique in
                     TechniqueDetailView(technique: technique, sessions: sessions)
                 }
-                .navigationDestination(for: Destination.self) { _ in
-                    FoundationsView(model: foundations)
-                }
         }
         .task { await model.load() }
-    }
-
-    /// The one screen this stack pushes that is not a technique. An enum rather
-    /// than a `Bool` flag, so adding the next one is a case rather than a
-    /// second presentation mechanism.
-    private enum Destination: Hashable {
-        case foundations
     }
 
     @ViewBuilder
@@ -105,7 +98,7 @@ private struct TechniqueRow: View {
     /// them actually needs — and the staged ones are a different proposition
     /// from the cyclic ones, so they say so.
     private var shapeDescription: String {
-        guard let stage = technique.stages.first, technique.stages.count == 1 else {
+        guard !technique.isStaged, let stage = technique.stages.first else {
             let rounds = technique.recommendedRounds
             let unit = rounds == 1 ? "round" : "rounds"
             return technique.hasOpenEndedStage

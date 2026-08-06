@@ -58,8 +58,6 @@ struct SessionTimelineTests {
         let timeline = SessionTimeline(stages: [Self.boxStage], rounds: 1)
 
         #expect(timeline.beats.count == 32)
-        #expect(timeline.totalCycles == 8)
-        #expect(timeline.roundDuration == .milliseconds(128_000))
         #expect(timeline.totalDuration == .milliseconds(128_000))
         #expect(timeline.beats.last?.cycle == 7)
         #expect(timeline.beats.last?.end == timeline.totalDuration)
@@ -75,8 +73,6 @@ struct SessionTimelineTests {
 
         // Per round: 3 cycles × 2 phases, one hold, three recovery phases.
         #expect(timeline.beats.count == 20)
-        #expect(timeline.totalCycles == 10)
-        #expect(timeline.roundDuration == .milliseconds(88000))
         #expect(timeline.totalDuration == .milliseconds(176_000))
 
         let opening = try #require(timeline.beats.first)
@@ -165,18 +161,6 @@ struct SessionTimelineTests {
         #expect(timeline.cyclesCompleted(at: timeline.totalDuration) == 10)
         // A clock that overshoots the last boundary cannot report an eleventh.
         #expect(timeline.cyclesCompleted(at: .milliseconds(999_999)) == 10)
-    }
-
-    /// Rounds are the unit a staged protocol is counted in — three rounds is the
-    /// thing someone says they did, not ninety-six cycles.
-    @Test("Rounds are counted whole, like cycles")
-    func countsWholeRoundsOnly() {
-        let timeline = SessionTimeline(stages: Self.staged, rounds: 2)
-
-        #expect(timeline.roundsCompleted(at: .milliseconds(87999)) == 0)
-        #expect(timeline.roundsCompleted(at: .milliseconds(88000)) == 1)
-        #expect(timeline.roundsCompleted(at: timeline.totalDuration) == 2)
-        #expect(timeline.roundsCompleted(at: .milliseconds(999_999)) == 2)
     }
 
     /// Breaths are counted per inhale, not per cycle — the physiological sigh

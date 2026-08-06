@@ -87,20 +87,6 @@ public struct Stage: Sendable, Hashable {
     public var duration: Duration {
         cycleDuration * max(cycles, 1)
     }
-
-    /// The same stage with `phases` replaced, keeping its cycles and its flag.
-    public func with(phases: [Phase]) -> Self {
-        Self(phases: phases, cycles: cycles, openEnded: openEnded)
-    }
-
-    /// The same stage at `cycles`, clamped to a count that is still a session.
-    public func with(cycles: Int) -> Self {
-        Self(
-            phases: phases,
-            cycles: TechniqueOverrides.cycleRange.clamping(cycles),
-            openEnded: openEnded
-        )
-    }
 }
 
 /// `Hashable` so a list row can push one as a `NavigationStack` value rather
@@ -149,9 +135,26 @@ public struct Technique: Sendable, Identifiable, Hashable {
     public var hasOpenEndedStage: Bool {
         stages.contains(where: \.openEnded)
     }
+
+    /// Whether this is a staged protocol rather than one cycle repeated.
+    ///
+    /// The distinction the interface turns on: a staged technique is dialled in
+    /// rounds and described stage by stage, a cyclic one in cycles.
+    public var isStaged: Bool {
+        stages.count > 1
+    }
+
+    /// How long a session takes at these settings.
+    ///
+    /// An open-ended stage counts at the typical hold it is seeded with, so this
+    /// is an estimate for any technique that has one — the same number
+    /// `SessionTimeline` lays out, without laying out every beat to find it.
+    public var plannedDuration: Duration {
+        stages.reduce(.zero) { $0 + $1.duration } * max(recommendedRounds, 1)
+    }
 }
 
-public extension [Phase] {
+extension [Phase] {
     /// How long the sequence takes end to end.
     ///
     /// One definition, so a technique's advertised cycle length and the length

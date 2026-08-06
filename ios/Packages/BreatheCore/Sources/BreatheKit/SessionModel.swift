@@ -53,10 +53,10 @@ public final class SessionModel {
         case finished
     }
 
+    /// The technique as it is being played — already dialled, if the person
+    /// dialled it (`Technique.dialled(with:)`). One answer to what this session
+    /// is, so nothing downstream can read a duration the session never plays.
     public let technique: Technique
-    /// The stages this session actually plays — the technique's own, or the
-    /// dialled versions the person chose on the detail screen.
-    public let stages: [Stage]
     public let timeline: SessionTimeline
 
     public private(set) var status: Status = .ready
@@ -91,17 +91,11 @@ public final class SessionModel {
 
     public init(
         technique: Technique,
-        stages: [Stage]? = nil,
-        rounds: Int? = nil,
         cues: any SessionCueing,
         recorder: any SessionRecording
     ) {
         self.technique = technique
-        self.stages = stages ?? technique.stages
-        timeline = SessionTimeline(
-            stages: self.stages,
-            rounds: rounds ?? technique.recommendedRounds
-        )
+        timeline = SessionTimeline(technique: technique)
         self.cues = cues
         self.recorder = recorder
     }
@@ -156,10 +150,18 @@ public final class SessionModel {
 
     /// How many cycles the stage on screen plays — the "of 30" in the header.
     public var cyclesInCurrentStage: Int {
+        let stages = technique.stages
         guard let stage = describingBeat?.stage, stages.indices.contains(stage) else {
             return stages.last?.cycles ?? 1
         }
         return stages[stage].cycles
+    }
+
+    /// Whether an open-ended hold is in progress — including while the session
+    /// is paused inside one, which is why this reads the hold's own clock rather
+    /// than `status`. A paused retention is still a retention.
+    public var isInHold: Bool {
+        holdBegan != nil
     }
 
     /// The beat the header describes. Before the cue loop's first turn, and
@@ -188,9 +190,9 @@ public final class SessionModel {
 
     public func resume() {
         guard status == .paused else { return }
-        // A pause inside a hold resumes into the hold, not past it: `holdBegan`
-        // outlives the pause, so the hold's own timer picks up where it stopped.
-        status = holdBegan == nil ? .running : .holding
+        // A pause inside a hold resumes into the hold, not past it: the hold's
+        // own clock outlives the pause and picks up where it stopped.
+        status = isInHold ? .holding : .running
         resumeClock()
     }
 

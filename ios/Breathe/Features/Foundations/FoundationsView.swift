@@ -19,7 +19,7 @@ struct FoundationsView: View {
         content
             .navigationTitle("The basics")
             .navigationBarTitleDisplayMode(.inline)
-            .task { await model.load() }
+            .task { await model.loadIfNeeded() }
     }
 
     @ViewBuilder

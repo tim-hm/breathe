@@ -60,10 +60,6 @@ public struct SessionTimeline: Sendable, Equatable {
     public let beats: [Beat]
     /// How many times the whole stage list repeats.
     public let rounds: Int
-    /// One repetition of the stage list.
-    public let roundDuration: Duration
-    /// Every cycle in the session — rounds × stages × each stage's cycles.
-    public let totalCycles: Int
     /// The planned length. An open-ended stage contributes its typical hold, so
     /// this is an estimate for any technique that has one.
     public let totalDuration: Duration
@@ -112,8 +108,6 @@ public struct SessionTimeline: Sendable, Equatable {
         self.beats = beats
         self.rounds = rounds
         self.cycleEnds = cycleEnds
-        roundDuration = stages.reduce(.zero) { $0 + $1.duration }
-        totalCycles = cycleEnds.count
         totalDuration = start
     }
 
@@ -153,14 +147,6 @@ public struct SessionTimeline: Sendable, Equatable {
         // Counted rather than searched: this answers when a session ends and
         // when a summary draws, not once a frame.
         cycleEnds.count { $0 <= elapsed }
-    }
-
-    /// How many rounds are wholly behind `elapsed` — the unit a staged protocol
-    /// is counted in, and the one its summary should report.
-    public func roundsCompleted(at elapsed: Duration) -> Int {
-        guard roundDuration > .zero else { return 0 }
-        let completed = elapsed.milliseconds / roundDuration.milliseconds
-        return min(max(Int(completed), 0), rounds)
     }
 
     /// How many inhales are wholly behind `elapsed`.

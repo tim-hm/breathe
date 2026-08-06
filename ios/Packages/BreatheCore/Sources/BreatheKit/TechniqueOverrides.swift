@@ -47,29 +47,50 @@ public extension Technique {
         )
     }
 
-    /// The stages to play, with `overrides` applied wherever they still fit.
+    /// `overrides` if they still describe this technique, the curated settings
+    /// otherwise.
     ///
-    /// Every value is clamped into the range the catalogue seeded, so a stored
-    /// preference cannot outlive a tightened safe range — and a preference whose
-    /// shape no longer matches the technique is dropped whole, which is the only
-    /// interpretation that cannot silently put a duration on the wrong phase.
-    func stages(applying overrides: TechniqueOverrides?) -> [Stage] {
-        guard let overrides, fits(overrides) else { return stages }
-
-        return stages.enumerated().map { index, stage in
-            let durations = overrides.phaseDurationsMs[index]
-            let dialled = stage.phases.enumerated().map { phaseIndex, phase in
-                phase.dialled(to: .milliseconds(durations[phaseIndex]))
-            }
-            return stage.with(phases: dialled).with(cycles: overrides.stageCycles[index])
-        }
+    /// The one place a stored preference is admitted. Everything downstream —
+    /// the dials that index these arrays, the session that plays them — works
+    /// from the result, so nothing can index a shape the catalogue has since
+    /// changed.
+    func resolving(_ overrides: TechniqueOverrides?) -> TechniqueOverrides {
+        guard let overrides, fits(overrides) else { return curatedOverrides }
+        return overrides
     }
 
-    /// How many rounds `overrides` asks for, or the curated count when it asks
-    /// for nothing this technique can honour.
-    func rounds(applying overrides: TechniqueOverrides?) -> Int {
-        guard let overrides, fits(overrides) else { return recommendedRounds }
-        return TechniqueOverrides.roundRange.clamping(overrides.rounds)
+    /// This technique as `overrides` dial it: the same catalogue entry, playing
+    /// the durations, cycles, and rounds this person chose.
+    ///
+    /// Returns a `Technique` rather than a pair of values so that stages and
+    /// rounds cannot be applied inconsistently — a session built from dialled
+    /// stages and a curated round count is a session nobody asked for. Every
+    /// value is clamped into the range the catalogue seeded, so a stored
+    /// preference cannot outlive a tightened safe range.
+    func dialled(with overrides: TechniqueOverrides?) -> Technique {
+        let overrides = resolving(overrides)
+
+        let stages = stages.enumerated().map { index, stage in
+            let durations = overrides.phaseDurationsMs[index]
+            return Stage(
+                phases: stage.phases.enumerated().map { phaseIndex, phase in
+                    phase.dialled(to: .milliseconds(durations[phaseIndex]))
+                },
+                cycles: TechniqueOverrides.cycleRange.clamping(overrides.stageCycles[index]),
+                openEnded: stage.openEnded
+            )
+        }
+
+        return Technique(
+            id: id,
+            slug: slug,
+            name: name,
+            summary: summary,
+            goal: goal,
+            stages: stages,
+            recommendedRounds: TechniqueOverrides.roundRange.clamping(overrides.rounds),
+            safetyNote: safetyNote
+        )
     }
 
     /// Whether `overrides` still describes this technique's shape.

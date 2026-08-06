@@ -36,8 +36,11 @@ struct TechniqueOverridesTests {
 
     @Test("No overrides is the curated technique, unchanged")
     func fallsBackToTheCatalogue() {
-        #expect(Self.technique.stages(applying: nil) == Self.technique.stages)
-        #expect(Self.technique.rounds(applying: nil) == 1)
+        let dialled = Self.technique.dialled(with: nil)
+
+        #expect(dialled.stages == Self.technique.stages)
+        #expect(dialled.recommendedRounds == 1)
+        #expect(dialled.slug == Self.technique.slug, "a dialled technique is the same technique")
     }
 
     @Test("A dialled technique plays what the person chose")
@@ -48,7 +51,7 @@ struct TechniqueOverridesTests {
             rounds: 1
         )
 
-        let stage = try #require(Self.technique.stages(applying: overrides).first)
+        let stage = try #require(Self.technique.dialled(with: overrides).stages.first)
 
         #expect(stage.phases.map(\.duration) == [.milliseconds(5000), .milliseconds(8000)])
         #expect(stage.cycles == 20)
@@ -68,28 +71,33 @@ struct TechniqueOverridesTests {
             rounds: 99
         )
 
-        let stage = try #require(Self.technique.stages(applying: overrides).first)
+        let dialled = Self.technique.dialled(with: overrides)
+        let stage = try #require(dialled.stages.first)
 
         #expect(stage.phases.map(\.duration) == [.milliseconds(5000), .milliseconds(6000)])
         #expect(stage.cycles == TechniqueOverrides.cycleRange.upperBound)
-        #expect(Self.technique.rounds(applying: overrides) == TechniqueOverrides.roundRange
-            .upperBound)
+        #expect(dialled.recommendedRounds == TechniqueOverrides.roundRange.upperBound)
     }
 
     /// The one case parallel arrays exist to make detectable: a technique that
     /// gained a phase since the preference was written. There is no way to know
     /// which stored duration belonged to which new phase, so the whole
-    /// preference goes rather than half of it landing on the wrong beat.
+    /// preference goes rather than half of it landing on the wrong beat — and
+    /// the rounds go with the stages, or a session plays curated stages for a
+    /// count nobody chose.
     @Test("Overrides that no longer fit the technique are dropped whole")
     func dropsOverridesThatNoLongerFit() {
         let stale = TechniqueOverrides(
             phaseDurationsMs: [[5000]],
             stageCycles: [20],
-            rounds: 1
+            rounds: 7
         )
 
-        #expect(Self.technique.stages(applying: stale) == Self.technique.stages)
-        #expect(Self.technique.rounds(applying: stale) == 1)
+        let dialled = Self.technique.dialled(with: stale)
+
+        #expect(dialled.stages == Self.technique.stages)
+        #expect(dialled.recommendedRounds == 1)
+        #expect(Self.technique.resolving(stale) == Self.technique.curatedOverrides)
     }
 
     @Test("The curated overrides describe the technique as seeded")
@@ -99,6 +107,6 @@ struct TechniqueOverridesTests {
         #expect(curated.phaseDurationsMs == [[4000, 6000]])
         #expect(curated.stageCycles == [12])
         #expect(curated.rounds == 1)
-        #expect(Self.technique.stages(applying: curated) == Self.technique.stages)
+        #expect(Self.technique.dialled(with: curated).stages == Self.technique.stages)
     }
 }
