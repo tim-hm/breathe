@@ -69,6 +69,20 @@ public final class SessionModel {
     /// so the summary screen shows exactly what was recorded.
     public private(set) var record: SessionRecord?
 
+    /// A session ended by hand inside this window never reaches the store: it
+    /// is a false start — a mistap, a phone call — not practice, and a journal
+    /// of two-second entries teaches people to stop trusting the journal.
+    /// Completed sessions are exempt; finishing a plan is practice however
+    /// short the plan was.
+    public static let minimumRecordedDuration: Duration = .seconds(10)
+
+    /// Whether the ended session was let go rather than kept — the view's cue
+    /// to close quietly instead of presenting a summary of nothing.
+    public var wasDiscarded: Bool {
+        guard status == .finished, let record else { return false }
+        return !record.completed && record.duration < Self.minimumRecordedDuration
+    }
+
     private let cues: any SessionCueing
     private let recorder: any SessionRecording
     private let clock = ContinuousClock()
@@ -302,6 +316,7 @@ public final class SessionModel {
             cues.playCompletion()
         }
 
+        guard !wasDiscarded else { return }
         Task { await recorder.record(record) }
     }
 }
