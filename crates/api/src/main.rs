@@ -5,7 +5,7 @@
 //! same stack this binary serves.
 
 use anyhow::{Context, Result};
-use api::features::assistant;
+use api::assistant;
 use api::state::AppState;
 use api::{config, http, obs};
 use sqlx::postgres::PgPoolOptions;
@@ -40,7 +40,7 @@ async fn main() -> Result<()> {
 
     // The composition root's one real choice: which side of the assistant's
     // model seam this process runs. Logged there, either way.
-    let assistant = assistant::model::from_config(&config);
+    let assistant = assistant::from_config(&config);
 
     let state = AppState::new(pool, config, assistant);
     let port = state.config.port;

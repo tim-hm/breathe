@@ -18,10 +18,9 @@ use uuid::Uuid;
 use super::errors::AssistantError;
 use super::model::{ModelClient, ModelRequest};
 use super::types::{
-    AssistantSource, DAILY_MODEL_CALLS, EXPLANATION_MAX_TOKENS, RECOMMENDATION_MAX_TOKENS,
-    Recommendation,
+    DAILY_MODEL_CALLS, EXPLANATION_MAX_TOKENS, RECOMMENDATION_MAX_TOKENS, Recommendation,
 };
-use super::{fallback, prompt, repository};
+use super::{fallback, parse, prompt, repository};
 use crate::features::profile::repository::{ProfileRow, find_profile};
 use crate::features::technique::repository::{TechniqueRow, list_techniques};
 use crate::proto::breathe::v1 as pb;
@@ -35,25 +34,45 @@ pub async fn get_recommendation(
     model: &dyn ModelClient,
     user_id: Uuid,
 ) -> Result<pb::GetRecommendationResponse, AssistantError> {
-    let catalogue = list_techniques(pool).await?;
+    let (catalogue, profile) = read_context(pool, user_id).await?;
     if catalogue.is_empty() {
         return Err(AssistantError::EmptyCatalogue);
     }
-    let profile = find_profile(pool, user_id).await?;
 
     let (recommendations, source) =
         match model_recommendations(pool, model, user_id, &catalogue, &profile).await {
-            Some(recommendations) => (recommendations, AssistantSource::Model),
+            Some(recommendations) => (recommendations, pb::AssistantSource::Model),
             None => (
                 fallback::recommendations(&catalogue, &profile),
-                AssistantSource::Fallback,
+                pb::AssistantSource::Fallback,
             ),
         };
 
     Ok(pb::GetRecommendationResponse {
         recommendations: recommendations.into_iter().map(to_proto).collect(),
-        source: source_to_proto(source) as i32,
+        source: source as i32,
     })
+}
+
+/// The catalogue and the caller's profile, read together.
+///
+/// Concurrently because neither read depends on the other, and both happen
+/// before anything else can: serialising them would put two loopback
+/// round-trips in front of every call rather than one.
+async fn read_context(
+    pool: &PgPool,
+    user_id: Uuid,
+) -> Result<(Vec<TechniqueRow>, ProfileRow), AssistantError> {
+    let (catalogue, profile) = tokio::try_join!(
+        async { list_techniques(pool).await.map_err(AssistantError::from) },
+        async {
+            find_profile(pool, user_id)
+                .await
+                .map_err(AssistantError::from)
+        },
+    )?;
+
+    Ok((catalogue, profile))
 }
 
 /// The model's answer, or `None` for every reason there might not be one.
@@ -69,7 +88,7 @@ async fn model_recommendations(
     catalogue: &[TechniqueRow],
     profile: &ProfileRow,
 ) -> Option<Vec<Recommendation>> {
-    if !claim_call(pool, user_id).await {
+    if !model.is_available() || !claim_call(pool, user_id).await {
         return None;
     }
 
@@ -88,7 +107,7 @@ async fn model_recommendations(
     };
 
     // The guard: a slug reaches a client only because the catalogue has it.
-    let recommendations = prompt::parse_recommendations(&reply, catalogue);
+    let recommendations = parse::parse_recommendations(&reply, catalogue);
     if recommendations.is_empty() {
         tracing::warn!(
             feature = "assistant",
@@ -106,16 +125,18 @@ pub async fn explain_technique(
     user_id: Uuid,
     slug: &str,
 ) -> Result<ExplanationStream, AssistantError> {
-    let catalogue = list_techniques(pool).await?;
+    let (catalogue, profile) = read_context(pool, user_id).await?;
     let technique = catalogue
         .iter()
         .find(|row| row.slug == slug)
         .ok_or_else(|| {
             AssistantError::UnknownTechnique(format!("no technique has the slug `{slug}`"))
         })?;
-    let profile = find_profile(pool, user_id).await?;
 
-    if claim_call(pool, user_id).await {
+    // Availability first, so a process with no key configured — a fresh clone,
+    // CI, the whole e2e suite — neither writes a quota row nor builds a prompt
+    // for a call that provably will not be made.
+    if model.is_available() && claim_call(pool, user_id).await {
         let request = ModelRequest {
             cacheable_prefix: prompt::catalogue_prefix(&catalogue),
             instruction: prompt::explanation_instruction(technique, &profile),
@@ -198,14 +219,5 @@ fn to_proto(recommendation: Recommendation) -> pb::Recommendation {
     pb::Recommendation {
         technique_slug: recommendation.technique_slug,
         reason: recommendation.reason,
-    }
-}
-
-/// Written out rather than derived, so adding a source without a proto member
-/// fails to compile here instead of reaching a client as an unmapped zero.
-const fn source_to_proto(source: AssistantSource) -> pb::AssistantSource {
-    match source {
-        AssistantSource::Model => pb::AssistantSource::Model,
-        AssistantSource::Fallback => pb::AssistantSource::Fallback,
     }
 }

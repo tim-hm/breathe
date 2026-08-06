@@ -11,13 +11,18 @@
 //! cacheable prefix, an instruction, and a ceiling; how that becomes a
 //! chat-completions call is `openrouter`'s business.
 
+pub mod breaker;
+pub mod disabled;
+pub mod openrouter;
+
 use std::pin::Pin;
 use std::sync::Arc;
 
 use tokio_stream::Stream;
 
-use super::breaker::GuardedModelClient;
-use super::openrouter::OpenRouterClient;
+use self::breaker::GuardedModelClient;
+use self::disabled::DisabledModelClient;
+use self::openrouter::OpenRouterClient;
 use crate::config::Config;
 
 /// Text arriving a piece at a time, in order.
@@ -63,6 +68,17 @@ pub enum ModelError {
     Failed(String),
 }
 
+impl ModelError {
+    /// The answer a client gives when it declines to call anything.
+    ///
+    /// One constructor rather than one per implementation, so "the disabled
+    /// client answers exactly what the breaker answers" is a fact about the
+    /// code rather than a claim in a comment.
+    pub fn unavailable(reason: &str) -> Self {
+        Self::Unavailable(reason.to_owned())
+    }
+}
+
 /// What the assistant needs from a language model, and nothing else.
 ///
 /// `tonic::async_trait` rather than a native `async fn`: async functions in
@@ -77,6 +93,21 @@ pub trait ModelClient: Send + Sync {
     /// The reply as it is written. The `Result` is the call being *established*;
     /// a failure after the first chunk arrives on the stream instead.
     async fn stream(&self, request: &ModelRequest) -> Result<ModelStream, ModelError>;
+
+    /// Whether a call would be attempted at all, asked before one is prepared.
+    ///
+    /// Purely advisory and deliberately not authoritative — `complete` and
+    /// `stream` still refuse on their own, because the breaker can trip between
+    /// this answer and the call. What it buys is that the caller can skip the
+    /// work a refusal would waste: a quota claim, which is a database write, and
+    /// the prompt, which walks the whole catalogue. With no key configured that
+    /// is every request in the process.
+    ///
+    /// Defaulted to `true` so an implementation that always tries — the
+    /// provider, a test double — says nothing.
+    fn is_available(&self) -> bool {
+        true
+    }
 }
 
 /// Installs the model client this process will use.
@@ -115,28 +146,4 @@ pub fn from_config(config: &Config) -> Arc<dyn ModelClient> {
         "the assistant is live"
     );
     Arc::new(GuardedModelClient::new(Arc::new(client)))
-}
-
-/// The client installed when there is no key.
-///
-/// Refuses every call as `Unavailable` — the same answer the breaker gives, and
-/// therefore a path the service already handles rather than a special case it
-/// has to know about.
-pub struct DisabledModelClient;
-
-#[tonic::async_trait]
-impl ModelClient for DisabledModelClient {
-    async fn complete(&self, _request: &ModelRequest) -> Result<String, ModelError> {
-        Err(Self::refusal())
-    }
-
-    async fn stream(&self, _request: &ModelRequest) -> Result<ModelStream, ModelError> {
-        Err(Self::refusal())
-    }
-}
-
-impl DisabledModelClient {
-    fn refusal() -> ModelError {
-        ModelError::Unavailable("no model is configured".to_owned())
-    }
 }

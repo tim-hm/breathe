@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use api::assistant::{DisabledModelClient, ModelClient};
 use api::config::{Config, Environment};
-use api::features::assistant::model::{DisabledModelClient, ModelClient};
 use api::state::AppState;
 use axum::Router;
 use axum::body::{Body, Bytes};
@@ -83,15 +83,21 @@ impl TestDatabase {
 
     /// The router the binary serves, over this database.
     ///
-    /// No language model: every test that is not about the assistant should
-    /// behave the same whether or not a key happens to be in the environment,
-    /// and a suite that reached the network would be a suite that fails on a
-    /// train.
+    /// No language model behind the seam: a test that is not about the
+    /// assistant must behave the same whether or not a key happens to be in the
+    /// environment, and a suite that could reach the network is a suite that
+    /// fails on a train. `DisabledModelClient` is not a stub for the occasion —
+    /// it is what a deployment without a key runs.
     pub fn app(&self) -> Router {
         build_app(self.pool.clone())
     }
 
-    /// The same router with a scripted model behind the assistant's seam.
+    /// The same router with a scripted model behind the seam.
+    ///
+    /// Paired with [`Self::app`] rather than folded into one argument, for the
+    /// same reason `call_grpc_web` is paired with `call_grpc_web_with`: the
+    /// model is the one thing that varies, and twenty unrelated tests should not
+    /// carry it.
     pub fn app_with_model(&self, assistant: Arc<dyn ModelClient>) -> Router {
         build_app_with_model(self.pool.clone(), assistant)
     }

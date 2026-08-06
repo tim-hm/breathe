@@ -297,10 +297,14 @@ depends = ["dev:db"]
 # it proves is that the key, the model id, the request body, and the parser all
 # still agree with a provider no test double can stand in for.
 #
+# The filter names a *category* — every `smoke_*` test — rather than one
+# function, so renaming a test cannot quietly make this task pass by running
+# nothing, and a second paid check joins by being named.
+#
 # `--no-capture` because the printed answer *is* the result. No key in the
 # environment is a skip, not a failure.
 env = { CARGO_TARGET_DIR = "{{env.CHECK_TARGET_DIR}}" }
-run = "cargo nextest run -p api --test e2e --run-ignored only -E 'test(the_real_model_answers)' --no-capture"
+run = "cargo nextest run -p api --test e2e --run-ignored only -E 'test(/^smoke_/)' --no-capture"
 
 [tasks."test:swift"]
 dir = "{{config_root}}/ios"
@@ -314,21 +318,41 @@ description = "Serve the marketing one-pager locally"
 run = "pnpm dlx serve --listen 18102 {{config_root}}/web"
 
 # infra: the AWS deployment, defined in infra/ and applied deliberately —
-# nothing below runs from `check` or CI, and only infra:apply touches AWS.
+# nothing below runs from `check` or CI, and only the apply tasks touch AWS.
+#
+# Every task that reaches AWS pins AWS_PROFILE, for the same reason DATABASE_URL
+# is pinned above: an ambient value inherited from another repo's shell is
+# indistinguishable from the right one until it has already done something.
+# `breathe` is the IAM user infra/bootstrap creates; `holmie` is the account
+# root, and bootstrap is the only thing that may still use it.
+
+[tasks."infra:bootstrap:init"]
+description = "Initialise the bootstrap root (state bucket + IAM user; local state)"
+dir = "{{config_root}}/infra/bootstrap"
+run = "tofu init"
+
+[tasks."infra:bootstrap:apply"]
+description = "Create the OpenTofu state bucket and the breathe-tofu IAM user (runs as account root; once)"
+dir = "{{config_root}}/infra/bootstrap"
+env = { AWS_PROFILE = "holmie" }
+run = "tofu apply"
 
 [tasks."infra:init"]
-description = "Initialise OpenTofu (downloads providers and modules; no AWS access)"
+description = "Initialise OpenTofu (downloads providers and modules; reaches the S3 backend)"
 dir = "{{config_root}}/infra"
+env = { AWS_PROFILE = "breathe" }
 run = "tofu init"
 
 [tasks."infra:plan"]
 description = "Preview infrastructure changes (needs AWS credentials, changes nothing)"
 dir = "{{config_root}}/infra"
+env = { AWS_PROFILE = "breathe" }
 run = ["tofu fmt -check -diff", "tofu validate", "tofu plan"]
 
 [tasks."infra:apply"]
 description = "Apply infrastructure changes to AWS"
 dir = "{{config_root}}/infra"
+env = { AWS_PROFILE = "breathe" }
 run = "tofu apply"
 
 [tasks.deploy]
@@ -336,7 +360,15 @@ description = "Build the release image, ship it to the box over SSH, migrate, re
 # No registry: one box makes `docker save | ssh docker load` the whole supply
 # chain. The host derives from the infra state rather than an env var, so there
 # is exactly one answer to where production is.
-run = ["docker build --platform linux/arm64 -t breathe-api:latest .", """
+env = { AWS_PROFILE = "breathe" }
+run = ["""
+  set -eu
+  # .dockerignore excludes .git, so build.rs cannot read the commit itself —
+  # without this, /about reports "unknown" and cannot say what is deployed.
+  docker build --platform linux/arm64 \
+    --build-arg GIT_COMMIT_HASH="$(git rev-parse --short HEAD)" \
+    -t breathe-api:latest .
+  """, """
   set -eu
   host="ubuntu@$(tofu -chdir=infra output -raw elastic_ip)"
   docker save breathe-api:latest | gzip | ssh "$host" 'gunzip | docker load'

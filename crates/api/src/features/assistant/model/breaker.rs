@@ -15,7 +15,7 @@
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use super::model::{ModelClient, ModelError, ModelRequest, ModelStream};
+use super::{ModelClient, ModelError, ModelRequest, ModelStream};
 
 /// Consecutive failures that trip it.
 ///
@@ -107,8 +107,22 @@ impl GuardedModelClient {
         }
     }
 
+    /// Whether the breaker is open right now, without touching the counter.
+    ///
+    /// Separate from [`Self::admits`], which clears an expired cooldown as it
+    /// passes: this one is asked speculatively, before a call is prepared, and a
+    /// peek that reset the breaker would let a caller who then decided not to
+    /// call consume the one probe the cooldown allows.
+    fn is_open(&self) -> bool {
+        self.state
+            .lock()
+            .ok()
+            .and_then(|state| state.open_until)
+            .is_some_and(|until| Instant::now() < until)
+    }
+
     fn refusal() -> ModelError {
-        ModelError::Unavailable("recent calls failed; waiting before trying again".to_owned())
+        ModelError::unavailable("recent calls failed; waiting before trying again")
     }
 }
 
@@ -135,5 +149,12 @@ impl ModelClient for GuardedModelClient {
         let result = self.inner.stream(request).await;
         self.record(result.is_ok());
         result
+    }
+
+    /// False while open, so a caller skips the quota claim and the prompt for a
+    /// call this would refuse anyway. Delegates once past its own gate — a
+    /// wrapped client may have its own reason to decline.
+    fn is_available(&self) -> bool {
+        !self.is_open() && self.inner.is_available()
     }
 }

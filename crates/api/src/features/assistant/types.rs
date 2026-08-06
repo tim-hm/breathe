@@ -1,4 +1,48 @@
 //! The assistant's domain vocabulary, and the numbers that bound what it costs.
+//!
+//! The prose here — what a goal is called, what an experience level is called —
+//! is shared by the prompt and by the rule-based fallback on purpose: the
+//! assistant's words for a goal should be the same whether a model or this
+//! server wrote the sentence around them.
+
+use crate::features::profile::types::ExperienceLevel;
+use crate::features::technique::types::TechniqueGoal;
+
+/// What a goal is called in prose.
+///
+/// Shared with `super::fallback`, which writes the rule-based reasons: the
+/// assistant's vocabulary for a goal should be the same whether a model or this
+/// server wrote the sentence.
+pub const fn goal_phrase(goal: TechniqueGoal) -> &'static str {
+    match goal {
+        TechniqueGoal::Calm => "settle in the moment",
+        TechniqueGoal::Sleep => "wind down towards sleep",
+        TechniqueGoal::Energy => "raise their energy",
+        TechniqueGoal::Reset => "reset after a spike",
+        TechniqueGoal::Focus => "hold their focus",
+    }
+}
+
+/// What an experience level is called in prose. `None` is a real state — nobody
+/// has been asked — and reads as such rather than as a beginner.
+pub const fn experience_phrase(level: Option<ExperienceLevel>) -> &'static str {
+    match level {
+        Some(ExperienceLevel::New) => "new to breathwork",
+        Some(ExperienceLevel::Occasional) => "has tried it, without a routine",
+        Some(ExperienceLevel::Regular) => "practises regularly",
+        None => "unknown — they have not been asked",
+    }
+}
+
+/// The separator between a slug and its reason in a model's reply.
+///
+/// A pipe rather than a colon or a comma, because both of those occur inside
+/// the sentence on the right and neither occurs in a slug — so `split_once`
+/// cannot be fooled by ordinary English. Shared by the instruction that asks
+/// for this shape and the parser that reads it: two copies could disagree, and
+/// the disagreement would look exactly like a model that stopped following
+/// instructions.
+pub const FIELD_SEPARATOR: char = '|';
 
 /// One technique the assistant is putting forward, and the sentence that
 /// justifies it.
@@ -10,14 +54,6 @@
 pub struct Recommendation {
     pub technique_slug: String,
     pub reason: String,
-}
-
-/// Where an answer came from. Mirrors `pb::AssistantSource`, minus the zero
-/// value the wire format can always produce.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AssistantSource {
-    Model,
-    Fallback,
 }
 
 /// How many techniques one recommendation carries.

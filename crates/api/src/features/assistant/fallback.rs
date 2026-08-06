@@ -11,8 +11,7 @@
 //! fallback answer is a plainer version of the same judgement rather than a
 //! different one.
 
-use super::prompt::goal_phrase;
-use super::types::{RECOMMENDATION_COUNT, Recommendation};
+use super::types::{RECOMMENDATION_COUNT, Recommendation, goal_phrase};
 use crate::features::profile::repository::ProfileRow;
 use crate::features::profile::types::ExperienceLevel;
 use crate::features::technique::repository::TechniqueRow;
@@ -24,26 +23,20 @@ use crate::features::technique::repository::TechniqueRow;
 /// even for somebody who picked one goal or none. Catalogue order is curated to
 /// open on what a newcomer should try first, which makes it the right tiebreak.
 pub fn recommendations(catalogue: &[TechniqueRow], profile: &ProfileRow) -> Vec<Recommendation> {
-    let mut chosen: Vec<&TechniqueRow> = Vec::new();
+    let mut ranked: Vec<&TechniqueRow> = catalogue.iter().collect();
 
-    for goal in &profile.goals {
-        for technique in catalogue.iter().filter(|row| row.goal == *goal) {
-            if !chosen.iter().any(|kept| kept.slug == technique.slug) {
-                chosen.push(technique);
-            }
-        }
-    }
+    // A *stable* sort is what expresses the whole rule: techniques serving an
+    // earlier goal come first, catalogue order survives within each goal, and
+    // everything the person did not ask for keeps its curated order at the end.
+    ranked.sort_by_key(|technique| {
+        profile
+            .goals
+            .iter()
+            .position(|goal| *goal == technique.goal)
+            .unwrap_or(usize::MAX)
+    });
 
-    for technique in catalogue {
-        if chosen.len() >= RECOMMENDATION_COUNT {
-            break;
-        }
-        if !chosen.iter().any(|kept| kept.slug == technique.slug) {
-            chosen.push(technique);
-        }
-    }
-
-    chosen
+    ranked
         .into_iter()
         .take(RECOMMENDATION_COUNT)
         .map(|technique| Recommendation {

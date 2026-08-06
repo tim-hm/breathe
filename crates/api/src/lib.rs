@@ -7,12 +7,28 @@
 //! `tests/e2e` can drive the exact router the binary serves. A harness that
 //! assembled its own router would verify a stack no deployment runs.
 
+mod features;
 mod grpc;
 
-/// Public so the composition root and `tests/e2e` can name the assistant's
-/// model seam — the one dependency this crate takes that a caller has to
-/// choose. Nothing else outside the crate reaches in here.
-pub mod features;
+/// The assistant's model seam — the one dependency this crate takes that its
+/// caller has to choose, and therefore the only thing a feature exposes outside
+/// the crate.
+///
+/// A named re-export rather than making `features` public: the composition root
+/// and `tests/e2e` need to name a handful of types, and publishing the whole
+/// feature tree to get them would also publish every service, repository, and
+/// error type — which is exactly the backdoor docs/code-structure.md's "nothing
+/// bypasses a feature's public surface" rules out. Adding to this list is a
+/// visible decision.
+pub mod assistant {
+    pub use crate::features::assistant::model::breaker::GuardedModelClient;
+    pub use crate::features::assistant::model::disabled::DisabledModelClient;
+    pub use crate::features::assistant::model::openrouter::OpenRouterClient;
+    pub use crate::features::assistant::model::{
+        ModelClient, ModelError, ModelRequest, ModelStream, from_config,
+    };
+    pub use crate::features::assistant::types::DAILY_MODEL_CALLS;
+}
 
 pub mod config;
 pub mod http;

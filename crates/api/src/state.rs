@@ -21,9 +21,9 @@ pub struct AppState {
     /// Injected exactly as the pool is, and for the same reason: it is the
     /// other thing in this process that talks to something outside it, and a
     /// handler holding a concrete client instead would be a handler no test
-    /// could point somewhere harmless. `features::assistant::model` owns the
-    /// trait; this field carries the chosen implementation from the composition
-    /// root down to the one service that calls it.
+    /// could point somewhere harmless. `crate::assistant` re-exports the trait
+    /// for the composition root; this field carries the chosen implementation
+    /// down to the one service that calls it.
     pub assistant: Arc<dyn ModelClient>,
 }
 

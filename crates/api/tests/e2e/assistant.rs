@@ -11,9 +11,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use api::features::assistant::breaker::GuardedModelClient;
-use api::features::assistant::model::{ModelClient, ModelError, ModelRequest, ModelStream};
-use api::features::assistant::types::DAILY_MODEL_CALLS;
+use api::assistant::{
+    DAILY_MODEL_CALLS, GuardedModelClient, ModelClient, ModelError, ModelRequest, ModelStream,
+};
 use api::identity::USER_ID_HEADER;
 use api::proto::breathe::v1 as pb;
 
@@ -39,11 +39,9 @@ struct ScriptedModel {
 }
 
 impl ScriptedModel {
+    /// `next` repeats a sole entry forever, so "always" is one-element script.
     fn always(reply: Result<String, ModelError>) -> Arc<Self> {
-        Arc::new(Self {
-            replies: Mutex::new(vec![reply]),
-            calls: AtomicUsize::new(0),
-        })
+        Self::script(vec![reply])
     }
 
     fn script(replies: Vec<Result<String, ModelError>>) -> Arc<Self> {
@@ -351,11 +349,12 @@ async fn callers_do_not_share_guidance() {
 
 /// The one test that spends money.
 ///
-/// `#[ignore]`, so it never runs in `mise run test:e2e` or in CI — it is driven
-/// by `mise run assistant:smoke`, which is the only way to find out whether the
-/// key, the model id, the request body, and the parser agree with a provider
-/// that is not a test double. Everything above this line is deterministic;
-/// this is the seam's other side, and it can only be checked by calling it.
+/// `#[ignore]` and named `smoke_*`, which is the category `mise run
+/// assistant:smoke` runs and nothing else does — so it never runs in `mise run
+/// test:e2e` or in CI. It is the only way to find out whether the key, the model
+/// id, the request body, and the parser agree with a provider that is not a test
+/// double. Everything above this line is deterministic; this is the seam's other
+/// side, and it can only be checked by calling it.
 ///
 /// Skips rather than fails without a key, because "no key" is a supported state
 /// of this repo and not a broken smoke test.
@@ -364,7 +363,7 @@ async fn callers_do_not_share_guidance() {
 // The whole output of this test is what it printed — a status line nobody reads
 // is not a smoke test.
 #[allow(clippy::print_stdout)]
-async fn the_real_model_answers() {
+async fn smoke_the_real_model_answers() {
     let Some(key) = std::env::var("OPENROUTER_API_KEY")
         .ok()
         .filter(|key| !key.trim().is_empty())
@@ -373,8 +372,7 @@ async fn the_real_model_answers() {
         return;
     };
 
-    let client = api::features::assistant::openrouter::OpenRouterClient::new(&key)
-        .expect("the HTTP client builds");
+    let client = api::assistant::OpenRouterClient::new(&key).expect("the HTTP client builds");
 
     let db = TestDatabase::create("assistant_smoke").await;
     set_goals(&db, USER, &[pb::TechniqueGoal::Sleep]).await;
@@ -440,10 +438,7 @@ async fn set_goals(db: &TestDatabase, user: &str, goals: &[pb::TechniqueGoal]) {
             profile: Some(pb::Profile {
                 goals: goals.iter().map(|goal| *goal as i32).collect(),
                 experience_level: pb::ExperienceLevel::New as i32,
-                reminder_intensity: pb::ReminderIntensity::Never as i32,
-                intent_note: String::new(),
-                display_name: String::new(),
-                birth_year_band: pb::BirthYearBand::Unspecified as i32,
+                ..pb::Profile::default()
             }),
         },
         &[(USER_ID_HEADER, user)],

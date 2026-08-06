@@ -16,7 +16,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use tokio_stream::StreamExt as _;
 
-use super::model::{ModelClient, ModelError, ModelRequest, ModelStream};
+use super::{ModelClient, ModelError, ModelRequest, ModelStream};
 use crate::config;
 
 /// Bounds a single call. Generous enough for a long explanation on a slow day
@@ -41,6 +41,9 @@ const STREAM_BUFFER_FRAMES: usize = 16;
 /// Talks to `OpenRouter`.
 pub struct OpenRouterClient {
     http: reqwest::Client,
+    /// The full endpoint, joined once. Rebuilding it per call would re-parse a
+    /// URL that cannot change.
+    endpoint: String,
     /// The bearer token, held here and nowhere else. It is never logged, never
     /// returned in an error, and never reaches a client — the whole reason the
     /// model is called server-side rather than from the app.
@@ -62,6 +65,7 @@ impl OpenRouterClient {
 
         Some(Self {
             http,
+            endpoint: format!("{}/chat/completions", config::OPENROUTER_BASE_URL),
             api_key: api_key.to_owned(),
         })
     }
@@ -106,7 +110,7 @@ impl OpenRouterClient {
 
         let response = self
             .http
-            .post(format!("{}/chat/completions", config::OPENROUTER_BASE_URL))
+            .post(&self.endpoint)
             .bearer_auth(&self.api_key)
             .json(&body)
             .send()
@@ -163,8 +167,8 @@ impl ModelClient for OpenRouterClient {
         // sentences.
         //
         // A channel and a task rather than a generator: the receiver *is* the
-        // stream, and a client that hangs up drops it, which fails the next
-        // send and stops the loop.
+        // stream, so a client that hangs up drops it and the decoder below
+        // notices immediately.
         let mut bytes = response.bytes_stream();
         let (sender, receiver) = tokio::sync::mpsc::channel(STREAM_BUFFER_FRAMES);
 
@@ -174,11 +178,22 @@ impl ModelClient for OpenRouterClient {
             // whole line is in hand.
             let mut buffer: Vec<u8> = Vec::new();
 
-            while let Some(frame) = bytes.next().await {
+            loop {
+                // Races the next frame against the client going away. Without
+                // the second arm, a reader who closed the screen mid-answer is
+                // only noticed on the following `send`, which for a slow
+                // provider can be the rest of the request's timeout away.
+                let frame = tokio::select! {
+                    frame = bytes.next() => frame,
+                    () = sender.closed() => return,
+                };
+
+                let Some(frame) = frame else {
+                    return;
+                };
+
                 let Ok(frame) = frame else {
                     let broken = ModelError::Failed("the stream broke mid-answer".to_owned());
-                    // Nobody to tell if the client has already hung up, which is
-                    // one of the two ways this arm is reached.
                     drop(sender.send(Err(broken)).await);
                     return;
                 };
@@ -186,9 +201,13 @@ impl ModelClient for OpenRouterClient {
                 buffer.extend_from_slice(&frame);
 
                 while let Some(newline) = buffer.iter().position(|byte| *byte == b'\n') {
-                    let line: Vec<u8> = buffer.drain(..=newline).collect();
+                    // Parsed from the slice and drained after: `parse_event`
+                    // returns owned data, and `from_utf8_lossy` over valid UTF-8
+                    // borrows — so the common case allocates nothing per line.
+                    let event = parse_event(String::from_utf8_lossy(&buffer[..=newline]).trim());
+                    buffer.drain(..=newline);
 
-                    match parse_event(String::from_utf8_lossy(&line).trim()) {
+                    match event {
                         Event::Done => return,
                         Event::Text(text) if !text.is_empty() => {
                             if sender.send(Ok(text)).await.is_err() {
@@ -248,7 +267,7 @@ fn excerpt(text: &str) -> String {
 
 #[derive(Serialize)]
 struct ChatRequest<'a> {
-    model: &'a str,
+    model: &'static str,
     max_tokens: i32,
     stream: bool,
     messages: Vec<Message<'a>>,
@@ -256,23 +275,25 @@ struct ChatRequest<'a> {
 
 #[derive(Serialize)]
 struct Message<'a> {
-    role: &'a str,
+    role: &'static str,
     content: Vec<Part<'a>>,
 }
 
 #[derive(Serialize)]
 struct Part<'a> {
     #[serde(rename = "type")]
-    kind: &'a str,
+    kind: &'static str,
     text: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
-    cache_control: Option<CacheControl<'a>>,
+    cache_control: Option<CacheControl>,
 }
 
+/// Marks the end of the prefix worth caching. Provider-specific and harmless
+/// elsewhere: a route that does not understand it ignores the field.
 #[derive(Serialize)]
-struct CacheControl<'a> {
+struct CacheControl {
     #[serde(rename = "type")]
-    kind: &'a str,
+    kind: &'static str,
 }
 
 #[derive(Deserialize)]
