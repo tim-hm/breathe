@@ -298,8 +298,7 @@ struct SessionView: View {
     /// the last second of a phase is still a second of it.
     private func secondsRemaining(in beat: SessionTimeline.Beat?, at elapsed: Duration) -> String {
         guard let beat else { return "" }
-        let remaining = (beat.end - elapsed).seconds
-        return "\(max(Int(remaining.rounded(.up)), 1))"
+        return "\(beat.secondsRemaining(at: elapsed))"
     }
 
     /// The session's one moving picture, with its accessibility role decided

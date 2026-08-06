@@ -39,10 +39,7 @@ struct BreathVisual: View {
     /// off `tint`, so the crossfade runs on the two boundaries that change the
     /// colour instead of on all four.
     private var isStill: Bool {
-        switch beat?.kind {
-        case .holdIn, .holdOut: true
-        default: false
-        }
+        beat?.kind.isHold ?? false
     }
 
     private var orb: some View {
@@ -71,23 +68,9 @@ struct BreathVisual: View {
         .padding(24)
     }
 
-    /// How full the lungs are, 0...1, mapped onto the orb's scale.
-    ///
-    /// Smoothstepped rather than linear: a breath does not change pace at its
-    /// boundaries, and a linear ramp visibly stops dead at the top of an inhale.
+    /// How full the lungs are, mapped straight onto the orb's scale. Empty
+    /// before the first beat, which is where a breath starts from.
     private var fullness: Double {
-        let smallest = 0.45
-        let largest = 1.0
-
-        guard let beat else { return smallest }
-        let progress = beat.fraction(at: elapsed)
-        let eased = progress * progress * (3 - 2 * progress)
-
-        return switch beat.kind {
-        case .inhale: smallest + (largest - smallest) * eased
-        case .exhale: largest - (largest - smallest) * eased
-        case .holdIn: largest
-        case .holdOut: smallest
-        }
+        beat?.lungFullness(at: elapsed) ?? SessionTimeline.Beat.emptyLungs
     }
 }

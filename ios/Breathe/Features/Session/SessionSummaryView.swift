@@ -17,18 +17,22 @@ struct SessionSummaryView: View {
             Spacer()
 
             VStack(spacing: Theme.Spacing.close) {
-                Text(headline)
+                Text(record.headline)
                     .font(.largeTitle.weight(.medium))
-                Text(closing)
-                    .font(.body)
-                    .foregroundStyle(Theme.Ink.secondary)
-                    .multilineTextAlignment(.center)
+                // Only a completed session gets a second line — the headline
+                // already says everything an ended one needs to hear.
+                if record.completed {
+                    Text("That's \(technique.name) done.")
+                        .font(.body)
+                        .foregroundStyle(Theme.Ink.secondary)
+                        .multilineTextAlignment(.center)
+                }
             }
 
             HStack(spacing: Theme.Spacing.loose) {
-                stat(record.cyclesCompleted == 1 ? "cycle" : "cycles", "\(record.cyclesCompleted)")
+                stat(record.cyclesLabel, "\(record.cyclesCompleted)")
                 stat("minutes", record.duration.formatted(.time(pattern: .minuteSecond)))
-                stat(record.breathCount == 1 ? "breath" : "breaths", "\(record.breathCount)")
+                stat(record.breathsLabel, "\(record.breathCount)")
             }
             .frame(maxWidth: .infinity)
             .padding(Theme.Spacing.standard)
@@ -51,21 +55,6 @@ struct SessionSummaryView: View {
 
     private var card: RoundedRectangle {
         RoundedRectangle(cornerRadius: Theme.Radius.card)
-    }
-
-    private var headline: String {
-        if record.completed {
-            "Nicely done."
-        } else if record.cyclesCompleted > 0 {
-            "Every cycle counts."
-        } else {
-            "Any breath counts."
-        }
-    }
-
-    private var closing: String {
-        (record.completed ? "That's \(technique.name) done. " : "")
-            + "Come back whenever you need it."
     }
 
     private func stat(_ label: String, _ value: String) -> some View {
