@@ -1,0 +1,19 @@
+globs:
+  - "**/*.md"
+  - "!**/.build/**"
+  - "!ios/Packages/*/.build/**"
+  - "!target/**"
+
+config:
+  # Prose is wrapped for reading, not to a column. A hard limit here would either
+  # be ignored or would start dictating how sentences are written.
+  MD013: false
+
+  # Tables in these docs use a leading pipe and no trailing alignment padding;
+  # enforcing padding produces large diffs for no readability gain.
+  MD055: false
+  MD056: false
+
+  # `mise run check` output and shell transcripts are fenced without a language,
+  # which is correct — they are not any language.
+  MD040: false

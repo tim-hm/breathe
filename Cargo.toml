@@ -1,0 +1,89 @@
+[workspace]
+members = ["crates/*"]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.96"
+
+[workspace.dependencies]
+anyhow = "1"
+axum = "0.8"
+chrono = { version = "0.4", features = ["serde"] }
+cuid2 = "0.1"
+prost = "0.14"
+serde = { version = "1", features = ["derive"] }
+sqlx = { version = "0.9", features = [
+  "migrate",
+  "postgres",
+  "runtime-tokio",
+  "tls-rustls",
+] }
+thiserror = "2"
+tokio = { version = "1", features = ["full"] }
+tonic = "0.14"
+tonic-prost = "0.14"
+tonic-prost-build = "0.14"
+tonic-reflection = "0.14"
+# Serves the gRPC-Web protocol over the same listener as gRPC. This is what the
+# iOS client actually talks to — see docs/transport.md for why the Swift client
+# uses gRPC-Web rather than the Connect protocol.
+tonic-web = "0.14"
+tower-http = { version = "0.7", features = ["cors", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Lints are declared once here and inherited by every crate via
+# `[lints] workspace = true`. Levels, not config values — the settings these
+# read live in clippy.toml.
+[workspace.lints.rust]
+# Nothing in this workspace has a reason to reach for `unsafe`. Denying it
+# outright means the question never has to be re-litigated in review.
+unsafe_code = "deny"
+elided_lifetimes_in_paths = "warn"
+let_underscore_drop = "warn"
+trivial_numeric_casts = "warn"
+unused_lifetimes = "warn"
+
+[workspace.lints.clippy]
+# `priority = -1` is load-bearing: same-priority lint entries resolve in an
+# unspecified order, so without it the individual overrides below race against
+# the group and may lose.
+pedantic = { level = "warn", priority = -1 }
+
+# Debugging leftovers. Denied rather than warned because there is no case where
+# one of these belongs on main.
+dbg_macro = "deny"
+print_stderr = "warn"
+print_stdout = "warn"
+todo = "warn"
+unimplemented = "warn"
+
+# Panicking paths. A panic in a request handler takes out the task and returns
+# no useful error to the client; the typed-error path (see crates/api/src/errors.rs)
+# is always available instead. clippy.toml re-allows all three inside tests.
+expect_used = "warn"
+panic = "warn"
+unwrap_used = "warn"
+
+# Async correctness. `await_holding_lock` is the one that actually bites: a
+# std::sync guard held across an await point deadlocks the executor rather than
+# failing loudly.
+await_holding_lock = "warn"
+significant_drop_tightening = "warn"
+
+redundant_clone = "warn"
+use_self = "warn"
+
+# Deliberate opt-outs. Each names an idiom this codebase uses on purpose, so
+# re-enabling one is a style decision rather than a cleanup ticket.
+#
+# `module_name_repetitions` fights the feature-first layout: within
+# features/technique/, a `TechniqueError` type is the clearest available name
+# even though the module is already called `technique`.
+module_name_repetitions = "allow"
+# Doc comments here explain *why*, per CLAUDE.md §1.2. Demanding a
+# `# Errors` section on every fallible function produces restatement, which
+# that same policy tells us to delete.
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"

@@ -1,0 +1,78 @@
+# The Xcode project is generated from this file by `mise run ios:gen`; the
+# resulting Breathe.xcodeproj is gitignored. Adding a source file means adding it
+# to disk under Breathe/ — the `sources` glob below picks it up on the next
+# generate, and no one ever resolves a pbxproj conflict.
+
+name: Breathe
+
+options:
+  bundleIdPrefix: xyz.holmie
+  deploymentTarget:
+    iOS: "18.0"
+  # Mirrors the on-disk folder structure in Xcode's navigator, so Features/
+  # reads the same in the IDE as it does in the repo.
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    # Swift 6 language mode. Data-race safety is checked at compile time, which
+    # is worth far more in an app built around a timing loop than it costs here.
+    SWIFT_STRICT_CONCURRENCY: complete
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+
+packages:
+  BreatheCore:
+    path: Packages/BreatheCore
+
+targets:
+  Breathe:
+    type: application
+    platform: iOS
+    sources:
+      - path: Breathe
+    dependencies:
+      # BreatheAPI is absent because it is not a product of BreatheCore at all —
+      # the app cannot name that module even by accident. See the target notes in
+      # Packages/BreatheCore/Package.swift.
+      - package: BreatheCore
+        product: BreatheKit
+      - package: BreatheCore
+        product: BreatheUI
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: xyz.holmie.breathe
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Breathe
+        # Portrait only. A breathing session is held still in one hand; a
+        # rotation mid-cycle interrupts the one thing the app is for.
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+    # An `info:` block rather than more INFOPLIST_KEY_* settings above, because
+    # those only carry scalars and arrays — NSAppTransportSecurity is a dict and
+    # has no build-setting form. The generated plist is gitignored.
+    info:
+      path: Breathe/Info.plist
+      properties:
+        # The dev backend is plain HTTP on localhost, which App Transport
+        # Security blocks by default. `NSAllowsLocalNetworking` is the narrow
+        # exemption for exactly that: it permits cleartext to loopback, .local,
+        # and private-range addresses only, and grants nothing towards arbitrary
+        # internet hosts the way NSAllowsArbitraryLoads would. It can therefore
+        # stay in the Release build without weakening it — a production backend
+        # on HTTPS is unaffected either way.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+
+schemes:
+  Breathe:
+    build:
+      targets:
+        Breathe: all
+    run:
+      config: Debug
+      # `BREATHE_API_BASE_URL` is deliberately not set here. The same default
+      # lives in AppConfiguration.swift, and a scheme value would always win —
+      # leaving the Swift constant reachable only from previews and tests, free
+      # to drift from the value the app actually uses. Add the variable to this
+      # scheme in Xcode when you need to point a physical device at your Mac.

@@ -1,0 +1,76 @@
+import Foundation
+
+/// The outcome a technique is chosen for.
+///
+/// Distinct from the generated `Breathe_V1_TechniqueGoal` on purpose: that type
+/// carries an `UNSPECIFIED` case the wire format can always produce, and every
+/// view that switched over it would need a branch for a value that means
+/// "the server and this app disagree". Decoding resolves that once, here.
+public enum TechniqueGoal: Sendable, CaseIterable {
+    case calm
+    case sleep
+    case energy
+    case reset
+}
+
+/// One segment of a breathing cycle.
+public enum PhaseKind: Sendable {
+    case inhale
+    case holdIn
+    case exhale
+    case holdOut
+}
+
+public struct Phase: Sendable, Equatable {
+    public let kind: PhaseKind
+    public let duration: Duration
+
+    public init(kind: PhaseKind, duration: Duration) {
+        self.kind = kind
+        self.duration = duration
+    }
+}
+
+public struct Technique: Sendable, Identifiable, Equatable {
+    public let id: String
+    /// The stable key this app pins artwork and haptic patterns to.
+    public let slug: String
+    public let name: String
+    public let summary: String
+    public let goal: TechniqueGoal
+    /// The cycle, in play order. Never empty — `TechniqueRepository` rejects a
+    /// technique without phases rather than handing a view an empty loop.
+    public let phases: [Phase]
+
+    public init(
+        id: String,
+        slug: String,
+        name: String,
+        summary: String,
+        goal: TechniqueGoal,
+        phases: [Phase]
+    ) {
+        self.id = id
+        self.slug = slug
+        self.name = name
+        self.summary = summary
+        self.goal = goal
+        self.phases = phases
+    }
+
+    /// How long one full cycle takes.
+    public var cycleDuration: Duration {
+        phases.reduce(.zero) { $0 + $1.duration }
+    }
+}
+
+public extension TechniqueGoal {
+    var title: String {
+        switch self {
+        case .calm: "Calm"
+        case .sleep: "Sleep"
+        case .energy: "Energy"
+        case .reset: "Reset"
+        }
+    }
+}

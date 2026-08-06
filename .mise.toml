@@ -1,0 +1,242 @@
+# The single entry point for every repo operation. See CLAUDE.md §3: run things
+# through `mise run <task>`, never the raw `cargo`/`buf`/`sqlx` equivalent — the
+# tasks encode the env (SQLX_OFFLINE, DATABASE_URL, CARGO_TARGET_DIR) that those
+# commands need to behave the same way here, in a fresh clone, and in CI.
+
+[tools]
+# Must precede the cargo:* entries so mise's cargo backend installs prebuilt
+# binaries instead of compiling each tool from source.
+cargo-binstall = "latest"
+
+# Kept in lockstep with Cargo.toml's `rust-version`. A dependency can raise the
+# real floor without declaring it, and then only a fresh clone finds out.
+rust = "1.96"
+
+buf = "latest"
+protoc = "latest"
+lychee = "latest"
+"npm:markdownlint-cli2" = "0.23.2"
+
+"cargo:cargo-nextest" = "latest"
+"cargo:cargo-watch" = "latest"
+# Reports crate dependencies nothing imports. Backs `check:deps`.
+"cargo:cargo-machete" = "latest"
+# Pinned to 0.9.x to match the `sqlx` crate: the CLI validates the committed
+# .sqlx offline cache, and a 0.8 CLI cannot read a 0.9 cache. Move both together.
+"cargo:sqlx-cli" = "0.9"
+
+# iOS toolchain. Xcode itself is not installable by mise — docs/contributing.md
+# covers that step.
+xcodegen = "latest"
+swiftlint = "latest"
+swiftformat = "latest"
+
+[env]
+# Global so every cargo invocation reads the committed .sqlx cache rather than
+# needing a live database. `generate:sqlx` overrides it, because refreshing the
+# cache is precisely the operation that must talk to a real server.
+SQLX_OFFLINE = "true"
+# Port rationale lives in compose.yaml. In short: breathe owns 18100–18199, and
+# a shell that has visited the sibling `connect` repo exports a DATABASE_URL
+# pointing at *its* cluster — so every task here supplies its own rather than
+# inheriting whatever the shell happens to hold.
+DATABASE_URL = "postgres://postgres:postgres@localhost:18101/breathe?sslmode=disable"
+
+# Every non-`dev` cargo invocation builds here instead of ./target. The reason is
+# the cargo *file lock*, not artifact invalidation: `clippy` and `build` write
+# distinct fingerprints and coexist happily, but they cannot hold the lock at the
+# same time — so without the split, running `check` blocks the `dev` watch loop
+# (and vice versa) until one finishes.
+CHECK_TARGET_DIR = "{{config_root}}/target/check"
+
+# dev: the local loop
+
+[tasks."dev:db"]
+description = "Start PostgreSQL in the background"
+run = "docker compose up -d --wait db"
+
+[tasks."dev:db:stop"]
+description = "Stop PostgreSQL"
+run = "docker compose down"
+
+[tasks."dev:db:reset"]
+description = "Destroy the database volume and rebuild it from migrations"
+run = ["docker compose down -v", "mise run dev:db", "mise run migrate"]
+
+[tasks.dev]
+description = "Run the API with auto-reload on change"
+depends = ["dev:db"]
+# Scoped to the directories the binary is actually built from. Unscoped,
+# `cargo watch` watches everything git tracks — so editing a SwiftUI view or a
+# doc would relink and restart the API.
+run = "cargo watch -w crates -w proto -x 'run -p api'"
+
+[tasks.migrate]
+description = "Create the database if absent, apply migrations, seed reference data"
+depends = ["dev:db"]
+run = "cargo run -p migrate"
+
+[tasks."db:psql"]
+description = "Query the local database (SQL on stdin)"
+run = "docker compose exec -T db psql -U postgres -d breathe"
+
+# generate: everything derived from a source of truth elsewhere
+
+[tasks.generate]
+description = "Regenerate protobuf types and the SQLx offline cache"
+run = ["mise run generate:proto", "mise run generate:sqlx"]
+
+[tasks."generate:proto"]
+description = "Generate Swift client code from proto/ (Rust generates in build.rs)"
+dir = "{{config_root}}/proto"
+run = "buf generate"
+
+[tasks."generate:sqlx"]
+description = "Refresh the committed .sqlx offline query cache"
+depends = ["dev:db"]
+# Must compile against a live database: `cargo sqlx prepare` discovers queries by
+# type-checking them against the real server, which is the whole point of the cache.
+env = { SQLX_OFFLINE = "false", CARGO_TARGET_DIR = "{{env.CHECK_TARGET_DIR}}" }
+run = "cargo sqlx prepare --workspace -- --all-targets"
+
+# fmt / fix: mutating
+
+[tasks.fmt]
+description = "Format everything"
+run = ["mise run fmt:rs", "mise run fmt:swift"]
+
+[tasks."fmt:rs"]
+run = "cargo fmt"
+
+[tasks."fmt:swift"]
+run = "swiftformat ios --config ios/.swiftformat"
+
+[tasks.fix]
+description = "Auto-fix formatting and the lint findings that are mechanically fixable"
+env = { CARGO_TARGET_DIR = "{{env.CHECK_TARGET_DIR}}" }
+run = [
+  "cargo clippy --workspace --all-targets --fix --allow-dirty --allow-staged",
+  "mise run fmt",
+  "swiftlint --fix --config ios/.swiftlint.yml ios",
+  "markdownlint-cli2 --fix",
+]
+
+# check: read-only validation. `check` is the gate — it is what must pass.
+
+[tasks.check]
+description = "Full validation (read-only)"
+# The Rust tasks share one cargo artifact lock, so running them concurrently just
+# stalls on "Blocking waiting for file lock" — they are serialised in `run` while
+# everything genuinely independent fans out through `depends`.
+depends = [
+  "check:proto",
+  "check:generated",
+  "check:md",
+  "check:doc-links",
+  "check:deps",
+]
+run = ["mise run check:rs", "mise run check:sqlx", "mise run test:rs"]
+
+[tasks."check:rs"]
+description = "Validate Rust (fmt + clippy)"
+env = { CARGO_TARGET_DIR = "{{env.CHECK_TARGET_DIR}}" }
+run = [
+  "cargo fmt -- --check",
+  "cargo clippy --workspace --all-targets -- -D warnings",
+]
+
+[tasks."check:sqlx"]
+description = "Assert the committed .sqlx cache matches the queries in the tree"
+env = { CARGO_TARGET_DIR = "{{env.CHECK_TARGET_DIR}}" }
+run = "cargo sqlx prepare --workspace --check -- --all-targets"
+
+[tasks."check:proto"]
+description = "Lint the protobuf contract and check it for breaking changes against main"
+dir = "{{config_root}}/proto"
+# The only condition that legitimately skips the breaking-change check is "this
+# repository has no commits yet", tested directly with `rev-parse HEAD`. Testing
+# for a local `main` branch instead would also skip on a detached-HEAD CI
+# checkout, a shallow clone, or a fork — exactly the places the check matters
+# most — so an unresolvable `main` over a non-empty history fails closed.
+# Delete this guard once the first commit lands.
+run = [
+  "buf lint",
+  """
+  if ! git -C .. rev-parse HEAD >/dev/null 2>&1; then
+    echo 'check:proto: repository has no commits yet — breaking-change check not applicable'
+  elif git -C .. rev-parse --verify --quiet main >/dev/null; then
+    buf breaking --against '../.git#branch=main,subdir=proto'
+  else
+    echo 'check:proto: cannot resolve `main`, refusing to skip the breaking-change check' >&2
+    exit 1
+  fi
+  """,
+]
+
+[tasks."check:swift"]
+description = "Validate Swift (format + lint)"
+run = [
+  "swiftformat --lint ios --config ios/.swiftformat",
+  "swiftlint lint --strict --config ios/.swiftlint.yml ios",
+]
+
+[tasks."check:md"]
+run = "markdownlint-cli2"
+
+[tasks."check:doc-links"]
+description = "Resolve every link in the docs without hitting the network"
+run = "lychee --offline --root-dir {{config_root}} 'docs/**/*.md' CLAUDE.md README.md"
+
+[tasks."check:generated"]
+description = "Assert the committed Swift protobuf matches proto/"
+# The same contract check:sqlx applies to the other committed generated artifact:
+# regenerate, compare, fail on drift. Needed because the Xcode build never runs
+# buf, so a .proto edit committed without `mise run generate:proto` surfaces much
+# later as a confusing Swift compile error.
+#
+# `git diff` only sees tracked files, so this is vacuous until the generated
+# Swift is committed for the first time — same bootstrap caveat as the
+# breaking-change check above, and it resolves the same way.
+run = [
+  "mise run generate:proto",
+  "git diff --exit-code -- ios/Packages/BreatheCore/Sources/BreatheAPI/Generated",
+]
+
+[tasks."check:deps"]
+description = "Report crate dependencies nothing imports"
+# Blind spot worth knowing: machete reads each *member's* [dependencies], so an
+# unused entry in the root [workspace.dependencies] is invisible to it. Check
+# that table by hand when removing a dependency.
+run = "cargo machete --with-metadata"
+
+# test
+
+[tasks.test]
+description = "Run every test suite"
+run = ["mise run test:rs", "mise run test:swift"]
+
+[tasks."test:rs"]
+env = { CARGO_TARGET_DIR = "{{env.CHECK_TARGET_DIR}}" }
+run = "cargo nextest run --workspace"
+
+[tasks."test:swift"]
+dir = "{{config_root}}/ios"
+run = "swift test --package-path Packages/BreatheCore"
+
+# ios
+
+[tasks."ios:gen"]
+description = "Generate Breathe.xcodeproj from ios/project.yml"
+dir = "{{config_root}}/ios"
+run = "xcodegen generate"
+
+[tasks."ios:open"]
+description = "Generate the project and open it in Xcode"
+depends = ["ios:gen"]
+run = "open {{config_root}}/ios/Breathe.xcodeproj"
+
+[tasks."ios:build"]
+description = "Build the app for the simulator without opening Xcode"
+depends = ["ios:gen"]
+dir = "{{config_root}}/ios"
+run = "xcodebuild -project Breathe.xcodeproj -scheme Breathe -destination 'platform=iOS Simulator,name=iPhone 17' build"

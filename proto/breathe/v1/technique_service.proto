@@ -1,0 +1,91 @@
+syntax = "proto3";
+
+package breathe.v1;
+
+// TechniqueService serves the catalogue of breathing techniques.
+//
+// A technique is reference data: a name, the goal it serves, and the ordered
+// cycle of phases a session repeats. It carries no user state — what a person
+// did with a technique is a separate concern, so this service stays readable
+// without authentication.
+service TechniqueService {
+  // Lists every technique, ordered for presentation.
+  //
+  // Unpaginated on purpose. The catalogue is curated and small (single digits
+  // now, tens at most), so a cursor would add a round-trip contract the client
+  // has to honour in exchange for nothing.
+  rpc ListTechniques(ListTechniquesRequest) returns (ListTechniquesResponse);
+}
+
+// The outcome a technique is chosen for. Drives how the catalogue is grouped in
+// the UI, so a technique has exactly one — the primary reason to reach for it.
+enum TechniqueGoal {
+  TECHNIQUE_GOAL_UNSPECIFIED = 0;
+
+  // Down-regulate in the moment: anxiety, pre-performance nerves, acute stress.
+  TECHNIQUE_GOAL_CALM = 1;
+
+  // Wind down towards sleep. Long exhales, no holds sharp enough to rouse.
+  TECHNIQUE_GOAL_SLEEP = 2;
+
+  // Raise alertness. Fast, exhale-driven, and the one category with real
+  // contraindications — never practised in water or while driving.
+  TECHNIQUE_GOAL_ENERGY = 3;
+
+  // Restore parasympathetic tone after a spike. Short, and effective in one or
+  // two cycles rather than over a timed session.
+  TECHNIQUE_GOAL_RESET = 4;
+}
+
+// One segment of a breathing cycle.
+enum PhaseKind {
+  PHASE_KIND_UNSPECIFIED = 0;
+
+  PHASE_KIND_INHALE = 1;
+
+  // Hold with the lungs full.
+  PHASE_KIND_HOLD_IN = 2;
+
+  PHASE_KIND_EXHALE = 3;
+
+  // Hold with the lungs empty. Distinct from HOLD_IN because it feels
+  // materially different to the practitioner and the UI cues it differently.
+  PHASE_KIND_HOLD_OUT = 4;
+}
+
+// A single segment of the cycle, held in the order the client should play it.
+message Phase {
+  PhaseKind kind = 1;
+
+  // Milliseconds, not seconds: the physiological sigh's second inhale is a
+  // sub-second beat, and an integer count of seconds cannot express it.
+  uint32 duration_ms = 2;
+}
+
+// A breathing technique and the cycle that defines it.
+message Technique {
+  string id = 1;
+
+  // Stable, human-readable key ("box-breathing"). The client pins its built-in
+  // artwork and haptic patterns to this rather than to `id`, so the catalogue
+  // can be reseeded without the app losing track of what it is looking at.
+  string slug = 2;
+
+  string name = 3;
+
+  // One or two sentences: what it does and when to reach for it.
+  string summary = 4;
+
+  TechniqueGoal goal = 5;
+
+  // The cycle, in play order. A session repeats this list; it is never empty.
+  repeated Phase phases = 6;
+}
+
+message ListTechniquesRequest {}
+
+message ListTechniquesResponse {
+  // Ordered for display, not by id — the sequence is curated so the catalogue
+  // opens on the techniques a newcomer should try first.
+  repeated Technique techniques = 1;
+}

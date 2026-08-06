@@ -1,0 +1,38 @@
+# The only container this repo runs. The API itself runs natively via
+# `mise run dev` so that a code change rebuilds in seconds rather than through a
+# Docker layer — see docs/contributing.md.
+services:
+  db:
+    image: postgres:18-alpine
+    # 18101, not 5432. A Homebrew/Postgres.app server usually owns 5432, and the
+    # sibling `connect` repo's Tilt port-forward owns 127.0.0.1:15432 — which
+    # beats a container's `*:15432` binding for `localhost`, so pointing there
+    # would silently reach that cluster instead.
+    #
+    # Every breathe port lives in 18100–18199, a block connect uses none of. One
+    # range means one thing to remember and one thing to check.
+    ports:
+      - "18101:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      # The `breathe` database is created by `crates/migrate`, not here, so that
+      # the one code path that provisions it is exercised on every fresh clone.
+      POSTGRES_DB: postgres
+    volumes:
+      # `/var/lib/postgresql`, not the `/data` subdirectory that every Postgres
+      # 17-and-earlier compose file uses. The 18 images place the cluster in a
+      # major-version-specific subdirectory so `pg_upgrade --link` can run
+      # without crossing a mount boundary, and mounting the old path makes the
+      # entrypoint refuse to start.
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      # `mise run dev:db` waits on this, so `migrate` never races the server's
+      # first-boot initdb.
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  db-data:

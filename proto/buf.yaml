@@ -1,0 +1,15 @@
+version: v2
+modules:
+  - path: .
+    name: buf.build/breathe/platform
+lint:
+  use:
+    - STANDARD
+  except:
+    # STANDARD wants the proto package to end in a version suffix that matches
+    # the directory. `breathe.v1` in `breathe/v1/` already carries the version;
+    # the rule fires on the *file* path convention we don't follow.
+    - PACKAGE_VERSION_SUFFIX
+breaking:
+  use:
+    - FILE

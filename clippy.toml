@@ -1,0 +1,23 @@
+# Clippy configuration values. Lint *levels* live in Cargo.toml's
+# [workspace.lints] so every crate inherits them with `[lints] workspace = true`;
+# this file only holds the settings those lints read.
+
+# All backend and database times are UTC. `Local::now()` reads the host's
+# timezone, so a value written on a developer's Mac and a value written in a
+# container mean different instants while comparing as if they didn't — the
+# class of bug that surfaces as an off-by-one-hour session duration months later.
+disallowed-methods = [
+  { path = "chrono::Local::now", reason = "All times are UTC. Use chrono::Utc::now()." },
+]
+
+disallowed-types = [
+  { path = "chrono::Local", reason = "All times are UTC. Use chrono::Utc." },
+]
+
+# `unwrap_used` / `expect_used` / `panic` are denied in production paths (see
+# Cargo.toml). Tests are the one place where panicking *is* the failure
+# reporting mechanism, so re-allowing them there keeps the lint meaningful
+# rather than drowned in per-test allows.
+allow-panic-in-tests = true
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true

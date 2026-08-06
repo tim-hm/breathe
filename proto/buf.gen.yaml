@@ -1,0 +1,19 @@
+version: v2
+inputs:
+  - directory: .
+plugins:
+  # Message types and enums.
+  - remote: buf.build/apple/swift
+    out: ../ios/Packages/BreatheCore/Sources/BreatheAPI/Generated
+    opt:
+      - Visibility=Public
+
+  # Service clients for the Connect runtime. `GenerateAsyncMethods` gives the
+  # async/await surface; the callback-based one is dead weight in a
+  # structured-concurrency codebase.
+  - remote: buf.build/connectrpc/swift
+    out: ../ios/Packages/BreatheCore/Sources/BreatheAPI/Generated
+    opt:
+      - Visibility=Public
+      - GenerateAsyncMethods=true
+      - GenerateCallbackMethods=false

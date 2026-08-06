@@ -1,0 +1,40 @@
+[package]
+name = "api"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+axum.workspace = true
+prost.workspace = true
+serde.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tonic.workspace = true
+tonic-prost.workspace = true
+tonic-reflection.workspace = true
+tonic-web.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[build-dependencies]
+chrono.workspace = true
+tonic-prost-build.workspace = true
+
+# `cargo machete` reads the crate's own source and cannot see code generated into
+# OUT_DIR, so it reports every dependency that only the generated protobuf module
+# uses. All four were verified by deleting them and rebuilding:
+#   prost              — `::prost::Message` / `::prost::Enumeration` derives
+#   tonic-prost        — `tonic_prost::ProstCodec` in the generated client/server
+#   tonic-prost-build  — build.rs, which machete does not analyse
+#   chrono             — build.rs, for the BUILD_TIMESTAMP stamp
+# Re-verify by removing one and running `cargo build -p api` before assuming this
+# list is stale.
+[package.metadata.cargo-machete]
+ignored = ["prost", "tonic-prost", "tonic-prost-build", "chrono"]
+
+[lints]
+workspace = true

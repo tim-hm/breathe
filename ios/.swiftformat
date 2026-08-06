@@ -1,0 +1,19 @@
+# Generated protobuf sources are not ours to format, and rewriting them would be
+# undone by the next `mise run generate:proto`.
+--exclude Packages/BreatheCore/Sources/BreatheAPI/Generated,**/.build
+
+--swiftversion 6.0
+--maxwidth 100
+--indent 4
+
+# Matches the Rust side's import grouping: third-party and first-party modules in
+# one alphabetised block, so a diff never turns on where an import landed.
+--importgrouping alphabetized
+
+--wraparguments before-first
+--wrapparameters before-first
+--wrapcollections before-first
+--closingparen balanced
+
+# `self.` only where the compiler demands it (initialisers, escaping closures).
+--self remove
