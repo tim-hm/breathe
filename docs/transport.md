@@ -42,6 +42,17 @@ let app = http::router(state).fallback_service(grpc_router);
 
 gRPC paths are `/breathe.v1.<Service>/<Method>` and can never collide with `/health` or `/about`, so axum matches its own routes first and everything else falls through to gRPC. One port means one thing to configure, one thing to port-forward, and one thing to point the app at.
 
+## Server streaming
+
+`AssistantService.ExplainTechnique` is the one streaming RPC, and it works over the same layer stack as everything else — no second transport, no second client factory.
+
+gRPC-Web sends a server stream as several length-prefixed message frames in one response body, then the trailer frame. That is the property that makes it testable without a listener: `harness::call_grpc_web_stream_with` reads the whole body and returns the messages in the order the server wrote them, which is exactly what a client accumulating text depends on.
+
+The two ends are asymmetric in shape, and deliberately so:
+
+- **Rust** — the handler returns `Pin<Box<dyn Stream<Item = Result<T, Status>> + Send>>`. Both the model's chunks and the rule-based fallback are sent down it, the fallback split into paragraphs, so the client's accumulate-and-render path is the only path. A fallback that arrived as one message would leave the streaming path exercised only when a provider happened to be reachable.
+- **Swift** — connect-swift hands back a `ServerOnlyAsyncStreamInterface` you `send` the request on once and then read `results()` from. `AssistantRepository` wraps that into an `AsyncThrowingStream`, so nothing above the repository boundary learns the shape — and, more usefully, a terminal `.complete` carrying a non-OK code becomes a thrown error rather than a stream that simply stops, which is otherwise indistinguishable from a short answer.
+
 ## Enum boundaries
 
 Every proto3 enum has an `_UNSPECIFIED = 0` member that the wire format can always produce — including from a server running a newer contract than the client. Both ends convert explicitly rather than passing the generated type inwards:

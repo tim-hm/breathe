@@ -270,7 +270,11 @@ async fn an_unavailable_model_still_explains() {
 
     let chunks = explain(&db, model, USER, "wim-hof-rounds").await.into_ok();
 
-    assert!(!chunks.is_empty());
+    assert!(
+        chunks.len() > 1,
+        "the fallback goes down the same chunked path, so the client's \
+         accumulate-and-render code is exercised whether or not a model answered"
+    );
     for chunk in &chunks {
         assert_eq!(chunk.source, pb::AssistantSource::Fallback as i32);
     }

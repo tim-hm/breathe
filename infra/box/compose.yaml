@@ -21,6 +21,12 @@ services:
     environment:
       BREATHE_ENV: production
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@db:5432/breathe?sslmode=disable
+      # The assistant's provider key, from the same env file the password comes
+      # from. Optional and defaulted to empty: an unset key is a supported state
+      # — the assistant answers from its rule-based fallback and the rest of the
+      # API is unaffected — and without the default, compose would refuse to
+      # start the stack on a box where nobody has added one.
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
     depends_on:
       db:
         condition: service_healthy

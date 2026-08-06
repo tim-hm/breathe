@@ -53,10 +53,13 @@ All free by product decision; requires M4's identity header on every RPC.
 
 ## M6 — AI guided personalisation
 
-`crates/api/src/features/assistant/` mirroring the `technique` crate, plus a small reqwest client for the Anthropic Messages API. `ANTHROPIC_API_KEY` joins `config.rs`; the key never ships to the client.
+`crates/api/src/features/assistant/` mirroring the `technique` crate. The model is reached over **OpenRouter** — one OpenAI-shaped HTTP API in front of every provider, so changing model is a constant rather than a client — calling `~anthropic/claude-haiku-latest`, a floating alias that tracks the newest Haiku (the leading `~` is part of the id). Haiku because both RPCs are short, structured, and latency-sensitive, and because per-call cost is what makes a generous free-tier quota possible at all.
+
+`OPENROUTER_API_KEY` joins `config.rs` as its third and only optional variable — a secret, which is the one thing CLAUDE.md §1.4 admits. The base URL and the model id are **constants** beside it, not variables: a model id that could differ between a laptop and a deployment would make "the assistant sounds different in production" invisible. The key never ships to the client; the model is called server-side precisely so no build of the app ever carries one.
 
 - **Two RPCs** in a new `assistant_service.proto`: unary `GetRecommendation` returning structured output (ranked technique slugs + one-line reasons, server-validated against the catalogue so the model cannot recommend a technique that doesn't exist), and server-streaming `ExplainTechnique` for the science explanation, where perceived latency matters.
-- **Cost controls**: prompt-cached system prompt + serialized catalogue, small `max_tokens`, per-user daily quota, a global circuit breaker, and a rule-based fallback on `TechniqueGoal` so the app degrades to fully useful with the LLM down.
+- **Cost and safety controls**, all server-side: a prompt-cached prefix (system prompt + serialized catalogue, marked with `cache_control` that OpenRouter forwards to Anthropic models), small `max_tokens`, a per-user daily quota persisted in Postgres so it survives a restart, a circuit breaker that trips on consecutive failures, and a rule-based fallback ranked on the profile's own `TechniqueGoal` ordering. Every RPC answers: the response carries `AssistantSource`, so the client says "chosen for you" only when a model wrote it.
+- **The seam**: a `ModelClient` trait with three implementations — the provider, a disabled one installed when no key is configured, and a scripted double the integration tests drive. Everything that matters sits above it, so validation, quota, breaker, and fallback are all tested with no key and no network.
 - **Risk**: this is the first server-streaming RPC through Connect-Swift — spike the transport before building on it (`docs/transport.md` is the reference); the fallback is a unary explanation.
 
 ## M7 — Reminders (opt-in)

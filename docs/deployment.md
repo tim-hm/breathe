@@ -21,7 +21,22 @@ The public entrance is Caddy on 443 (80 redirects and answers ACME challenges), 
 
 ## Environment
 
-The container gets exactly the two variables `crates/api/src/config.rs` reads: `BREATHE_ENV=production` (JSON logs, no permissive CORS) and `DATABASE_URL` (assembled in `infra/box/compose.yaml` from the generated password). Anything more belongs in config.rs as a derivation, per CLAUDE.md §1.4.
+The container gets exactly the three variables `crates/api/src/config.rs` reads, and no more — anything else belongs in config.rs as a derivation, per CLAUDE.md §1.4.
+
+| Variable             | Required | Where it comes from                                                              |
+| :------------------- | :------- | :------------------------------------------------------------------------------- |
+| `BREATHE_ENV`        | yes      | Literal `production` in `infra/box/compose.yaml` — JSON logs, no permissive CORS |
+| `DATABASE_URL`       | yes      | Assembled in the same file from the generated `POSTGRES_PASSWORD`                |
+| `OPENROUTER_API_KEY` | no       | `/srv/data/breathe.env`, added by hand — see below                               |
+
+`OPENROUTER_API_KEY` is the assistant's provider key, and the only optional one. Absent, the API boots normally and the assistant answers from its rule-based fallback; every RPC still returns a real answer, flagged so the client can say so. Add it the same way the password lives — appended to `/srv/data/breathe.env` on the data volume, which `/srv/breathe/.env` symlinks onto, so it survives replacing the instance:
+
+```sh
+ssh ubuntu@<elastic_ip> 'printf "OPENROUTER_API_KEY=%s\n" "<key>" | sudo tee -a /srv/data/breathe.env >/dev/null'
+ssh ubuntu@<elastic_ip> 'cd /srv/breathe && docker compose up -d api'
+```
+
+The key never leaves the box: the model is called server-side precisely so no build of the app ever carries one. Rotating it is the same two commands with the old line removed first.
 
 ## First launch (deliberate, in order)
 

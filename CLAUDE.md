@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
    - Use an active voice. Use camel case for abbreviations in identifiers and type names: `Did`, not `DID`; `TechniqueId`, not `TechniqueID`. Prose keeps the natural form — "the technique's ID".
    - Assume the reader has a working knowledge of the codebase.
 3. **Ergonomics and DX**: Prioritise intuitive API design and developer experience.
-4. **Minimal Environment Footprint**: Environment variables are for secrets and essential boot-time context only. The backend reads exactly two — `BREATHE_ENV` and `DATABASE_URL`. Everything else is derived in `crates/api/src/config.rs`. Every new variable is a value that can differ between a laptop and a deployment without anything noticing.
+4. **Minimal Environment Footprint**: Environment variables are for secrets and essential boot-time context only. The backend reads exactly three — `BREATHE_ENV`, `DATABASE_URL`, and the optional `OPENROUTER_API_KEY` (a secret, which is what the principle admits; absent, the assistant answers from its rule-based fallback). Everything else is derived in `crates/api/src/config.rs` — including which provider and which model the assistant calls, because a model id that could differ between a laptop and a deployment is exactly the drift this rule exists to prevent. Every new variable is a value that can differ between the two without anything noticing.
 5. **Derivation by Convention**: Ports, log format, and CORS policy derive from `BREATHE_ENV`. Prefer deriving over configuring.
 6. **Code Structure**: Follow [docs/code-structure.md](docs/code-structure.md) — feature-first (not layer-first), three-tier escalation, and the naming conventions defined there.
 
