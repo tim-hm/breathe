@@ -64,6 +64,9 @@ struct BreatheApp: App {
                 Tab("Techniques", systemImage: "square.grid.2x2") {
                     TechniqueListView(model: catalogue, sessions: sessions)
                 }
+                Tab("Journal", systemImage: "clock.arrow.circlepath") {
+                    JournalView(model: catalogue, sessions: sessions)
+                }
                 Tab("The basics", systemImage: "book") {
                     NavigationStack {
                         FoundationsView(model: foundations)
