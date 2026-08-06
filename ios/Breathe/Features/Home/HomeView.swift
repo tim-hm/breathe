@@ -96,10 +96,10 @@ struct HomeView: View {
         }
     }
 
-    /// Three regions, one per third: the orb centred in the open air at the
-    /// top, the wheel down where a thumb rests, and Begin flush against the
-    /// tab bar. The orb's region is all the leftover space, which is what
-    /// keeps the breathing feeling unhurried on any screen height.
+    /// The screen's rhythm in three equal breaths of space: one above the
+    /// orb, one between orb and wheel, one between wheel and Begin. Equal
+    /// spacers are what keep the wheel exactly halfway between the breathing
+    /// and the button on any screen height.
     private func loaded(_ techniques: [Technique]) -> some View {
         let chosen = chosen(from: techniques)
 
@@ -107,21 +107,24 @@ struct HomeView: View {
             wordmark
                 .padding(.top, Theme.Spacing.standard)
 
-            Color.clear
-                .overlay(AmbientOrb(accent: chosen?.goal.accent ?? Theme.Accent.brand))
+            Spacer(minLength: Theme.Spacing.standard)
+
+            AmbientOrb(accent: chosen?.goal.accent ?? Theme.Accent.brand)
+
+            Spacer(minLength: Theme.Spacing.standard)
 
             intentWheel(over: goals(in: techniques))
 
+            Spacer(minLength: Theme.Spacing.standard)
+
             // The reading order is the doing order: what you want (wheel),
             // what that resolves to (link), then Begin — which terminates the
-            // screen, with nothing beneath it for the tab bar to crowd. The
-            // top padding keeps a thumb finishing a spin off the link.
+            // screen, with nothing beneath it for the tab bar to crowd.
             if let chosen {
                 VStack(spacing: Theme.Spacing.standard) {
                     chosenTechnique(chosen)
                     beginButton(chosen)
                 }
-                .padding(.top, Theme.Spacing.standard)
             }
         }
         .padding(.horizontal, Theme.Spacing.standard)
