@@ -36,6 +36,15 @@ tower-http = { version = "0.7", features = ["cors", "trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
+# What a deployment ships (`mise run build:release`). Thin LTO buys most of
+# fat LTO's cross-crate inlining at a fraction of the link time, and stripping
+# symbols roughly halves the binary. `panic = "abort"` is deliberately absent:
+# it would turn any handler panic into whole-process death, where unwinding
+# loses only the offending task.
+[profile.release]
+lto = "thin"
+strip = "symbols"
+
 # Lints are declared once here and inherited by every crate via
 # `[lints] workspace = true`. Levels, not config values — the settings these
 # read live in clippy.toml.

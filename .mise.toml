@@ -88,6 +88,11 @@ run = "cargo run -p migrate"
 description = "Query the local database (SQL on stdin)"
 run = "docker compose exec -T db psql -U postgres -d breathe"
 
+[tasks."build:release"]
+description = "Build the API release binary (what a deployment ships)"
+env = { CARGO_TARGET_DIR = "{{env.CHECK_TARGET_DIR}}" }
+run = "cargo build --release -p api"
+
 # generate: everything derived from a source of truth elsewhere
 
 [tasks.generate]
