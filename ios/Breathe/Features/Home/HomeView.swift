@@ -1,6 +1,8 @@
 import BreatheKit
 import BreatheUI
+import os
 import SwiftUI
+import UIKit
 
 /// The way in: say what you want, start breathing.
 ///
@@ -17,6 +19,11 @@ struct HomeView: View {
     let sessions: any SessionRecording
 
     @Environment(SessionSettings.self) private var settings
+
+    /// Diagnostic for the wheel haptic that a device reports never feeling:
+    /// both feedback paths log here, so a console next to a silent phone can
+    /// say which half is lying. Remove once the device mystery is solved.
+    private static let wheelLog = Logger(subsystem: "xyz.holmie.breathe", category: "wheel")
 
     /// What the wheel points at. Set once the catalogue lands — before then
     /// there is no goal known to have a technique behind it.
@@ -170,7 +177,13 @@ struct HomeView: View {
         // that is actively dragging the wheel it disappears entirely. Skipped
         // for the settle on launch — that is the app restoring state, not the
         // person choosing.
-        .sensoryFeedback(.impact(weight: .medium), trigger: goal) { old, _ in old != nil }
+        .sensoryFeedback(.impact(weight: .medium), trigger: goal) { old, new in
+            Self.wheelLog
+                .notice(
+                    "sensoryFeedback trigger evaluated: \(String(describing: old), privacy: .public) -> \(String(describing: new), privacy: .public)"
+                )
+            return old != nil
+        }
     }
 
     /// The technique the wheel's goal resolves to, as a way through to its
@@ -239,6 +252,14 @@ struct HomeView: View {
             set: {
                 goal = $0
                 settings.lastGoal = $0
+                // Diagnostic, not the design: a direct generator, outside
+                // .sensoryFeedback, so a silent device splits "modifier never
+                // fires" from "feedback generators are suppressed".
+                UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                Self.wheelLog
+                    .notice(
+                        "wheel settled on \($0.rawValue, privacy: .public); direct heavy impact fired"
+                    )
             }
         )
     }
