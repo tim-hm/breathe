@@ -21,12 +21,12 @@ Ask instead: _if this broke, would anything else notice?_ If a compile error, a 
 
 The existing tests are the pattern:
 
-| Test | Guards |
-| :-- | :-- |
-| `carries_the_query_string_onto_the_maintenance_url` | Dropping the query string would silently change the maintenance connection's TLS mode |
-| `no_domain_goal_maps_to_unspecified` | The proto zero value never escapes as a real enum case |
-| `slugs_are_unique` | The seed upsert is keyed on `slug`; a duplicate would make array order decide which definition wins |
-| `rejectsAnUnspecifiedGoal` | The Swift side of the same boundary — a newer server cannot put a technique in the wrong section |
+| Test                                                | Guards                                                                                              |
+| :-------------------------------------------------- | :-------------------------------------------------------------------------------------------------- |
+| `carries_the_query_string_onto_the_maintenance_url` | Dropping the query string would silently change the maintenance connection's TLS mode               |
+| `no_domain_goal_maps_to_unspecified`                | The proto zero value never escapes as a real enum case                                              |
+| `slugs_are_unique`                                  | The seed upsert is keyed on `slug`; a duplicate would make array order decide which definition wins |
+| `rejectsAnUnspecifiedGoal`                          | The Swift side of the same boundary — a newer server cannot put a technique in the wrong section    |
 
 Every one covers a decision that is invisible in the code and expensive to rediscover.
 
@@ -50,12 +50,12 @@ Swift tests run on the **host**, not a simulator — every package declares a ma
 
 The four tests and what they pin:
 
-| Test | Guards |
-| :-- | :-- |
-| `the_seeded_catalogue_arrives_over_grpc_web` | The bootstrap's acceptance criterion, minus the simulator |
-| `phase_order_follows_ordinal_not_insertion_order` | The service groups phases through a `HashMap`; the fixture inserts a cycle out of order so ignoring `ordinal` fails |
-| `a_phaseless_technique_fails_the_call_rather_than_vanishing` | A corrupt row surfaces as a non-zero `grpc-status`, not a quietly shortened list |
-| `health_answers_without_a_reachable_database` | `/health` is liveness-only; its pool points at a dead port, so answering at all proves it issued no query |
+| Test                                                         | Guards                                                                                                              |
+| :----------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------ |
+| `the_seeded_catalogue_arrives_over_grpc_web`                 | The bootstrap's acceptance criterion, minus the simulator                                                           |
+| `phase_order_follows_ordinal_not_insertion_order`            | The service groups phases through a `HashMap`; the fixture inserts a cycle out of order so ignoring `ordinal` fails |
+| `a_phaseless_technique_fails_the_call_rather_than_vanishing` | A corrupt row surfaces as a non-zero `grpc-status`, not a quietly shortened list                                    |
+| `health_answers_without_a_reachable_database`                | `/health` is liveness-only; its pool points at a dead port, so answering at all proves it issued no query           |
 
 Each was verified by breaking the code it covers and confirming it fails.
 

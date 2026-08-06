@@ -10,13 +10,13 @@ Handlers log outcomes. `service.rs` and `repository.rs` say nothing — they com
 
 Keyed on a single question: _was this expected?_
 
-| Level | Means | Example |
-| :-- | :-- | :-- |
+| Level   | Means                                                    | Example                                                |
+| :------ | :------------------------------------------------------- | :----------------------------------------------------- |
 | `error` | Unexpected. Something is broken and a human should look. | A query failed against a schema that should support it |
-| `warn` | A handled failure mode. Degraded but understood. | A dependency was unreachable and the fallback ran |
-| `info` | A lifecycle milestone. Rare, and permanent. | "connected to the database", "listening" |
-| `debug` | Detail for an investigation in progress | A connection retry attempt |
-| `trace` | Per-request hot path |  |
+| `warn`  | A handled failure mode. Degraded but understood.         | A dependency was unreachable and the fallback ran      |
+| `info`  | A lifecycle milestone. Rare, and permanent.              | "connected to the database", "listening"               |
+| `debug` | Detail for an investigation in progress                  | A connection retry attempt                             |
+| `trace` | Per-request hot path                                     |                                                        |
 
 The test for `info`: would you still want this line after a million requests? "listening" yes; "handled a request" no — that is what the `TraceLayer` span is for.
 

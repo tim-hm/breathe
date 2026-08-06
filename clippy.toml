@@ -6,9 +6,7 @@
 # timezone, so a value written on a developer's Mac and a value written in a
 # container mean different instants while comparing as if they didn't — the
 # class of bug that surfaces as an off-by-one-hour session duration months later.
-disallowed-methods = [
-  { path = "chrono::Local::now", reason = "All times are UTC. Use chrono::Utc::now()." },
-]
+disallowed-methods = [{ path = "chrono::Local::now", reason = "All times are UTC. Use chrono::Utc::now()." }]
 
 disallowed-types = [{ path = "chrono::Local", reason = "All times are UTC. Use chrono::Utc." }]
 

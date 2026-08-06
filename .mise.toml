@@ -138,9 +138,9 @@ description = "Format everything that is not Rust or Swift (markdown, YAML, JSON
 # rather than three tools.
 #
 # `proseWrap: "never"` in vite.config.ts is the load-bearing setting: a paragraph
-# is one physical line and the reader's editor decides where it breaks. It also
-# keeps tables compact rather than column-aligned, which is the trade — aligned
-# tables reflow every row when one cell changes.
+# is one physical line and the reader's editor decides where it breaks. The
+# `printWidth` beside it is not a line limit — see the comment there for what it
+# actually decides.
 #
 # vp refuses to run outside a JS workspace, which is the only reason the root
 # package.json exists — it declares no dependencies and installs nothing. The
@@ -170,14 +170,7 @@ description = "Full validation (the gate)"
 # The Rust tasks share one cargo artifact lock, so running them concurrently just
 # stalls on "Blocking waiting for file lock" — they are serialised in `run` while
 # everything genuinely independent fans out through `depends`.
-depends = [
-  "check:proto",
-  "check:generated",
-  "check:text",
-  "check:md",
-  "check:doc-links",
-  "check:deps",
-]
+depends = ["check:proto", "check:generated", "check:text", "check:md", "check:doc-links", "check:deps"]
 run = ["mise run check:rs", "mise run check:sqlx", "mise run test:rs", "mise run test:e2e"]
 
 [tasks."check:rs"]
@@ -207,10 +200,7 @@ run = ["buf lint", """
 
 [tasks."check:swift"]
 description = "Validate Swift (format + lint)"
-run = [
-  "swiftformat --lint ios --config ios/.swiftformat",
-  "swiftlint lint --strict --config ios/.swiftlint.yml ios",
-]
+run = ["swiftformat --lint ios --config ios/.swiftformat", "swiftlint lint --strict --config ios/.swiftlint.yml ios"]
 
 [tasks."check:text"]
 description = "Assert markdown, YAML, JSON, and TOML are formatted"
@@ -233,10 +223,7 @@ description = "Assert the committed Swift protobuf matches proto/"
 # regenerate, compare, fail on drift. Needed because the Xcode build never runs
 # buf, so a .proto edit committed without `mise run generate:proto` surfaces much
 # later as a confusing Swift compile error.
-run = [
-  "mise run generate:proto",
-  "git diff --exit-code -- ios/Packages/BreatheCore/Sources/BreatheAPI/Generated",
-]
+run = ["mise run generate:proto", "git diff --exit-code -- ios/Packages/BreatheCore/Sources/BreatheAPI/Generated"]
 
 [tasks."check:deps"]
 description = "Report crate dependencies nothing imports"
