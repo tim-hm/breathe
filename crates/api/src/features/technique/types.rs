@@ -13,6 +13,7 @@ pub enum TechniqueGoal {
     Sleep,
     Energy,
     Reset,
+    Focus,
 }
 
 /// Mirrors the `phase_kind` Postgres enum.

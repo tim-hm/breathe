@@ -13,6 +13,10 @@ struct TechniqueListLoadingTests {
         func listTechniques() async throws -> [Technique] {
             try result.get()
         }
+
+        func listFoundations() async throws -> [FoundationTopic] {
+            []
+        }
     }
 
     private func technique(slug: String) -> Technique {
@@ -22,8 +26,10 @@ struct TechniqueListLoadingTests {
             name: slug,
             summary: "",
             goal: .calm,
-            phases: [Phase(kind: .inhale, duration: .milliseconds(4000))],
-            recommendedCycles: 8
+            stages: [
+                Stage(phases: [Phase(kind: .inhale, duration: .milliseconds(4000))], cycles: 8),
+            ],
+            recommendedRounds: 1
         )
     }
 

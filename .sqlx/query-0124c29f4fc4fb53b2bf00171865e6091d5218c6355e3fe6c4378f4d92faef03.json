@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            id,\n            slug,\n            name,\n            summary,\n            goal AS \"goal: TechniqueGoal\",\n            recommended_cycles\n         FROM techniques\n         ORDER BY sort_order",
+  "query": "SELECT\n            id,\n            slug,\n            name,\n            summary,\n            safety_note,\n            goal AS \"goal: TechniqueGoal\",\n            recommended_rounds\n         FROM techniques\n         ORDER BY sort_order",
   "describe": {
     "columns": [
       {
@@ -49,6 +49,17 @@
       },
       {
         "ordinal": 4,
+        "name": "safety_note",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "techniques",
+            "name": "safety_note"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
         "name": "goal: TechniqueGoal",
         "type_info": {
           "Custom": {
@@ -58,7 +69,8 @@
                 "CALM",
                 "SLEEP",
                 "ENERGY",
-                "RESET"
+                "RESET",
+                "FOCUS"
               ]
             }
           }
@@ -71,13 +83,13 @@
         }
       },
       {
-        "ordinal": 5,
-        "name": "recommended_cycles",
+        "ordinal": 6,
+        "name": "recommended_rounds",
         "type_info": "Int4",
         "origin": {
           "Table": {
             "table": "techniques",
-            "name": "recommended_cycles"
+            "name": "recommended_rounds"
           }
         }
       }
@@ -91,8 +103,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "7b811278165f40747347a62464caaafe57669e06277a5909ffa135da05a1a607"
+  "hash": "0124c29f4fc4fb53b2bf00171865e6091d5218c6355e3fe6c4378f4d92faef03"
 }

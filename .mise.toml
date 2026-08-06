@@ -192,13 +192,28 @@ dir = "{{config_root}}/proto"
 # An unresolvable `main` fails closed rather than skipping: a skip-on-missing
 # branch would also skip on a detached-HEAD CI checkout, a shallow clone, or a
 # fork — exactly the places the breaking-change check matters most.
+#
+# PROTO_BREAKING_ACK is the escape hatch for a commit that breaks the contract on
+# purpose, which is only defensible while no client has shipped (M2's stage model
+# was the first and, if V1 goes to the App Store on schedule, the last). It is
+# opt-in per invocation, so the default stays fail-closed; it still runs the
+# check and prints every finding, so nothing is hidden from review; and it
+# demands a sentence rather than a boolean, so the reason travels with the run.
+# The break stops being one the moment the commit reaches `main`, which is what
+# makes a per-invocation variable the right shape instead of a config entry.
 run = ["buf lint", """
-  if git -C .. rev-parse --verify --quiet main >/dev/null; then
-    buf breaking --against '../.git#branch=main,subdir=proto'
-  else
+  if ! git -C .. rev-parse --verify --quiet main >/dev/null; then
     echo 'check:proto: cannot resolve `main`, refusing to skip the breaking-change check' >&2
     exit 1
   fi
+
+  if [ -n "${PROTO_BREAKING_ACK:-}" ]; then
+    echo "check:proto: breaking changes acknowledged — ${PROTO_BREAKING_ACK}" >&2
+    buf breaking --against '../.git#branch=main,subdir=proto' || true
+    exit 0
+  fi
+
+  buf breaking --against '../.git#branch=main,subdir=proto'
   """]
 
 [tasks."check:swift"]

@@ -5,10 +5,39 @@ import Testing
 
 @Suite("Decoding proto techniques into domain types")
 struct TechniqueDecodingTests {
+    private static func phase(
+        _ kind: Breathe_V1_PhaseKind,
+        _ ms: UInt32,
+        range: (UInt32, UInt32)? = nil
+    ) -> Breathe_V1_Phase {
+        var phase = Breathe_V1_Phase()
+        phase.kind = kind
+        phase.durationMs = ms
+        phase.minDurationMs = range?.0 ?? ms
+        phase.maxDurationMs = range?.1 ?? ms
+        return phase
+    }
+
+    private static func stage(
+        _ phases: [Breathe_V1_Phase],
+        cycles: UInt32 = 8,
+        openEnded: Bool = false
+    ) -> Breathe_V1_Stage {
+        var stage = Breathe_V1_Stage()
+        stage.phases = phases
+        stage.cycles = cycles
+        stage.openEnded = openEnded
+        return stage
+    }
+
+    /// Nil `stages` means the plain one-stage shape most of these tests want;
+    /// spelling it here rather than in a default argument keeps the fixture
+    /// readable and unambiguous.
     private func protoTechnique(
         goal: Breathe_V1_TechniqueGoal = .calm,
-        phases: [Breathe_V1_Phase] = [phase(.inhale, 4000), phase(.exhale, 4000)],
-        recommendedCycles: UInt32 = 8
+        stages: [Breathe_V1_Stage]? = nil,
+        recommendedRounds: UInt32 = 1,
+        safetyNote: String = ""
     ) -> Breathe_V1_Technique {
         var technique = Breathe_V1_Technique()
         technique.id = "id"
@@ -16,37 +45,84 @@ struct TechniqueDecodingTests {
         technique.name = "Box Breathing"
         technique.summary = "Four equal counts."
         technique.goal = goal
-        technique.phases = phases
-        technique.recommendedCycles = recommendedCycles
+        technique.stages = stages
+            ?? [Self.stage([Self.phase(.inhale, 4000), Self.phase(.exhale, 4000)])]
+        technique.recommendedRounds = recommendedRounds
+        technique.safetyNote = safetyNote
         return technique
     }
 
-    private static func phase(_ kind: Breathe_V1_PhaseKind, _ ms: UInt32) -> Breathe_V1_Phase {
-        var phase = Breathe_V1_Phase()
-        phase.kind = kind
-        phase.durationMs = ms
-        return phase
-    }
-
-    @Test("A well-formed technique decodes with its cycle intact")
+    @Test("A well-formed technique decodes with its stages intact")
     func decodesAWellFormedTechnique() throws {
-        let technique = try Technique(proto: protoTechnique())
+        let technique = try Technique(
+            proto: protoTechnique(
+                stages: [
+                    Self.stage(
+                        [Self.phase(.inhale, 4000, range: (3000, 8000)), Self.phase(.exhale, 4000)],
+                        cycles: 8
+                    ),
+                    Self.stage([Self.phase(.holdOut, 60000)], cycles: 1, openEnded: true),
+                ],
+                recommendedRounds: 3
+            )
+        )
 
         #expect(technique.slug == "box-breathing")
         #expect(technique.goal == .calm)
-        #expect(technique.phases.count == 2)
-        #expect(technique.cycleDuration == .milliseconds(8000))
-        #expect(technique.recommendedCycles == 8)
+        #expect(technique.stages.count == 2)
+        #expect(technique.stages[0].cycles == 8)
+        #expect(technique.stages[0].cycleDuration == .milliseconds(8000))
+        #expect(technique.stages[1].openEnded)
+        #expect(technique.recommendedRounds == 3)
+        #expect(technique.hasOpenEndedStage)
+        #expect(technique.safetyNote == nil, "an empty note is no note, not an empty one")
+    }
+
+    /// The dial is rendered from the range, so it has to arrive as authored
+    /// rather than as a copy of the default — the whole point of seeding it.
+    @Test("A phase carries the range its dial moves within")
+    func decodesADialRange() throws {
+        let technique = try Technique(
+            proto: protoTechnique(
+                stages: [Self.stage([Self.phase(.exhale, 6000, range: (6000, 8000))])]
+            )
+        )
+        let exhale = try #require(technique.stages.first?.phases.first)
+
+        #expect(exhale.range == .milliseconds(6000) ... .milliseconds(8000))
+        #expect(exhale.isAdjustable)
+        #expect(exhale.dialled(to: .milliseconds(12000)).duration == .milliseconds(8000))
+    }
+
+    /// A range that does not contain its own default leaves a slider with
+    /// nowhere to put the handle, and a repaired one would be a safe limit this
+    /// app invented. Same rule as the enums: reject rather than guess.
+    @Test("A phase outside its own range is rejected")
+    func rejectsAPhaseOutsideItsRange() {
+        #expect(throws: TechniqueRepositoryError.self) {
+            try Technique(
+                proto: protoTechnique(
+                    stages: [Self.stage([Self.phase(.inhale, 4000, range: (5000, 8000))])]
+                )
+            )
+        }
     }
 
     /// Zero is the proto default, so it is what a server predating the field
-    /// sends — and a session of no cycles has nothing to play. Same rule as the
-    /// enums: a value the app cannot represent fails decoding rather than
-    /// quietly becoming a guess.
-    @Test("A technique recommending no cycles is rejected")
-    func rejectsAZeroCycleCount() {
+    /// sends — and a session of no rounds has nothing to play.
+    @Test("A technique recommending no rounds is rejected")
+    func rejectsAZeroRoundCount() {
         #expect(throws: TechniqueRepositoryError.self) {
-            try Technique(proto: protoTechnique(recommendedCycles: 0))
+            try Technique(proto: protoTechnique(recommendedRounds: 0))
+        }
+    }
+
+    @Test("A stage playing no cycles is rejected")
+    func rejectsAZeroCycleStage() {
+        #expect(throws: TechniqueRepositoryError.self) {
+            try Technique(
+                proto: protoTechnique(stages: [Self.stage([Self.phase(.inhale, 4000)], cycles: 0)])
+            )
         }
     }
 
@@ -64,17 +140,28 @@ struct TechniqueDecodingTests {
     @Test("An unspecified phase kind is rejected rather than defaulted")
     func rejectsAnUnspecifiedPhaseKind() {
         #expect(throws: TechniqueRepositoryError.self) {
-            try Technique(proto: protoTechnique(phases: [Self.phase(.unspecified, 4000)]))
+            try Technique(
+                proto: protoTechnique(stages: [Self.stage([Self.phase(.unspecified, 4000)])])
+            )
         }
     }
 
-    /// A phase-less technique would leave the player with an empty loop and no
-    /// segment to advance to.
-    @Test("A technique with no phases is rejected")
-    func rejectsATechniqueWithNoPhases() {
+    /// A technique with no stages — or a stage with no phases — would leave the
+    /// player with an empty loop and no segment to advance to.
+    @Test("A technique with nothing to play is rejected")
+    func rejectsATechniqueWithNothingToPlay() {
         #expect(throws: TechniqueRepositoryError.self) {
-            try Technique(proto: protoTechnique(phases: []))
+            try Technique(proto: protoTechnique(stages: []))
         }
+        #expect(throws: TechniqueRepositoryError.self) {
+            try Technique(proto: protoTechnique(stages: [Self.stage([])]))
+        }
+    }
+
+    @Test("Safety copy survives the trip")
+    func decodesTheSafetyNote() throws {
+        let technique = try Technique(proto: protoTechnique(safetyNote: "Never in water."))
+        #expect(technique.safetyNote == "Never in water.")
     }
 
     @Test("Every domain goal has a display title")

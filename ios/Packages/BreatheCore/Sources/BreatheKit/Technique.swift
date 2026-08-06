@@ -11,6 +11,7 @@ public enum TechniqueGoal: Sendable, CaseIterable {
     case sleep
     case energy
     case reset
+    case focus
 }
 
 /// One segment of a breathing cycle.
@@ -23,11 +24,82 @@ public enum PhaseKind: Sendable, Hashable {
 
 public struct Phase: Sendable, Hashable {
     public let kind: PhaseKind
+    /// The curated default, and what a session plays unless a dial moved it.
     public let duration: Duration
+    /// The evidence-based range this phase may be dialled within, inclusive.
+    ///
+    /// Seeded per phase rather than assumed, so the Advanced dials are rendered
+    /// from the catalogue instead of from limits this app would then have to
+    /// keep in step with it. A single-point range means no dial at all.
+    public let range: ClosedRange<Duration>
 
-    public init(kind: PhaseKind, duration: Duration) {
+    /// Defaults the range to the duration itself — the honest description of a
+    /// phase nobody has widened, and what keeps a hand-built `Phase` in a test
+    /// or a preview to one line.
+    public init(kind: PhaseKind, duration: Duration, range: ClosedRange<Duration>? = nil) {
         self.kind = kind
         self.duration = duration
+        self.range = range ?? duration ... duration
+    }
+
+    /// Whether there is anything to drag. False for a hold the person ends.
+    public var isAdjustable: Bool {
+        range.lowerBound < range.upperBound
+    }
+
+    /// The same phase at `duration`, clamped into its own range — a dial cannot
+    /// take a phase somewhere the catalogue says it should not go.
+    public func dialled(to duration: Duration) -> Self {
+        Self(kind: kind, duration: range.clamping(duration), range: range)
+    }
+}
+
+/// A run of cycles sharing one phase pattern.
+///
+/// The general case a plain cyclic technique degenerates to: box breathing is
+/// one stage of eight cycles, while a Wim Hof-style round is three — fast
+/// breaths, a retention the person ends, then a recovery hold.
+public struct Stage: Sendable, Hashable {
+    /// The pattern, in play order. Never empty — `TechniqueRepository` rejects
+    /// an empty stage rather than handing a view a loop with nothing in it.
+    public let phases: [Phase]
+    public let cycles: Int
+    /// Whether the person, rather than the clock, decides when this stage ends.
+    ///
+    /// True only for a retention hold. The session clock stops for one: its
+    /// phase durations describe a typical hold, not a scheduled one, so nothing
+    /// downstream may treat them as a length.
+    public let openEnded: Bool
+
+    public init(phases: [Phase], cycles: Int, openEnded: Bool = false) {
+        self.phases = phases
+        self.cycles = cycles
+        self.openEnded = openEnded
+    }
+
+    /// How long one repetition of the pattern takes.
+    public var cycleDuration: Duration {
+        phases.totalDuration
+    }
+
+    /// How long the whole stage takes — nominal for an open-ended one, which is
+    /// as good an estimate as exists before the person decides.
+    public var duration: Duration {
+        cycleDuration * max(cycles, 1)
+    }
+
+    /// The same stage with `phases` replaced, keeping its cycles and its flag.
+    public func with(phases: [Phase]) -> Self {
+        Self(phases: phases, cycles: cycles, openEnded: openEnded)
+    }
+
+    /// The same stage at `cycles`, clamped to a count that is still a session.
+    public func with(cycles: Int) -> Self {
+        Self(
+            phases: phases,
+            cycles: TechniqueOverrides.cycleRange.clamping(cycles),
+            openEnded: openEnded
+        )
     }
 }
 
@@ -40,12 +112,17 @@ public struct Technique: Sendable, Identifiable, Hashable {
     public let name: String
     public let summary: String
     public let goal: TechniqueGoal
-    /// The cycle, in play order. Never empty — `TechniqueRepository` rejects a
-    /// technique without phases rather than handing a view an empty loop.
-    public let phases: [Phase]
-    /// The curated default number of cycles for a session. At least one; a
-    /// person's own preference overrides it for the session they are starting.
-    public let recommendedCycles: Int
+    /// The session, in play order. Never empty.
+    public let stages: [Stage]
+    /// The curated default number of times a session repeats the whole stage
+    /// list. One for everything cyclic; a person's own preference overrides it
+    /// for the session they are starting.
+    public let recommendedRounds: Int
+    /// The caution this technique carries, or nil where it carries none.
+    ///
+    /// Separate from `summary` because it has a second audience: the summary is
+    /// read while choosing, this while breathing.
+    public let safetyNote: String?
 
     public init(
         id: String,
@@ -53,25 +130,28 @@ public struct Technique: Sendable, Identifiable, Hashable {
         name: String,
         summary: String,
         goal: TechniqueGoal,
-        phases: [Phase],
-        recommendedCycles: Int
+        stages: [Stage],
+        recommendedRounds: Int,
+        safetyNote: String? = nil
     ) {
         self.id = id
         self.slug = slug
         self.name = name
         self.summary = summary
         self.goal = goal
-        self.phases = phases
-        self.recommendedCycles = recommendedCycles
+        self.stages = stages
+        self.recommendedRounds = recommendedRounds
+        self.safetyNote = safetyNote
     }
 
-    /// How long one full cycle takes.
-    public var cycleDuration: Duration {
-        phases.totalDuration
+    /// Whether any stage waits on the person rather than the clock — which is
+    /// what makes this technique's length an estimate rather than a promise.
+    public var hasOpenEndedStage: Bool {
+        stages.contains(where: \.openEnded)
     }
 }
 
-extension [Phase] {
+public extension [Phase] {
     /// How long the sequence takes end to end.
     ///
     /// One definition, so a technique's advertised cycle length and the length
@@ -88,6 +168,7 @@ public extension TechniqueGoal {
         case .sleep: "Sleep"
         case .energy: "Energy"
         case .reset: "Reset"
+        case .focus: "Focus"
         }
     }
 }

@@ -1,0 +1,62 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT technique_id, ordinal, cycles, open_ended\n          FROM technique_stages\n          ORDER BY technique_id, ordinal",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "technique_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "technique_stages",
+            "name": "technique_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "ordinal",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "technique_stages",
+            "name": "ordinal"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "cycles",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "technique_stages",
+            "name": "cycles"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "open_ended",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "technique_stages",
+            "name": "open_ended"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "37fff2df81382794c769a50ee25b1d954baf4e611761e775d38fc2394a50f3cd"
+}

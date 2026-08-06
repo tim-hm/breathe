@@ -61,6 +61,18 @@ mise run check      # 3. full validation
 
 `mise run check` covers Rust, protobuf, doc links, and the formatting of everything that is not Rust or Swift — markdown, YAML, JSON, and TOML all go through `vp` (`check:text`), with `check:md` layering markdown's own rules on top. It deliberately excludes `check:swift` and `test:swift`, which need the Xcode toolchain — run those yourself when touching `ios/`.
 
+### Breaking the protobuf contract on purpose
+
+`check:proto` compares `proto/` against `main` and fails on a breaking change, because a released client would break with it. Until one has shipped there is nothing to protect, and a contract that cannot be corrected before its first release is worse than one that can — M2 replaced `Technique.phases` with `stages` for exactly that reason.
+
+The single-run override:
+
+```bash
+PROTO_BREAKING_ACK='M2 replaces Technique.phases with stages; no client has shipped' mise run check
+```
+
+It is per-invocation, it still runs `buf breaking` and prints every finding, and it asks for a sentence rather than a flag. Nothing about it persists: once the commit is on `main` the comparison is against the new shape and the check passes unaided, so reaching for this twice in a row means the first break was never merged — or that the contract now has clients and the change needs a new field instead.
+
 CI (`.github/workflows/checks.yml`) runs the formatting and lint subset on every push to `main` and every pull request: `check:rs`, `check:proto`, `check:text`, `check:md`, and `check:doc-links` on Linux, plus `check:swift` on macOS. Tests and the drift checks (`check:sqlx`, `check:generated`) remain local — CI has neither a database nor BSR access — so the full gate is still `mise run check` before committing.
 
 ## Common tasks

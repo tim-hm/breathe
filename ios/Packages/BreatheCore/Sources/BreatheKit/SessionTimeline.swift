@@ -9,6 +9,11 @@ import Foundation
 /// `ContinuousClock`, and a test can ask it with no clock at all. Nothing
 /// accumulates, so nothing drifts: a late wake-up answers for the time it
 /// actually is rather than the time the previous tick expected.
+///
+/// An open-ended stage is laid out like any other, at the typical length the
+/// catalogue seeds it with. The timeline cannot know how long a hold the person
+/// ends will actually last, so it does not try: `SessionModel` stops the clock
+/// at the hold's start and splices the plan back on at its end.
 public struct SessionTimeline: Sendable, Equatable {
     /// One occurrence of a phase, placed at its offset from the start.
     ///
@@ -22,8 +27,15 @@ public struct SessionTimeline: Sendable, Equatable {
         /// technique's worth of proof that `kind` alone cannot identify a beat.
         public let id: Int
         public let kind: PhaseKind
-        /// Zero-based index of the cycle this beat belongs to.
+        /// Zero-based index of the round this beat belongs to.
+        public let round: Int
+        /// Zero-based index of the stage within the round.
+        public let stage: Int
+        /// Zero-based index of the cycle within the stage.
         public let cycle: Int
+        /// Whether the person ends this beat rather than the clock. Its
+        /// `duration` is then a typical hold, never a scheduled one.
+        public let isOpenEnded: Bool
         /// Offset from t = 0.
         public let start: Duration
         public let duration: Duration
@@ -46,55 +58,74 @@ public struct SessionTimeline: Sendable, Equatable {
 
     /// Every beat of the session, in play order.
     public let beats: [Beat]
-    /// How many times the cycle repeats.
-    public let cycles: Int
-    /// One repetition of the technique's cycle.
-    public let cycleDuration: Duration
+    /// How many times the whole stage list repeats.
+    public let rounds: Int
+    /// One repetition of the stage list.
+    public let roundDuration: Duration
+    /// Every cycle in the session — rounds × stages × each stage's cycles.
+    public let totalCycles: Int
+    /// The planned length. An open-ended stage contributes its typical hold, so
+    /// this is an estimate for any technique that has one.
     public let totalDuration: Duration
 
-    /// Lays out `cycles` repetitions of `phases`.
-    ///
-    /// Both arguments are floored rather than asserted: a session is not worth
-    /// trapping over, and a caller that asks for zero cycles gets one. `phases`
-    /// arriving empty is unreachable from the catalogue — `TechniqueRepository`
-    /// rejects a phaseless technique — and yields an already-finished timeline
-    /// rather than an unadvanceable one.
-    public init(phases: [Phase], cycles: Int) {
-        let cycles = max(cycles, 1)
-        var beats: [Beat] = []
-        beats.reserveCapacity(phases.count * cycles)
+    /// Where each cycle ends, ascending. Precomputed because a cycle boundary is
+    /// no longer `elapsed / cycleDuration`: stages have different lengths, so
+    /// division would count the short stage's cycles across the long one.
+    private let cycleEnds: [Duration]
 
+    /// Lays out `rounds` repetitions of `stages`.
+    ///
+    /// Counts are floored rather than asserted: a session is not worth trapping
+    /// over, and a caller that asks for zero rounds gets one. Empty `stages` is
+    /// unreachable from the catalogue — `TechniqueRepository` rejects a
+    /// stageless technique — and yields an already-finished timeline rather than
+    /// an unadvanceable one.
+    public init(stages: [Stage], rounds: Int) {
+        let rounds = max(rounds, 1)
+        var beats: [Beat] = []
+        var cycleEnds: [Duration] = []
         var start = Duration.zero
-        for cycle in 0 ..< cycles {
-            for phase in phases {
-                beats.append(
-                    Beat(
-                        id: beats.count,
-                        kind: phase.kind,
-                        cycle: cycle,
-                        start: start,
-                        duration: phase.duration
-                    )
-                )
-                start += phase.duration
+
+        for round in 0 ..< rounds {
+            for (stageIndex, stage) in stages.enumerated() {
+                for cycle in 0 ..< max(stage.cycles, 1) {
+                    for phase in stage.phases {
+                        beats.append(
+                            Beat(
+                                id: beats.count,
+                                kind: phase.kind,
+                                round: round,
+                                stage: stageIndex,
+                                cycle: cycle,
+                                isOpenEnded: stage.openEnded,
+                                start: start,
+                                duration: phase.duration
+                            )
+                        )
+                        start += phase.duration
+                    }
+                    cycleEnds.append(start)
+                }
             }
         }
 
         self.beats = beats
-        self.cycles = cycles
-        cycleDuration = phases.totalDuration
+        self.rounds = rounds
+        self.cycleEnds = cycleEnds
+        roundDuration = stages.reduce(.zero) { $0 + $1.duration }
+        totalCycles = cycleEnds.count
         totalDuration = start
     }
 
     /// The session a technique describes, at its curated length.
-    public init(technique: Technique, cycles: Int? = nil) {
-        self.init(phases: technique.phases, cycles: cycles ?? technique.recommendedCycles)
+    public init(technique: Technique, rounds: Int? = nil) {
+        self.init(stages: technique.stages, rounds: rounds ?? technique.recommendedRounds)
     }
 
     /// The beat covering `elapsed`, or nil once the session has run out.
     ///
-    /// Binary search rather than a scan: the bellows breath's twenty cycles are
-    /// already forty beats, and this runs on every animation frame.
+    /// Binary search rather than a scan: a Wim Hof-style session is three rounds
+    /// of sixty-plus beats, and this runs on every animation frame.
     public func beat(at elapsed: Duration) -> Beat? {
         guard elapsed >= .zero else { return beats.first }
         guard elapsed < totalDuration else { return nil }
@@ -119,9 +150,17 @@ public struct SessionTimeline: Sendable, Equatable {
     /// A cycle abandoned three phases in does not count. Someone who stops early
     /// is told what they finished, never what they left.
     public func cyclesCompleted(at elapsed: Duration) -> Int {
-        guard cycleDuration > .zero else { return 0 }
-        let completed = elapsed.milliseconds / cycleDuration.milliseconds
-        return min(max(Int(completed), 0), cycles)
+        // Counted rather than searched: this answers when a session ends and
+        // when a summary draws, not once a frame.
+        cycleEnds.count { $0 <= elapsed }
+    }
+
+    /// How many rounds are wholly behind `elapsed` — the unit a staged protocol
+    /// is counted in, and the one its summary should report.
+    public func roundsCompleted(at elapsed: Duration) -> Int {
+        guard roundDuration > .zero else { return 0 }
+        let completed = elapsed.milliseconds / roundDuration.milliseconds
+        return min(max(Int(completed), 0), rounds)
     }
 
     /// How many inhales are wholly behind `elapsed`.
