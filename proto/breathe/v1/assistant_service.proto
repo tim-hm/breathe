@@ -1,0 +1,93 @@
+syntax = "proto3";
+
+package breathe.v1;
+
+// AssistantService turns what somebody told us at onboarding into guidance: a
+// short ranked list of techniques to try, and an explanation of why a technique
+// works, written for how much breathwork they have done before.
+//
+// Scoped to the caller exactly like ProfileService — the anonymous identity
+// travels in the `breathe-user-id` header and no request message carries a
+// profile, so one client can never ask for guidance shaped by another's
+// answers.
+//
+// Every RPC here answers. A language model sits behind both of them, and it can
+// be unreachable, rate-limited, or over the caller's daily quota; when it is,
+// the server falls back to a rule-based answer derived from the same profile
+// rather than failing the call. `AssistantSource` on the response says which
+// happened, so a client can be honest about it instead of guessing.
+service AssistantService {
+  // Returns techniques to try next, best first.
+  //
+  // The request carries nothing: the server already holds the profile the
+  // ranking is derived from, and a client that sent its own copy would let a
+  // stale one decide what it is told.
+  rpc GetRecommendation(GetRecommendationRequest) returns (GetRecommendationResponse);
+
+  // Streams an explanation of why one technique works.
+  //
+  // Server-streaming because perceived latency is the whole point: an
+  // explanation arrives a sentence at a time and the reader starts reading
+  // immediately, where a unary call would show a spinner for as long as the
+  // model takes to finish.
+  rpc ExplainTechnique(ExplainTechniqueRequest) returns (stream ExplainTechniqueResponse);
+}
+
+// Where an answer came from.
+//
+// Carried on every response so the client can say "this one is written for you"
+// only when it is. The distinction is user-visible copy, not telemetry.
+enum AssistantSource {
+  ASSISTANT_SOURCE_UNSPECIFIED = 0;
+
+  // A language model, given the catalogue and this person's profile.
+  ASSISTANT_SOURCE_MODEL = 1;
+
+  // The server's own rules, from the goals the person picked. What every caller
+  // gets when the model is unreachable, has failed repeatedly, or the caller has
+  // spent their daily quota — and what every caller gets offline, since a client
+  // that cannot reach the server shows the same shape of answer.
+  ASSISTANT_SOURCE_FALLBACK = 2;
+}
+
+message GetRecommendationRequest {}
+
+// One technique worth trying, and why.
+message Recommendation {
+  // A slug from the catalogue `TechniqueService.ListTechniques` serves, always.
+  // The server validates every slug a model produces against the catalogue and
+  // drops the ones it invented, so a client can look this up without a
+  // defensive branch for a technique it has never heard of.
+  string technique_slug = 1;
+
+  // One sentence, addressed to the person, grounded in the goals and experience
+  // level they gave. Never empty.
+  string reason = 2;
+}
+
+message GetRecommendationResponse {
+  // Best first, and bounded — this is a nudge towards a next session, not a
+  // second catalogue. Never empty: a model that returned nothing usable falls
+  // back to the rules rather than an empty list the client has to explain.
+  repeated Recommendation recommendations = 1;
+
+  AssistantSource source = 2;
+}
+
+message ExplainTechniqueRequest {
+  // A catalogue slug. Unknown slugs are NOT_FOUND rather than an invented
+  // explanation.
+  string technique_slug = 1;
+}
+
+message ExplainTechniqueResponse {
+  // The next piece of the explanation, to be appended to what came before.
+  // Chunk boundaries are wherever the model happened to break and carry no
+  // meaning — a client accumulates them and renders the running total.
+  string text = 1;
+
+  // Identical on every chunk of one stream, so a client reading the first
+  // message already knows whether to say the explanation was written for this
+  // person. Repeating it costs a byte and saves a header contract.
+  AssistantSource source = 2;
+}
