@@ -4,10 +4,10 @@ import SwiftUI
 /// The marketing site's orb, idling on home: a filled dot inside two rings,
 /// breathing whether or not anyone has begun.
 ///
-/// It breathes like a person at rest — ten breaths a minute, with enough
-/// travel that the expansion reads as a breath rather than a shimmer.
-/// Ambience, not instruction: the session orb swells to be followed; this
-/// one only has to be unmistakably alive.
+/// It breathes briskly and visibly — a second and a half in, the same out —
+/// with enough travel that the expansion reads as a breath rather than a
+/// shimmer. Ambience, not instruction: the session orb swells to be
+/// followed; this one only has to be unmistakably alive.
 struct AmbientOrb: View {
     /// The wheel's current goal accent, so the orb takes the colour of what
     /// the person is about to do.
@@ -16,7 +16,7 @@ struct AmbientOrb: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// One breath, in seconds.
-    private static let cycle = 6.0
+    private static let cycle = 3.0
 
     var body: some View {
         // Built out here rather than in the closure below, which runs at display
@@ -35,20 +35,22 @@ struct AmbientOrb: View {
             let breath = reduceMotion
                 ? 1.0
                 : fullness(at: context.date.timeIntervalSinceReferenceDate)
-            let travel = 0.08 * breath
+            let travel = 0.11 * breath
 
+            // Bases sit `travel` short of where the old ones did, so a full
+            // inhale lands the outer ring exactly on the frame's edge.
             ZStack {
                 Circle()
                     .stroke(outerRing, lineWidth: 1)
-                    .scaleEffect(0.92 + travel)
+                    .scaleEffect(0.89 + travel)
 
                 Circle()
                     .stroke(innerRing, lineWidth: 1)
-                    .scaleEffect(0.73 + travel)
+                    .scaleEffect(0.70 + travel)
 
                 Circle()
                     .fill(core)
-                    .scaleEffect(0.50 + travel)
+                    .scaleEffect(0.47 + travel)
             }
         }
         .frame(width: 176, height: 176)

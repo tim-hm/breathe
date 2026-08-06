@@ -110,11 +110,16 @@ struct HomeView: View {
 
                 intentWheel(over: goals(in: techniques))
 
+                // Begin sits directly under the wheel — it acts on what the
+                // wheel says, and the technique row is a footnote to both.
+                // The extra top padding keeps a thumb finishing a spin from
+                // landing on it.
                 if let chosen {
                     VStack(spacing: Theme.Spacing.standard) {
-                        chosenTechnique(chosen)
                         beginButton(chosen)
+                        chosenTechnique(chosen)
                     }
+                    .padding(.top, Theme.Spacing.standard)
                 }
             }
 
@@ -144,19 +149,23 @@ struct HomeView: View {
     private func intentWheel(over goals: [TechniqueGoal]) -> some View {
         HStack(spacing: Theme.Spacing.close) {
             Text("I want to")
-                .font(.title3)
+                .font(.title2)
                 .foregroundStyle(Theme.Ink.secondary)
 
             Picker("I want to", selection: wheelBinding(over: goals)) {
                 ForEach(goals, id: \.self) { goal in
                     Text(goal.intentObject)
-                        .font(.title3.weight(.semibold))
+                        .font(.title2.weight(.semibold))
                         .tag(goal)
                 }
             }
             .pickerStyle(.wheel)
-            .frame(width: 190, height: 120)
+            .frame(width: 205, height: 132)
         }
+        // The detent click a hardware wheel would give: one tick per option as
+        // the spin passes it. Skipped for the settle on launch — that is the
+        // app restoring state, not the person choosing.
+        .sensoryFeedback(.selection, trigger: goal) { old, _ in old != nil }
     }
 
     /// The technique the wheel's goal resolves to, as a way through to its
