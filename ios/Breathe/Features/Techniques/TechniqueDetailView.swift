@@ -21,6 +21,7 @@ struct TechniqueDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.loose) {
                 header
+                BreathRhythmChart(technique: dialled)
                 SafetyNote(technique: technique)
                 sessionShape(of: dialled)
                 lengthControl(of: dialled)
