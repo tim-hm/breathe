@@ -37,6 +37,13 @@ public enum BreatheClients {
         Breathe_V1_JourneyServiceClient(client: protocolClient(baseURL: baseURL, userId: userId))
     }
 
+    public static func assistantService(
+        baseURL: URL,
+        userId: @escaping @Sendable () -> UUID?
+    ) -> Breathe_V1_AssistantServiceClient {
+        Breathe_V1_AssistantServiceClient(client: protocolClient(baseURL: baseURL, userId: userId))
+    }
+
     private static func protocolClient(
         baseURL: URL,
         userId: @escaping @Sendable () -> UUID?

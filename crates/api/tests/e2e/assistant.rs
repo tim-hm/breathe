@@ -345,6 +345,55 @@ async fn callers_do_not_share_guidance() {
     );
 }
 
+/// The one test that spends money.
+///
+/// `#[ignore]`, so it never runs in `mise run test:e2e` or in CI — it is driven
+/// by `mise run assistant:smoke`, which is the only way to find out whether the
+/// key, the model id, the request body, and the parser agree with a provider
+/// that is not a test double. Everything above this line is deterministic;
+/// this is the seam's other side, and it can only be checked by calling it.
+///
+/// Skips rather than fails without a key, because "no key" is a supported state
+/// of this repo and not a broken smoke test.
+#[tokio::test]
+#[ignore = "calls the real model provider; run it with `mise run assistant:smoke`"]
+// The whole output of this test is what it printed — a status line nobody reads
+// is not a smoke test.
+#[allow(clippy::print_stdout)]
+async fn the_real_model_answers() {
+    let Some(key) = std::env::var("OPENROUTER_API_KEY")
+        .ok()
+        .filter(|key| !key.trim().is_empty())
+    else {
+        println!("OPENROUTER_API_KEY is not set — nothing to smoke-test");
+        return;
+    };
+
+    let client = api::features::assistant::openrouter::OpenRouterClient::new(&key)
+        .expect("the HTTP client builds");
+
+    let db = TestDatabase::create("assistant_smoke").await;
+    set_goals(&db, USER, &[pb::TechniqueGoal::Sleep]).await;
+
+    let response = recommend(&db, Arc::new(client), USER).await;
+
+    println!("model:  {}", api::config::OPENROUTER_MODEL_ID);
+    println!(
+        "source: {:?}",
+        pb::AssistantSource::try_from(response.source)
+    );
+    for item in &response.recommendations {
+        let reason: String = item.reason.chars().take(90).collect();
+        println!("  {} — {reason}", item.technique_slug);
+    }
+
+    assert_eq!(
+        response.source,
+        pb::AssistantSource::Model as i32,
+        "the provider answered but the reply was unusable — see the warning above"
+    );
+}
+
 async fn recommend(
     db: &TestDatabase,
     model: Arc<dyn ModelClient>,

@@ -47,6 +47,11 @@ struct TechniqueListView: View {
 
         case let .loaded(techniques):
             List {
+                // Leads the catalogue rather than replacing it: somebody who
+                // came here to browse still browses, and somebody who wants to
+                // be told what to do is told first.
+                SuggestedForYouView(techniques: techniques)
+
                 ForEach(goals(in: techniques), id: \.self) { goal in
                     Section {
                         ForEach(techniques.filter { $0.goal == goal }) { technique in

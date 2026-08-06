@@ -287,6 +287,21 @@ depends = ["dev:db"]
 env = { CARGO_TARGET_DIR = "{{env.CHECK_TARGET_DIR}}" }
 run = "cargo nextest run -p api --test e2e"
 
+[tasks."assistant:smoke"]
+description = "Make one real call to the model provider and print what it said"
+depends = ["dev:db"]
+# The only task in this file that spends money and the only one that leaves the
+# machine, which is why it is `#[ignore]`d out of every other suite rather than
+# guarded by a variable someone could set by accident. One call, on the cheapest
+# model in the catalogue, through the same service path an RPC takes — so what
+# it proves is that the key, the model id, the request body, and the parser all
+# still agree with a provider no test double can stand in for.
+#
+# `--no-capture` because the printed answer *is* the result. No key in the
+# environment is a skip, not a failure.
+env = { CARGO_TARGET_DIR = "{{env.CHECK_TARGET_DIR}}" }
+run = "cargo nextest run -p api --test e2e --run-ignored only -E 'test(the_real_model_answers)' --no-capture"
+
 [tasks."test:swift"]
 dir = "{{config_root}}/ios"
 run = "swift test --package-path Packages/BreatheCore"
@@ -341,7 +356,14 @@ dir = "{{config_root}}/ios"
 # build keeps working untethered. The Bonjour name rather than the LAN IP
 # because it survives a DHCP renewal, and derives per machine with no config:
 # whoever generates the project gets their own Mac baked in.
-run = ["xcodegen generate", 'plutil -replace BreatheAPIBaseURL -string "http://$(scutil --get LocalHostName).local:18100" Breathe/Info.plist']
+# Both apps get the same address baked in: the watch talks to the backend
+# directly rather than proxying through the phone (roadmap M9), so it needs the
+# URL just as much and from the same source.
+run = ["xcodegen generate", '''
+  url="http://$(scutil --get LocalHostName).local:18100"
+  plutil -replace BreatheAPIBaseURL -string "$url" Breathe/Info.plist
+  plutil -replace BreatheAPIBaseURL -string "$url" BreatheWatch/Info.plist
+  ''']
 
 [tasks."ios:open"]
 description = "Generate the project and open it in Xcode"
@@ -355,3 +377,12 @@ dir = "{{config_root}}/ios"
 # The generic destination builds without naming a device, so this works on any
 # machine regardless of which simulators its Xcode happens to have installed.
 run = "xcodebuild -project Breathe.xcodeproj -scheme Breathe -destination 'generic/platform=iOS Simulator' build"
+
+[tasks."ios:build:watch"]
+description = "Build the watch app for the simulator without opening Xcode"
+depends = ["ios:gen"]
+dir = "{{config_root}}/ios"
+# Separate from `ios:build` rather than folded into it: the phone scheme embeds
+# the watch app, so building it covers both, but a watch-only change wants a
+# build that fails on the wrist's compiler errors alone.
+run = "xcodebuild -project Breathe.xcodeproj -scheme BreatheWatch -destination 'generic/platform=watchOS Simulator' build"

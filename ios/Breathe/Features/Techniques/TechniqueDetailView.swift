@@ -23,6 +23,7 @@ struct TechniqueDetailView: View {
                 header
                 BreathRhythmChart(technique: dialled)
                 SafetyNote(technique: technique)
+                WhyThisWorksView(techniqueSlug: technique.slug)
                 sessionShape(of: dialled)
                 lengthControl(of: dialled)
                 advanced(of: dialled)
