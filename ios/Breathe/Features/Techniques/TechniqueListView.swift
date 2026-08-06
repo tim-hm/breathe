@@ -27,6 +27,7 @@ struct TechniqueListView: View {
     var body: some View {
         NavigationStack {
             content
+                .paletteGround()
                 .navigationTitle("Breathe")
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
@@ -53,6 +54,7 @@ struct TechniqueListView: View {
                 NavigationLink(value: technique) {
                     TechniqueRow(technique: technique)
                 }
+                .listRowBackground(Color.clear)
             }
             .listStyle(.plain)
 
@@ -84,11 +86,11 @@ private struct TechniqueRow: View {
 
             Text(technique.summary)
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.Ink.secondary)
 
             Text(shapeDescription)
                 .font(.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Theme.Ink.tertiary)
         }
         .padding(.vertical, Theme.Spacing.close)
     }

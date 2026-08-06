@@ -37,6 +37,7 @@ struct TechniqueDetailView: View {
             }
             .padding(Theme.Spacing.standard)
         }
+        .paletteGround()
         .navigationTitle(technique.name)
         .navigationBarTitleDisplayMode(.inline)
         .fullScreenCover(item: $started) { session in
@@ -49,7 +50,7 @@ struct TechniqueDetailView: View {
             GoalBadge(goal: technique.goal)
             Text(technique.summary)
                 .font(.body)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.Ink.secondary)
         }
     }
 
@@ -93,7 +94,7 @@ struct TechniqueDetailView: View {
 
             Text(lengthDescription(of: dialled))
                 .font(.footnote)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.Ink.secondary)
         }
     }
 
@@ -154,7 +155,7 @@ struct TechniqueDetailView: View {
             // A hold the person ends has no dial, and a disabled stepper would
             // invite them to look for one.
             LabeledContent(phase.kind.instruction, value: "you decide")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.Ink.secondary)
         }
     }
 
@@ -172,6 +173,10 @@ struct TechniqueDetailView: View {
                 .font(.headline)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, Theme.Spacing.close)
+                // The ground, so the label inverts with the fill: an accent is
+                // dark on white and light on near-black, and a prominent button
+                // that kept white text would be unreadable in one of the two.
+                .foregroundStyle(Theme.Surface.ground)
         }
         .buttonStyle(.borderedProminent)
         .tint(technique.goal.accent)

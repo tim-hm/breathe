@@ -17,9 +17,9 @@ struct SafetyNote: View {
         if let note = technique.safetyNote {
             HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.close) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Theme.Accent.caution)
                 Text(note)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.Ink.secondary)
             }
             .font(font)
             .padding(Theme.Spacing.standard)

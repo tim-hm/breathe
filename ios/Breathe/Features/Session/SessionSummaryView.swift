@@ -21,7 +21,7 @@ struct SessionSummaryView: View {
                     .font(.largeTitle.weight(.medium))
                 Text(closing)
                     .font(.body)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.Ink.secondary)
                     .multilineTextAlignment(.center)
             }
 
@@ -30,6 +30,12 @@ struct SessionSummaryView: View {
                 stat("minutes", record.duration.formatted(.time(pattern: .minuteSecond)))
                 stat(record.breathCount == 1 ? "breath" : "breaths", "\(record.breathCount)")
             }
+            .frame(maxWidth: .infinity)
+            .padding(Theme.Spacing.standard)
+            // Translucent, so the accent wash the session was drawn in still
+            // shows through the one thing left on the screen.
+            .background(Theme.Surface.raised.opacity(0.6), in: card)
+            .overlay(card.stroke(Theme.Surface.line))
 
             Spacer()
 
@@ -40,6 +46,11 @@ struct SessionSummaryView: View {
                 .background(technique.goal.accent.opacity(0.2), in: Capsule())
         }
         .padding(Theme.Spacing.loose)
+        .foregroundStyle(Theme.Ink.primary)
+    }
+
+    private var card: RoundedRectangle {
+        RoundedRectangle(cornerRadius: Theme.Spacing.standard)
     }
 
     private var headline: String {
@@ -64,7 +75,7 @@ struct SessionSummaryView: View {
                 .monospacedDigit()
             Text(label)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.Ink.secondary)
         }
         .accessibilityElement(children: .combine)
     }

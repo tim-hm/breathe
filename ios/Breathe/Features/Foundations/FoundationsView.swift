@@ -17,6 +17,7 @@ struct FoundationsView: View {
 
     var body: some View {
         content
+            .paletteGround()
             .navigationTitle("The basics")
             .navigationBarTitleDisplayMode(.inline)
             .task { await model.loadIfNeeded() }
@@ -36,17 +37,19 @@ struct FoundationsView: View {
                             .font(.headline)
                         Text(topic.answer)
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Theme.Ink.secondary)
                     }
                     .padding(.vertical, Theme.Spacing.close)
                     .accessibilityElement(children: .combine)
+                    .listRowBackground(Color.clear)
                 }
 
                 Text("All of this is a suggestion, never a rule. The breathing works while "
                     + "you're still learning it.")
                     .font(.footnote)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Theme.Ink.tertiary)
                     .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
             }
             .listStyle(.plain)
 

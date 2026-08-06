@@ -46,14 +46,20 @@ struct SessionView: View {
         .onChange(of: model.currentBeat?.id) { _, _ in announceCurrentPhase() }
     }
 
+    /// The accent, washed over the palette's own ground rather than over
+    /// whatever the presentation put behind it — a translucent gradient alone
+    /// would sit on the system's background, which is pure black at night and
+    /// paper white by day, and neither is this palette.
     private var backdrop: some View {
-        LinearGradient(
-            colors: [
-                model.technique.goal.accent.opacity(0.35),
-                model.technique.goal.accent.opacity(0.05),
-            ],
-            startPoint: .top,
-            endPoint: .bottom
+        Theme.Surface.ground.overlay(
+            LinearGradient(
+                colors: [
+                    model.technique.goal.accent.opacity(0.35),
+                    model.technique.goal.accent.opacity(0.05),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
         )
     }
 
@@ -76,6 +82,9 @@ struct SessionView: View {
             controls
         }
         .padding(Theme.Spacing.loose)
+        // Set once for the screen: everything under here is text on the app's
+        // own backdrop, and the buttons carry their own tint over it.
+        .foregroundStyle(Theme.Ink.primary)
     }
 
     /// Everything that changes at a phase boundary rather than at display
@@ -87,7 +96,7 @@ struct SessionView: View {
                 .font(.headline)
             Text(position)
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.Ink.secondary)
         }
     }
 
@@ -119,7 +128,7 @@ struct SessionView: View {
                     Text(secondsRemaining(in: beat, at: elapsed))
                         .font(.system(.largeTitle, design: .rounded).weight(.light))
                         .monospacedDigit()
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.Ink.secondary)
                 }
                 // One VoiceOver element for the whole guide: the phase and how
                 // long is left in it, which is everything the visual conveys.
@@ -155,7 +164,7 @@ struct SessionView: View {
                     Text(model.holdElapsed.formatted(.time(pattern: .minuteSecond)))
                         .font(.system(.largeTitle, design: .rounded).weight(.light))
                         .monospacedDigit()
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.Ink.secondary)
                 }
                 .accessibilityElement(children: .combine)
 
@@ -196,7 +205,7 @@ struct SessionView: View {
                 model.end()
             }
             .font(.headline)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Theme.Ink.secondary)
         }
         .padding(.bottom, Theme.Spacing.standard)
     }
