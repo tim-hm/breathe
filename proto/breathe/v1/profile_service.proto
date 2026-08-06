@@ -85,10 +85,43 @@ message Profile {
   // normal state.
   string intent_note = 4;
 
-  // Field 5 is where M5 puts `display_name`, which is what makes a person
-  // visible on a leaderboard. Deliberately absent until the boards exist —
-  // asking for a name before there is anywhere to show it invites one that is
-  // never revisited.
+  // What the leaderboards call this person, and the whole of the opt-in to
+  // them: empty means invisible to everyone else, which is the state every
+  // profile starts in and stays in until somebody types a name.
+  //
+  // The server owns the final value — it trims, screens, and suffixes a name
+  // somebody else already holds — so what comes back in
+  // `UpdateProfileResponse` is what other people will see, and may not be what
+  // was sent.
+  string display_name = 5;
+
+  // Which decade they were born in, if they said. Optional, and coarse on
+  // purpose: it exists so the age-band leaderboard can compare like with like,
+  // and a birth year would be a more precise fact than that use needs.
+  BirthYearBand birth_year_band = 6;
+}
+
+// The decade somebody was born in.
+//
+// Bands by birth decade rather than by age, so a person's band never changes
+// under them and no stored value silently means something different a year
+// later. UNSPECIFIED is a real state: nobody has to answer, and most will not.
+enum BirthYearBand {
+  BIRTH_YEAR_BAND_UNSPECIFIED = 0;
+
+  BIRTH_YEAR_BAND_BORN_BEFORE_1960 = 1;
+
+  BIRTH_YEAR_BAND_BORN_1960S = 2;
+
+  BIRTH_YEAR_BAND_BORN_1970S = 3;
+
+  BIRTH_YEAR_BAND_BORN_1980S = 4;
+
+  BIRTH_YEAR_BAND_BORN_1990S = 5;
+
+  BIRTH_YEAR_BAND_BORN_2000S = 6;
+
+  BIRTH_YEAR_BAND_BORN_2010_OR_LATER = 7;
 }
 
 message GetProfileRequest {}

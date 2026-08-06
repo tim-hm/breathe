@@ -1,0 +1,243 @@
+syntax = "proto3";
+
+package breathe.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// JourneyService holds what a person has actually done: the sessions they
+// breathed, the controlled-pause tests they took, and where that puts them
+// against everyone who has chosen to be visible.
+//
+// Scoped to the caller exactly like ProfileService — the anonymous identity
+// travels in the `breathe-user-id` header and no request message carries an id,
+// so one client can never read another's journey by guessing a value.
+service JourneyService {
+  // Records a batch of finished sessions.
+  //
+  // A batch rather than one call per session because the client records
+  // sessions locally from the moment it is installed and drains them
+  // opportunistically — a person can breathe a week's worth of sessions on a
+  // plane and sync them all at once.
+  //
+  // Idempotent on `(caller, client_session_id)`: a retry, a double-sync, and a
+  // client that has lost track of what it already sent all converge on the same
+  // rows. The response says how many were new so a client can trust its own
+  // bookkeeping without reading anything back.
+  rpc RecordSessions(RecordSessionsRequest) returns (RecordSessionsResponse);
+
+  // Returns the caller's totals, streaks, and recent history.
+  //
+  // Everything here is derived on read. There are no denormalised counters, so
+  // there is nothing to drift out of step with the sessions themselves.
+  rpc GetJourney(GetJourneyRequest) returns (GetJourneyResponse);
+
+  // Records one BOLT-style controlled-pause measurement.
+  //
+  // The measurement happens on the client — it is a stopwatch the person starts
+  // and stops — so the server's job is to keep the history and answer whether
+  // this one is their best.
+  rpc RecordBoltScore(RecordBoltScoreRequest) returns (RecordBoltScoreResponse);
+
+  // Returns a board's leading entries plus where the caller stands on it.
+  //
+  // Only people who have chosen a display name appear in `entries`; everyone
+  // with a score is counted in the ranking. Someone with no display name is
+  // therefore invisible to others and still knows their own position.
+  rpc GetLeaderboard(GetLeaderboardRequest) returns (GetLeaderboardResponse);
+}
+
+// One session a person breathed.
+//
+// The same shape in both directions: it is what the client sends up and what
+// `GetJourney` sends back, because a session is a fact rather than a projection
+// and a second message for the read side would be the same fields under
+// different names.
+message SessionRecord {
+  // A UUID the client mints when the session ends, and the idempotency key the
+  // server upserts on. Client-generated rather than server-assigned so a
+  // session recorded offline already has its identity and a retry is not a
+  // second session.
+  string client_session_id = 1;
+
+  // The technique's slug, stored as text and deliberately not checked against
+  // the catalogue — see the migration for why a renamed technique must never
+  // invalidate a session someone did.
+  string technique_slug = 2;
+
+  // When the session began, not when it synced.
+  google.protobuf.Timestamp started_at = 3;
+
+  // How long it ran. Milliseconds, matching `Phase.duration_ms`.
+  uint32 duration_ms = 4;
+
+  // Cycles wholly finished. A session ended mid-cycle counts the cycles behind
+  // it, never the one it was in.
+  uint32 cycles_completed = 5;
+
+  // Inhales taken — two per cycle in techniques like the physiological sigh.
+  uint32 breath_count = 6;
+
+  // Whether the timeline ran out, as opposed to the person ending it early.
+  // Both are recorded; only this distinguishes them.
+  bool completed = 7;
+}
+
+message RecordSessionsRequest {
+  // Never empty, and bounded — the server rejects an oversized batch rather
+  // than accepting an unbounded write from a client that has lost its place.
+  repeated SessionRecord sessions = 1;
+}
+
+message RecordSessionsResponse {
+  // Sessions the server had not seen before.
+  uint32 recorded = 1;
+
+  // Sessions it already held, whether from an earlier sync or from a repeat
+  // within this same batch. Not an error: it is the expected answer to a retry.
+  uint32 already_known = 2;
+}
+
+message GetJourneyRequest {
+  // The caller's offset from UTC, in minutes, east-positive — 60 for British
+  // Summer Time, -480 for Pacific Standard.
+  //
+  // Sent per request and never stored: a streak is a run of *local* calendar
+  // days, so the same history yields different streaks depending on where the
+  // person is standing, and the only party that knows that is the client. A
+  // stored offset would be wrong the moment somebody flew somewhere.
+  int32 utc_offset_minutes = 1;
+}
+
+// Everything a person has accumulated, in the units the screen shows.
+message JourneyTotals {
+  uint32 sessions = 1;
+
+  uint64 breaths = 2;
+
+  // Whole minutes, rounded down. Derived from the summed milliseconds so that a
+  // hundred short sessions do not each lose their remainder.
+  uint64 minutes = 3;
+}
+
+message GetJourneyResponse {
+  JourneyTotals totals = 1;
+
+  // Consecutive local days ending today or yesterday. Yesterday counts because
+  // a streak is not broken until a whole local day has passed without a
+  // session — somebody who has not breathed yet this morning has not lost
+  // anything.
+  uint32 current_streak_days = 2;
+
+  // The longest run of consecutive local days there has ever been. Never
+  // decreases, which is the point: it is the thing left to celebrate when a
+  // current streak pauses.
+  uint32 best_streak_days = 3;
+
+  // The most recent sessions, newest first. Bounded by the server — this is a
+  // history strip, not a paginated archive.
+  repeated SessionRecord recent_sessions = 4;
+
+  // The caller's best controlled pause, absent until they have taken one.
+  // Carried here so the journey screen does not need a second round trip to
+  // draw the BOLT card.
+  optional uint32 best_bolt_seconds = 5;
+}
+
+message RecordBoltScoreRequest {
+  // How long the comfortable pause lasted, measured on the client.
+  //
+  // Seconds rather than milliseconds: the test ends when the person feels the
+  // first definite urge to breathe, and precision past a second would claim an
+  // accuracy the measurement does not have.
+  uint32 seconds = 1;
+
+  // When it was taken. Optional — the server uses its own clock when the field
+  // is absent, which is the normal case for a test taken online.
+  google.protobuf.Timestamp measured_at = 2;
+}
+
+message RecordBoltScoreResponse {
+  // The best score on record after this one, so a client that was offline for
+  // several tests still shows the right number.
+  uint32 best_seconds = 1;
+
+  // Whether this measurement is the new best. Answered by the server rather
+  // than compared on the client, which may not hold the full history.
+  bool is_personal_best = 2;
+}
+
+// Which board is being asked for.
+//
+// Every board measures consistency or a controlled test. There is deliberately
+// no maximal-breath-hold board: a contest over how long someone can hold their
+// breath rewards exactly the behaviour this app tells people not to do.
+enum LeaderboardBoard {
+  LEADERBOARD_BOARD_UNSPECIFIED = 0;
+
+  // Current streak in consecutive local days.
+  LEADERBOARD_BOARD_STREAK = 1;
+
+  // Minutes breathed over the last thirty days. A rolling window rather than an
+  // all-time total, so somebody who started this month is not ranked against a
+  // year of somebody else's history.
+  LEADERBOARD_BOARD_MINUTES_30D = 2;
+
+  // Best BOLT-style controlled pause, in seconds.
+  LEADERBOARD_BOARD_BOLT = 3;
+}
+
+// Who a board is drawn from.
+enum LeaderboardScope {
+  LEADERBOARD_SCOPE_UNSPECIFIED = 0;
+
+  // Everyone.
+  LEADERBOARD_SCOPE_GLOBAL = 1;
+
+  // Only people who share the caller's birth-year band. Requires the caller to
+  // have set one — the server has nothing to compare against otherwise.
+  LEADERBOARD_SCOPE_AGE_BAND = 2;
+}
+
+message GetLeaderboardRequest {
+  LeaderboardBoard board = 1;
+
+  LeaderboardScope scope = 2;
+
+  // The caller's offset from UTC in minutes, as on GetJourneyRequest. Read only
+  // by the streak board, and harmless on the others.
+  int32 utc_offset_minutes = 3;
+}
+
+message LeaderboardEntry {
+  // Position on the board. Equal values share a rank, and the ranking counts
+  // everybody with a score — so consecutive entries may skip a number where the
+  // person in between has not chosen a display name.
+  uint32 rank = 1;
+
+  // Never empty: a name is what puts somebody on a board at all.
+  string display_name = 2;
+
+  // The board's measure, in that board's unit — days, minutes, or seconds.
+  uint32 value = 3;
+}
+
+// Where the caller stands, whether or not anyone else can see them.
+message LeaderboardStanding {
+  // Absent when the caller has nothing to rank yet — no sessions, or no BOLT
+  // score on that board.
+  optional uint32 rank = 1;
+
+  uint32 value = 2;
+
+  // Whether other people can see them here. False until they set a display
+  // name, which is the whole of the opt-in.
+  bool listed = 3;
+}
+
+message GetLeaderboardResponse {
+  // The leading named entries, best first. Empty is a normal state on a young
+  // board where nobody has opted in.
+  repeated LeaderboardEntry entries = 1;
+
+  LeaderboardStanding caller = 2;
+}
