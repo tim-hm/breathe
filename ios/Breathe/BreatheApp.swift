@@ -47,7 +47,9 @@ struct BreatheApp: App {
         let identity = identity
         let baseURL = AppConfiguration.apiBaseURL
 
-        let techniques = TechniqueRepository(baseURL: baseURL, identity: identity)
+        let techniques = CachedTechniqueRepository(
+            caching: TechniqueRepository(baseURL: baseURL, identity: identity)
+        )
         _catalogue = State(wrappedValue: TechniqueListModel(techniques: techniques))
         _foundations = State(wrappedValue: FoundationsModel(topics: techniques))
 
