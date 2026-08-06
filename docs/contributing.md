@@ -38,7 +38,7 @@ Then the app:
 mise run ios:open     # generates Breathe.xcodeproj and opens it
 ```
 
-Pick any iPhone simulator and press ⌘R. You should see four techniques, served from your local Postgres.
+Pick any iPhone simulator and press ⌘R. You should see nine techniques, served from your local Postgres.
 
 ## Ports
 
