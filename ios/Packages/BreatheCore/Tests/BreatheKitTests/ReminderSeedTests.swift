@@ -67,18 +67,29 @@ struct ReminderSeedTests {
         return suite ?? .standard
     }
 
-    /// A loaded catalogue, because a seed can only name a technique the app has
-    /// actually heard of.
-    private func catalogue() async -> TechniqueListModel {
-        let model = TechniqueListModel(
+    /// An unloaded catalogue, deliberately: a first launch answers the last
+    /// question while the fetch may still be in the air, so the seed has to
+    /// wait for it rather than read whatever is there at that instant.
+    private func catalogue() -> TechniqueListModel {
+        TechniqueListModel(
             techniques: StubReader(techniques: [
                 technique(slug: "box-breathing", goal: .calm),
                 technique(slug: "four-seven-eight", goal: .sleep),
                 technique(slug: "bellows-breath", goal: .energy),
             ])
         )
-        await model.loadIfNeeded()
-        return model
+    }
+
+    /// Polls until the seed's fire-and-forget task has run, the same way the
+    /// schedule tests wait on the store's notifier.
+    private func waitForSchedule(in store: ScheduleStore) async throws {
+        for _ in 0 ..< 200 {
+            if !store.schedules.isEmpty {
+                return
+            }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        Issue.record("timed out waiting for the seeded schedule")
     }
 
     /// Walks the real flow to the end with the answers given.
@@ -87,8 +98,8 @@ struct ReminderSeedTests {
         reminders: ReminderIntensity,
         into schedules: ScheduleStore,
         defaults suite: UserDefaults
-    ) async {
-        let model = await OnboardingModel(
+    ) {
+        let model = OnboardingModel(
             store: ProfileStore(profiles: AcceptingProfiles(), defaults: suite),
             schedules: schedules,
             catalogue: catalogue()
@@ -116,7 +127,7 @@ struct ReminderSeedTests {
         let spy = NotifierSpy()
         let schedules = ScheduleStore(notifier: spy, defaults: defaults("never"))
 
-        await complete(
+        complete(
             goals: [.sleep],
             reminders: .never,
             into: schedules,
@@ -178,12 +189,13 @@ struct ReminderSeedTests {
         let spy = NotifierSpy()
         let schedules = ScheduleStore(notifier: spy, defaults: defaults("seed"))
 
-        await complete(
+        complete(
             goals: [.sleep],
             reminders: .daily,
             into: schedules,
             defaults: defaults("seed-profile")
         )
+        try await waitForSchedule(in: schedules)
 
         #expect(schedules.schedules.count == 1)
         let seeded = try #require(schedules.schedules.first)
@@ -203,12 +215,13 @@ struct ReminderSeedTests {
 
         // A person who already keeps schedules has an arrangement of their own,
         // and the flow does not add to it.
-        await complete(
+        complete(
             goals: [.calm],
             reminders: .daily,
             into: schedules,
             defaults: defaults("seed-profile-again")
         )
+        try await Task.sleep(for: .milliseconds(50))
         #expect(schedules.schedules == [seeded])
     }
 }

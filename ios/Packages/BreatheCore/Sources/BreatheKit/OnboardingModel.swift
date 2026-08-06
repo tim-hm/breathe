@@ -66,11 +66,11 @@ public final class OnboardingModel {
 
     /// Whether this person has told the flow anything yet.
     ///
-    /// Reminders count as answered only once moved: `never` is what the dial
-    /// holds before anybody touches it, so treating it as an answer would make
-    /// every launch look half-completed.
+    /// Asked of the profile the answers make rather than field by field, so the
+    /// question a restore turns on and the question asked of the server's copy
+    /// are the same one — and a fourth question cannot make them disagree.
     public var hasAnswered: Bool {
-        !goals.isEmpty || experienceLevel != nil || reminderIntensity != .never
+        profile.hasAnswers
     }
 
     /// Adopts the answers the server already holds for this identity, closing
@@ -168,23 +168,38 @@ public final class OnboardingModel {
     /// Only ever seeds into an empty list: somebody who already keeps schedules
     /// has an arrangement of their own, and a flow that has just asked one
     /// question about reminders is not entitled to add to it.
+    ///
+    /// Waits for the catalogue rather than reading whatever it holds at this
+    /// instant, because a reminder can only name a technique the app has heard
+    /// of and this runs on a first launch — the one launch where the fetch may
+    /// still be in the air. Joining the shared load rather than starting a fetch
+    /// of its own, and not awaited, so the person is still one tap from
+    /// breathing.
     private func seedReminder() {
-        guard let schedules, schedules.schedules.isEmpty,
-              let catalogue, case let .loaded(techniques) = catalogue.state,
-              // Calm where they skipped the goals question: the seed is a
-              // starting point to edit rather than a claim about them, and it
-              // is the one goal that suits an unknown reason for being here.
-              let technique = HomeSuggestion.technique(
-                  for: goals.first ?? .calm,
-                  techniques: techniques,
-                  history: []
-              ),
-              let seeded = ReminderSeed.schedule(for: reminderIntensity, technique: technique)
-        else {
-            return
-        }
+        guard let schedules, schedules.schedules.isEmpty, let catalogue else { return }
+        let goal = goals.first ?? .calm
+        let intensity = reminderIntensity
 
-        schedules.add(seeded)
+        Task {
+            await catalogue.loadIfNeeded()
+
+            guard case let .loaded(techniques) = catalogue.state,
+                  // Calm where they skipped the goals question: the seed is a
+                  // starting point to edit rather than a claim about them, and
+                  // it is the one goal that suits an unknown reason for being
+                  // here.
+                  let technique = HomeSuggestion.technique(
+                      for: goal,
+                      techniques: techniques,
+                      history: []
+                  ),
+                  let seeded = ReminderSeed.schedule(for: intensity, technique: technique)
+            else {
+                return
+            }
+
+            schedules.add(seeded)
+        }
     }
 
     /// Whether there is a question behind this one to return to.
