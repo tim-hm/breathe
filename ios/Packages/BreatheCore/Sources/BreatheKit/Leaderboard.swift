@@ -94,6 +94,20 @@ public struct LeaderboardStanding: Sendable, Equatable {
         self.value = value
         self.listed = listed
     }
+
+    /// "1st", "2nd", "3rd" — a bare number beside "You're" reads as a score
+    /// rather than a place. Localised, because the suffix is not English-only,
+    /// and here beside `LeaderboardBoard.formatted(_:)` so that board values and
+    /// board ranks are formatted in the same place.
+    public var formattedRank: String? {
+        rank.map { Self.ordinal.string(from: NSNumber(value: $0)) ?? "\($0)" }
+    }
+
+    private static let ordinal: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .ordinal
+        return formatter
+    }()
 }
 
 /// A board as it was when it was fetched.

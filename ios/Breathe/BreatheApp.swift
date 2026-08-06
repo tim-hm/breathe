@@ -108,9 +108,12 @@ struct BreatheApp: App {
             // Cheap when there is nothing outstanding, which is every launch
             // after the first — and the same is true of the sessions recorded
             // while it was unreachable.
+            // Concurrently: neither depends on the other, and the journey drain
+            // should not wait out a profile request's timeout to start.
             .task {
-                await profiles.syncIfNeeded()
-                await journey.sync()
+                async let profile: Void = profiles.syncIfNeeded()
+                async let sessions: Void = journey.sync()
+                _ = await (profile, sessions)
             }
         }
     }

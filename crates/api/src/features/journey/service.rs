@@ -6,13 +6,14 @@
 
 use std::collections::HashSet;
 
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::errors::JourneyError;
 use super::repository::{self, LeaderboardRow, SessionRow};
 use super::types::{LeaderboardBoard, LeaderboardScope};
+use crate::features::profile::repository as profile_repository;
 use crate::proto::breathe::v1 as pb;
 
 /// How many sessions one call may carry.
@@ -20,7 +21,7 @@ use crate::proto::breathe::v1 as pb;
 /// A person breathing every waking hour for a month would not reach this, so it
 /// bounds a client that has lost track of what it sent rather than a client
 /// with a genuine backlog. The queue splits anything larger.
-const MAX_SESSIONS_PER_BATCH: usize = 200;
+const MAX_SESSIONS_PER_BATCH: u32 = 200;
 
 /// Twelve hours. Longer than any session the app can produce and short enough
 /// that a stuck timer arrives as a rejection rather than as a person's totals.
@@ -35,10 +36,16 @@ const MAX_SLUG_CHARS: usize = 64;
 /// Matches the `CHECK` on `bolt_scores.seconds`.
 const MAX_BOLT_SECONDS: u32 = 600;
 
+/// 2025-01-01T00:00:00Z, as an epoch second.
+///
 /// No session predates the first build of the app, and a row dated earlier is a
 /// broken clock rather than a memory. Rejected rather than clamped: a silently
 /// moved date would land in somebody's streak.
-const EARLIEST_SESSION: &str = "2025-01-01T00:00:00Z";
+///
+/// A timestamp rather than an RFC 3339 string so the check is a comparison
+/// rather than a parse repeated for all two hundred records of a batch — and so
+/// there is no unparseable case to invent a fallback for.
+const EARLIEST_SESSION_TIMESTAMP: i64 = 1_735_689_600;
 
 /// How far ahead of the server's clock a session may claim to have started.
 ///
@@ -68,14 +75,15 @@ pub async fn record_sessions(
     if submitted.is_empty() {
         return Err(JourneyError::Invalid("`sessions` is empty".to_owned()));
     }
-    if submitted.len() > MAX_SESSIONS_PER_BATCH {
+
+    // Saturating rather than failing: a length past `u32::MAX` is past the batch
+    // limit too, so it falls out of the same check with the same message.
+    let submitted_count = u32::try_from(submitted.len()).unwrap_or(u32::MAX);
+    if submitted_count > MAX_SESSIONS_PER_BATCH {
         return Err(JourneyError::Invalid(format!(
             "`sessions` carries more than {MAX_SESSIONS_PER_BATCH} records"
         )));
     }
-
-    let submitted_count = u32::try_from(submitted.len())
-        .map_err(|_| JourneyError::Invalid("`sessions` is implausibly large".to_owned()))?;
 
     // Deduplicated before the insert rather than left to `ON CONFLICT`, so that
     // a batch repeating one id reports it as already known instead of as a row
@@ -90,7 +98,7 @@ pub async fn record_sessions(
     }
 
     let recorded = u32::try_from(repository::insert_sessions(pool, user_id, &rows).await?)
-        .unwrap_or(submitted_count);
+        .unwrap_or(MAX_SESSIONS_PER_BATCH);
 
     Ok(pb::RecordSessionsResponse {
         recorded,
@@ -136,6 +144,13 @@ pub async fn record_bolt_score(
     let seconds = i32::try_from(request.seconds)
         .map_err(|_| JourneyError::Invalid("`seconds` is out of range".to_owned()))?;
 
+    let client_score_id = Uuid::parse_str(&request.client_score_id).map_err(|_| {
+        JourneyError::Invalid(format!(
+            "`client_score_id` `{}` is not a UUID",
+            request.client_score_id
+        ))
+    })?;
+
     let measured_at = request
         .measured_at
         .map(|stamp| timestamp_from_proto(&stamp, "measured_at"))
@@ -145,7 +160,7 @@ pub async fn record_bolt_score(
     // about the history that existed before it — asking afterwards would always
     // answer yes.
     let previous_best = repository::best_bolt_score(pool, user_id).await?;
-    repository::insert_bolt_score(pool, user_id, seconds, measured_at).await?;
+    repository::insert_bolt_score(pool, user_id, client_score_id, seconds, measured_at).await?;
 
     let is_personal_best = previous_best.is_none_or(|best| seconds > best);
 
@@ -170,7 +185,7 @@ pub async fn get_leaderboard(
     let band = match scope {
         LeaderboardScope::Global => None,
         LeaderboardScope::AgeBand => Some(
-            repository::find_birth_year_band(pool, user_id)
+            profile_repository::find_birth_year_band(pool, user_id)
                 .await?
                 .ok_or(JourneyError::AgeBandUnset)?,
         ),
@@ -302,11 +317,7 @@ fn bounded(value: u32, maximum: u32, field: &str) -> Result<i32, JourneyError> {
 /// harmlessly in the table, but a session dated next year holds a current streak
 /// open indefinitely and nothing later can close it.
 fn validate_started_at(started_at: DateTime<Utc>, now: DateTime<Utc>) -> Result<(), JourneyError> {
-    let earliest: DateTime<Utc> = EARLIEST_SESSION
-        .parse()
-        .unwrap_or_else(|_| Utc.timestamp_nanos(0));
-
-    if started_at < earliest {
+    if started_at.timestamp() < EARLIEST_SESSION_TIMESTAMP {
         return Err(JourneyError::Invalid(
             "`started_at` predates the app".to_owned(),
         ));

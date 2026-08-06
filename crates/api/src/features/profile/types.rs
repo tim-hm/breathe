@@ -15,6 +15,15 @@ pub enum ExperienceLevel {
     Regular,
 }
 
+/// How long a display name may be, in characters.
+///
+/// One constant for the whole feature: validation rejects an over-long name
+/// with it, and the collision suffix trims against it. Two copies could
+/// disagree, and the pair that disagreed would produce a suffixed candidate the
+/// column `CHECK` in `0005_journey.sql` then refuses — an `internal` error for
+/// something the caller did nothing wrong to trigger.
+pub const MAX_DISPLAY_NAME_CHARS: usize = 24;
+
 /// Mirrors the `birth_year_band` Postgres enum.
 ///
 /// Every variant is renamed explicitly rather than through `rename_all`: the

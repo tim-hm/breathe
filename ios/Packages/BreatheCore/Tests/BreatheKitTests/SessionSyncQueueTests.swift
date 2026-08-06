@@ -65,16 +65,9 @@ struct SessionSyncQueueTests {
             isReachable = true
         }
 
-        @discardableResult
-        func record(_ sessions: [SessionRecord]) async throws -> SessionSyncResult {
+        func record(_ sessions: [SessionRecord]) async throws {
             guard isReachable else { throw Offline() }
-
-            let new = sessions.filter { !received.contains($0.id) }
             received.append(contentsOf: sessions.map(\.id))
-            return SessionSyncResult(
-                recorded: new.count,
-                alreadyKnown: sessions.count - new.count
-            )
         }
 
         func record(_ score: BoltScore) async throws {

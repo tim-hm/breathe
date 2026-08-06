@@ -79,20 +79,22 @@ struct LeaderboardView: View {
             .padding(.vertical, Theme.Spacing.loose)
 
         case let .loaded(leaderboard):
-            standing(leaderboard.standing, board: leaderboard.board)
+            standing(leaderboard)
             entries(leaderboard)
         }
     }
 
-    private func standing(_ standing: LeaderboardStanding, board: LeaderboardBoard) -> some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.tight) {
-            Text(standing.rank.map { "You're \(ordinal($0))" } ?? "Nothing to rank yet")
+    private func standing(_ leaderboard: Leaderboard) -> some View {
+        let standing = leaderboard.standing
+
+        return VStack(alignment: .leading, spacing: Theme.Spacing.tight) {
+            Text(standing.formattedRank.map { "You're \($0)" } ?? "Nothing to rank yet")
                 .font(.headline)
 
             Text(
                 standing.rank == nil
                     ? "A session or two and you'll be on here."
-                    : "\(board.formatted(standing.value))"
+                    : "\(leaderboard.board.formatted(standing.value))"
                     + (standing.listed ? "" : " · only you can see this")
             )
             .font(.caption)
@@ -141,40 +143,13 @@ struct LeaderboardView: View {
     }
 
     private var optIn: some View {
-        NavigationLink {
+        JourneyCard(
+            title: profiles.profile.displayName.isEmpty ? "Join in" : "Your name",
+            caption: profiles.profile.displayName.isEmpty
+                ? "Pick a name and others can see you here. Leave it blank and nobody can."
+                : profiles.profile.displayName
+        ) {
             LeaderboardNameView(profiles: profiles)
-        } label: {
-            HStack {
-                VStack(alignment: .leading, spacing: Theme.Spacing.tight) {
-                    Text(profiles.profile.displayName.isEmpty ? "Join in" : "Your name")
-                        .font(.headline)
-                    Text(
-                        profiles.profile.displayName.isEmpty
-                            ? "Pick a name and others can see you here. Leave it blank and nobody can."
-                            : profiles.profile.displayName
-                    )
-                    .font(.caption)
-                    .foregroundStyle(Theme.Ink.tertiary)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .foregroundStyle(Theme.Ink.tertiary)
-            }
-            .padding(Theme.Spacing.standard)
-            .background(Theme.Surface.raised, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
         }
-        .buttonStyle(.plain)
     }
-
-    /// "1st", "2nd", "3rd" — a bare number beside "You're" reads as a score
-    /// rather than a place. Localised, because the suffix is not English-only.
-    private func ordinal(_ rank: Int) -> String {
-        Self.ordinalFormatter.string(from: NSNumber(value: rank)) ?? "\(rank)"
-    }
-
-    private static let ordinalFormatter: NumberFormatter = {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .ordinal
-        return formatter
-    }()
 }

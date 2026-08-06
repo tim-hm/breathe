@@ -7,7 +7,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::errors::ProfileError;
-use super::types::{BirthYearBand, ExperienceLevel, ReminderIntensity};
+use super::types::{BirthYearBand, ExperienceLevel, MAX_DISPLAY_NAME_CHARS, ReminderIntensity};
 use crate::features::technique::types::TechniqueGoal;
 
 /// The answer columns of one `users` row.
@@ -31,9 +31,6 @@ pub struct ProfileRow {
 /// A middle dot rather than a digit run-on, so `Tim·2` cannot be misread as a
 /// name somebody chose that happens to end in a two.
 const DISPLAY_NAME_SUFFIX_SEPARATOR: char = '·';
-
-/// Matches the `CHECK` on `users.display_name`.
-const MAX_DISPLAY_NAME_CHARS: usize = 24;
 
 /// How many suffixes to try before giving up.
 ///
@@ -67,6 +64,29 @@ pub async fn find_profile(pool: &PgPool, user_id: Uuid) -> Result<ProfileRow, Pr
     .ok_or(ProfileError::Missing)?;
 
     Ok(row)
+}
+
+/// The caller's birth-year band, or `None` if they have not said.
+///
+/// Lives here rather than in `journey`, which is the only reader: `users` and
+/// every answer on it belong to this feature, so a change to how the band is
+/// held is a change inside one directory. The board queries join `users`
+/// themselves because ranking has to happen in one statement — this standalone
+/// lookup has no such excuse.
+pub async fn find_birth_year_band(
+    pool: &PgPool,
+    user_id: Uuid,
+) -> Result<Option<BirthYearBand>, ProfileError> {
+    let band = sqlx::query_scalar!(
+        r#"SELECT birth_year_band AS "birth_year_band?: BirthYearBand"
+           FROM users WHERE id = $1"#,
+        user_id
+    )
+    .fetch_optional(pool)
+    .await?
+    .flatten();
+
+    Ok(band)
 }
 
 /// Replaces every answer column and returns the display name as stored.

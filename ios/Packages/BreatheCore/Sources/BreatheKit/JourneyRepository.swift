@@ -12,15 +12,6 @@ public enum JourneyRepositoryError: Error, Equatable {
     case malformedResponse(String)
 }
 
-/// What the server made of a batch of sessions.
-public struct SessionSyncResult: Sendable, Equatable {
-    /// Sessions it had not seen before.
-    public let recorded: Int
-    /// Sessions it already held. Not a failure — it is the expected answer to a
-    /// resend, which is the whole reason each session carries an id.
-    public let alreadyKnown: Int
-}
-
 /// The network side of the journey.
 ///
 /// Everything here is a sync or a genuinely online read. Nothing the journey tab
@@ -31,8 +22,7 @@ public struct SessionSyncResult: Sendable, Equatable {
 public protocol JourneySyncing: Sendable {
     /// Sends sessions the server may not have. Idempotent on each session's id,
     /// so a caller unsure of what landed may simply send it again.
-    @discardableResult
-    func record(_ sessions: [SessionRecord]) async throws -> SessionSyncResult
+    func record(_ sessions: [SessionRecord]) async throws
 
     /// Sends one controlled-pause score.
     func record(_ score: BoltScore) async throws
@@ -53,24 +43,19 @@ public struct JourneyRepository: JourneySyncing {
         client = BreatheClients.journeyService(baseURL: baseURL, userId: identity.userId)
     }
 
-    @discardableResult
-    public func record(_ sessions: [SessionRecord]) async throws -> SessionSyncResult {
+    public func record(_ sessions: [SessionRecord]) async throws {
         var request = Breathe_V1_RecordSessionsRequest()
         request.sessions = sessions.map(\.proto)
 
         let response = await client.recordSessions(request: request)
-        guard let message = response.message else {
+        guard response.message != nil else {
             throw Self.transportError(response.error)
         }
-
-        return SessionSyncResult(
-            recorded: Int(message.recorded),
-            alreadyKnown: Int(message.alreadyKnown)
-        )
     }
 
     public func record(_ score: BoltScore) async throws {
         var request = Breathe_V1_RecordBoltScoreRequest()
+        request.clientScoreID = score.id.uuidString
         request.seconds = UInt32(max(0, score.seconds))
         let measured = timestampParts(score.measuredAt)
         request.measuredAt.seconds = measured.seconds

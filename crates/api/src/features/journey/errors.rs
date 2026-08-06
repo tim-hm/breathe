@@ -20,6 +20,12 @@ pub enum JourneyError {
 
     #[error("database error: {0}")]
     Database(#[from] sqlx::Error),
+
+    /// The band lookup belongs to `profile`, which owns the column. Its errors
+    /// are the same two shapes as this feature's own, so they are carried rather
+    /// than re-described.
+    #[error(transparent)]
+    Profile(#[from] crate::features::profile::errors::ProfileError),
 }
 
 /// Logs server-side faults before converting them.
@@ -33,6 +39,7 @@ impl From<JourneyError> for Status {
             JourneyError::AgeBandUnset => Self::failed_precondition(
                 "set a birth year band before asking for the age band board",
             ),
+            JourneyError::Profile(e) => e.into(),
             JourneyError::Database(e) => {
                 tracing::error!(feature = "journey", error = %e, "database error");
                 Self::internal("internal error")

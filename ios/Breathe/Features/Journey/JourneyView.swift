@@ -23,8 +23,8 @@ struct JourneyView: View {
                 VStack(alignment: .leading, spacing: Theme.Spacing.loose) {
                     StreakCard(stats: model.stats)
                     totals
-                    BoltCard(model: model)
-                    leaderboardLink
+                    boltCard
+                    leaderboardCard
                     history
                 }
                 .padding(Theme.Spacing.standard)
@@ -48,30 +48,28 @@ struct JourneyView: View {
         }
     }
 
-    private var leaderboardLink: some View {
-        NavigationLink {
-            LeaderboardView(model: model, profiles: profiles)
-        } label: {
-            HStack {
-                VStack(alignment: .leading, spacing: Theme.Spacing.tight) {
-                    Text("Leaderboards")
-                        .font(.headline)
-                    Text(
-                        profiles.profile.displayName.isEmpty
-                            ? "Optional, and off until you pick a name."
-                            : "You're listed as \(profiles.profile.displayName)."
-                    )
-                    .font(.caption)
-                    .foregroundStyle(Theme.Ink.tertiary)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .foregroundStyle(Theme.Ink.tertiary)
-            }
-            .padding(Theme.Spacing.standard)
-            .background(Theme.Surface.raised, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
+    /// The way into the controlled-pause test, carrying the best result so far.
+    private var boltCard: some View {
+        JourneyCard(
+            title: "Comfortable pause",
+            caption: model.personalBest == nil
+                ? "A two-minute check-in on your breathing."
+                : "Your best so far. Take it again whenever.",
+            value: model.personalBest.map { "\($0)s" }
+        ) {
+            BoltTestView(model: model)
         }
-        .buttonStyle(.plain)
+    }
+
+    private var leaderboardCard: some View {
+        JourneyCard(
+            title: "Leaderboards",
+            caption: profiles.profile.displayName.isEmpty
+                ? "Optional, and off until you pick a name."
+                : "You're listed as \(profiles.profile.displayName)."
+        ) {
+            LeaderboardView(model: model, profiles: profiles)
+        }
     }
 
     private var history: some View {
@@ -84,9 +82,14 @@ struct JourneyView: View {
                     .font(.callout)
                     .foregroundStyle(Theme.Ink.secondary)
             } else {
-                ForEach(model.history) { record in
-                    SessionHistoryRow(record: record, name: name(for: record))
-                    Divider().overlay(Theme.Surface.line)
+                // Lazy, because this grows for the life of the install: somebody
+                // two years in has hundreds of rows, and an eager stack builds
+                // every one of them to show the four on screen.
+                LazyVStack(spacing: 0) {
+                    ForEach(model.history) { record in
+                        SessionHistoryRow(record: record, name: name(for: record))
+                        Divider().overlay(Theme.Surface.line)
+                    }
                 }
             }
         }
@@ -102,16 +105,15 @@ struct JourneyView: View {
     }
 }
 
-/// The streak, said in a way nobody has to brace for.
 private struct StreakCard: View {
     let stats: JourneyStats
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.close) {
-            Text(headline)
+            Text(stats.streakHeadline)
                 .font(.title2.weight(.semibold))
 
-            Text(detail)
+            Text(stats.streakDetail)
                 .font(.callout)
                 .foregroundStyle(Theme.Ink.secondary)
         }
@@ -122,29 +124,6 @@ private struct StreakCard: View {
             in: RoundedRectangle(cornerRadius: Theme.Radius.card)
         )
         .accessibilityElement(children: .combine)
-    }
-
-    private var headline: String {
-        switch stats.currentStreakDays {
-        case 0: stats.bestStreakDays == 0 ? "Ready when you are" : "Your streak is paused"
-        case 1: "One day in"
-        case let days: "\(days) days in a row"
-        }
-    }
-
-    /// The best streak is always available to fall back on, which is the point
-    /// of keeping it: a run that has paused is still a run somebody did.
-    private var detail: String {
-        if stats.currentStreakDays == 0 {
-            return stats.bestStreakDays == 0
-                ? "Your first session starts the count."
-                : "Your longest run was \(stats.bestStreakDays) days. One session picks it up again."
-        }
-
-        if stats.currentStreakDays >= stats.bestStreakDays {
-            return "That's your longest run yet."
-        }
-        return "Your longest run is \(stats.bestStreakDays) days."
     }
 }
 
@@ -165,43 +144,5 @@ private struct StatTile: View {
         .background(Theme.Surface.raised, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(value) \(label)")
-    }
-}
-
-/// The way into the controlled-pause test, and the last result of it.
-private struct BoltCard: View {
-    let model: JourneyModel
-
-    var body: some View {
-        NavigationLink {
-            BoltTestView(model: model)
-        } label: {
-            HStack {
-                VStack(alignment: .leading, spacing: Theme.Spacing.tight) {
-                    Text("Comfortable pause")
-                        .font(.headline)
-                    Text(detail)
-                        .font(.caption)
-                        .foregroundStyle(Theme.Ink.tertiary)
-                }
-                Spacer()
-                if let best = model.personalBest {
-                    Text("\(best)s")
-                        .font(.title3.weight(.semibold).monospacedDigit())
-                        .foregroundStyle(Theme.Accent.attend)
-                }
-                Image(systemName: "chevron.right")
-                    .foregroundStyle(Theme.Ink.tertiary)
-            }
-            .padding(Theme.Spacing.standard)
-            .background(Theme.Surface.raised, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var detail: String {
-        model.personalBest == nil
-            ? "A two-minute check-in on your breathing."
-            : "Your best so far. Take it again whenever."
     }
 }

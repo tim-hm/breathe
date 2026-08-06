@@ -49,19 +49,28 @@ public actor SessionSyncQueue {
     /// Safe to call on every foreground and after every session: it returns
     /// almost immediately when there is nothing outstanding, and being an actor
     /// is what stops two of those overlapping into a double send.
-    public func sync() async {
+    ///
+    /// - Returns: whether the local stores changed, which only a restore can do.
+    ///   Sending changes nothing on this device, so a caller that re-reads on
+    ///   every sync would re-read for nothing on all but the first run after a
+    ///   reinstall.
+    @discardableResult
+    public func sync() async -> Bool {
         await sendSessions()
         await sendScores()
-        await restore()
+        return await restore()
     }
 
     private func sendSessions() async {
         let recorded = await sessions.recordedSessions()
-        var acknowledged = acknowledged(Self.acknowledgedSessionsKey, keeping: recorded.map(\.id))
+        var acknowledged = ledger.acknowledged(
+            Self.acknowledgedSessionsKey,
+            keeping: recorded.map(\.id)
+        )
         // Written on every run, not only a successful send: the read above has
         // already dropped ids whose sessions are gone, and that pruning is what
         // stops the ledger growing for the life of the install.
-        defer { store(acknowledged, at: Self.acknowledgedSessionsKey) }
+        defer { ledger.store(acknowledged, at: Self.acknowledgedSessionsKey) }
 
         let pending = recorded.filter { !acknowledged.contains($0.id) }
         guard !pending.isEmpty else { return }
@@ -79,8 +88,11 @@ public actor SessionSyncQueue {
 
     private func sendScores() async {
         let recorded = await scores.recordedScores()
-        var acknowledged = acknowledged(Self.acknowledgedScoresKey, keeping: recorded.map(\.id))
-        defer { store(acknowledged, at: Self.acknowledgedScoresKey) }
+        var acknowledged = ledger.acknowledged(
+            Self.acknowledgedScoresKey,
+            keeping: recorded.map(\.id)
+        )
+        defer { ledger.store(acknowledged, at: Self.acknowledgedScoresKey) }
 
         let pending = recorded.filter { !acknowledged.contains($0.id) }
         guard !pending.isEmpty else { return }
@@ -104,30 +116,22 @@ public actor SessionSyncQueue {
     /// not, so this is what stops somebody's streak vanishing because they
     /// changed phones. Anything restored is acknowledged on arrival — it came
     /// from the server, so sending it back would be pure noise.
-    private func restore() async {
+    private func restore() async -> Bool {
         do {
             let stored = try await journeys.storedSessions()
-            guard !stored.isEmpty else { return }
+            guard !stored.isEmpty else { return false }
 
             await sessions.merge(stored)
-
-            var acknowledged = await acknowledged(
-                Self.acknowledgedSessionsKey,
-                keeping: sessions.recordedSessions().map(\.id)
-            )
-            acknowledged.formUnion(stored.map(\.id))
-            store(acknowledged, at: Self.acknowledgedSessionsKey)
+            // Union rather than a fresh prune: `sendSessions` has already pruned
+            // this key on the way past, and re-deriving the present ids would
+            // mean reading the whole session file again to learn what was just
+            // written to it.
+            ledger.acknowledge(stored.map(\.id), at: Self.acknowledgedSessionsKey)
+            return true
         } catch {
             Self.logger.notice("journey restore deferred: \(error.localizedDescription)")
+            return false
         }
-    }
-
-    private func acknowledged(_ key: String, keeping present: [UUID]) -> Set<UUID> {
-        ledger.acknowledged(key, keeping: present)
-    }
-
-    private func store(_ ids: Set<UUID>, at key: String) {
-        ledger.store(ids, at: key)
     }
 }
 
@@ -155,7 +159,20 @@ public struct SyncLedger: @unchecked Sendable {
         return Set(stored.compactMap(UUID.init(uuidString:))).intersection(present)
     }
 
+    /// Writes only on a genuine change. A sync with nothing outstanding is the
+    /// common case — every foreground, every finished session — and it would
+    /// otherwise rewrite two identical arrays each time.
     func store(_ ids: Set<UUID>, at key: String) {
-        defaults.set(ids.map(\.uuidString).sorted(), forKey: key)
+        let encoded = ids.map(\.uuidString).sorted()
+        guard defaults.stringArray(forKey: key) != encoded else { return }
+
+        defaults.set(encoded, forKey: key)
+    }
+
+    /// Adds ids without pruning — for sessions that arrived from the server and
+    /// are therefore acknowledged the moment they land.
+    func acknowledge(_ ids: [UUID], at key: String) {
+        let stored = defaults.stringArray(forKey: key) ?? []
+        store(Set(stored.compactMap(UUID.init(uuidString:))).union(ids), at: key)
     }
 }

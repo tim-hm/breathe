@@ -192,16 +192,24 @@ pub async fn recent_sessions(
     Ok(rows)
 }
 
+/// Stores a score unless the caller has already sent that one.
+///
+/// `ON CONFLICT DO NOTHING` on `(user_id, client_score_id)`, the same contract
+/// `insert_sessions` offers: both streams drain through one opportunistic queue
+/// on the client, so a retry has to be free on both.
 pub async fn insert_bolt_score(
     pool: &PgPool,
     user_id: Uuid,
+    client_score_id: Uuid,
     seconds: i32,
     measured_at: Option<DateTime<Utc>>,
 ) -> Result<(), JourneyError> {
     sqlx::query!(
-        "INSERT INTO bolt_scores (user_id, seconds, measured_at)
-         VALUES ($1, $2, coalesce($3, now()))",
+        "INSERT INTO bolt_scores (user_id, client_score_id, seconds, measured_at)
+         VALUES ($1, $2, $3, coalesce($4, now()))
+         ON CONFLICT (user_id, client_score_id) DO NOTHING",
         user_id,
+        client_score_id,
         seconds,
         measured_at
     )
@@ -221,22 +229,6 @@ pub async fn best_bolt_score(pool: &PgPool, user_id: Uuid) -> Result<Option<i32>
     .await?;
 
     Ok(best)
-}
-
-pub async fn find_birth_year_band(
-    pool: &PgPool,
-    user_id: Uuid,
-) -> Result<Option<BirthYearBand>, JourneyError> {
-    let band = sqlx::query_scalar!(
-        r#"SELECT birth_year_band AS "birth_year_band?: BirthYearBand"
-           FROM users WHERE id = $1"#,
-        user_id
-    )
-    .fetch_optional(pool)
-    .await?
-    .flatten();
-
-    Ok(band)
 }
 
 /// Ranks current streaks, in the caller's local days.

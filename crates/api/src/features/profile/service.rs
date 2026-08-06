@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use super::errors::ProfileError;
 use super::repository::{self, ProfileRow};
-use super::types::{BirthYearBand, ExperienceLevel, ReminderIntensity};
+use super::types::{BirthYearBand, ExperienceLevel, MAX_DISPLAY_NAME_CHARS, ReminderIntensity};
 use crate::features::technique::service::goal_to_proto;
 use crate::features::technique::types::TechniqueGoal;
 use crate::proto::breathe::v1 as pb;
@@ -19,9 +19,10 @@ use crate::proto::breathe::v1 as pb;
 /// opaque `internal` a constraint violation would become.
 const MAX_INTENT_NOTE_CHARS: usize = 500;
 
-/// Matches the `CHECK` on `users.display_name`, for the same reason.
+/// The floor the column does not express as its own value; the ceiling lives in
+/// `super::types` because the suffixing in `super::repository` trims against it
+/// too.
 const MIN_DISPLAY_NAME_CHARS: usize = 2;
-const MAX_DISPLAY_NAME_CHARS: usize = 24;
 
 /// Names nobody may take, matched as a lowercase substring.
 ///

@@ -144,6 +144,13 @@ message GetJourneyResponse {
 }
 
 message RecordBoltScoreRequest {
+  // A UUID the client mints when the test ends, and the idempotency key the
+  // server upserts on — the same contract `SessionRecord` carries, and for the
+  // same reason: these are drained by one opportunistic sync queue, so a retry
+  // must cost nothing. Without it a resend would add a second row that every
+  // board silently absorbs behind `max(seconds)`.
+  string client_score_id = 3;
+
   // How long the comfortable pause lasted, measured on the client.
   //
   // Seconds rather than milliseconds: the test ends when the person feels the

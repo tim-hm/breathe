@@ -1,0 +1,72 @@
+import Foundation
+import Observation
+
+/// Drives the one screen that puts somebody on a leaderboard, or takes them off
+/// it.
+///
+/// In `BreatheKit` rather than the view for the reason `OnboardingModel` gives
+/// about the intent note: the rule belongs to the answer, not to one way of
+/// typing it, and the app target has no test bundle to pin it in. The rule here
+/// is the same one, in the same unit — a name clamped by a count the server does
+/// not share is a profile that fails every sync forever, silently.
+@MainActor
+@Observable
+public final class LeaderboardNameModel {
+    /// Clamped as it is typed, in Unicode scalars, because that is what the
+    /// server's validation and the column `CHECK` both count. A
+    /// grapheme-cluster count would let through a name of multi-scalar emoji
+    /// that the server then rejects.
+    public var displayName: String {
+        didSet {
+            let scalars = displayName.unicodeScalars
+            if scalars.count > Profile.maxDisplayNameLength {
+                let end = scalars.index(
+                    scalars.startIndex,
+                    offsetBy: Profile.maxDisplayNameLength
+                )
+                displayName = String(scalars[..<end])
+            }
+        }
+    }
+
+    public var birthYearBand: BirthYearBand?
+
+    /// True while the save is in flight, so the screen can refuse a second one.
+    public private(set) var isSaving = false
+
+    private let store: ProfileStore
+
+    public init(store: ProfileStore) {
+        self.store = store
+        displayName = store.profile.displayName
+        birthYearBand = store.profile.birthYearBand
+    }
+
+    /// Empty is always allowed — it means "take me off the boards", and clearing
+    /// a name must stay as easy as setting one. Anything else has to clear the
+    /// server's minimum, or the save would come back `INVALID_ARGUMENT`.
+    public var canSave: Bool {
+        let trimmed = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !isSaving
+            && (trimmed.isEmpty || trimmed.unicodeScalars.count >= Profile.minDisplayNameLength)
+    }
+
+    /// Saves, and reflects back whatever the server decided to call this person.
+    ///
+    /// Awaited, unlike onboarding's: a taken name comes back suffixed, and
+    /// somebody should see that here rather than discover it on a board later. A
+    /// failure is still not an error — the answer is stored locally and the next
+    /// launch retries it.
+    public func save() async {
+        guard canSave else { return }
+        isSaving = true
+        defer { isSaving = false }
+
+        var profile = store.profile
+        profile.displayName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        profile.birthYearBand = birthYearBand
+
+        await store.save(profile)
+        displayName = store.profile.displayName
+    }
+}

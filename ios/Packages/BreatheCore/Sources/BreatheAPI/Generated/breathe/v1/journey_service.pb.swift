@@ -295,6 +295,13 @@ public nonisolated struct Breathe_V1_RecordBoltScoreRequest: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// A UUID the client mints when the test ends, and the idempotency key the
+  /// server upserts on — the same contract `SessionRecord` carries, and for the
+  /// same reason: these are drained by one opportunistic sync queue, so a retry
+  /// must cost nothing. Without it a resend would add a second row that every
+  /// board silently absorbs behind `max(seconds)`.
+  public var clientScoreID: String = String()
+
   /// How long the comfortable pause lasted, measured on the client.
   ///
   /// Seconds rather than milliseconds: the test ends when the person feels the
@@ -699,7 +706,7 @@ nonisolated extension Breathe_V1_GetJourneyResponse: SwiftProtobuf.Message, Swif
 
 nonisolated extension Breathe_V1_RecordBoltScoreRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RecordBoltScoreRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}seconds\0\u{3}measured_at\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}seconds\0\u{3}measured_at\0\u{3}client_score_id\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -709,6 +716,7 @@ nonisolated extension Breathe_V1_RecordBoltScoreRequest: SwiftProtobuf.Message, 
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularUInt32Field(value: &self.seconds) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._measuredAt) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.clientScoreID) }()
       default: break
       }
     }
@@ -725,10 +733,14 @@ nonisolated extension Breathe_V1_RecordBoltScoreRequest: SwiftProtobuf.Message, 
     try { if let v = self._measuredAt {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
+    if !self.clientScoreID.isEmpty {
+      try visitor.visitSingularStringField(value: self.clientScoreID, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Breathe_V1_RecordBoltScoreRequest, rhs: Breathe_V1_RecordBoltScoreRequest) -> Bool {
+    if lhs.clientScoreID != rhs.clientScoreID {return false}
     if lhs.seconds != rhs.seconds {return false}
     if lhs._measuredAt != rhs._measuredAt {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}

@@ -30,10 +30,10 @@ ALTER TABLE users
 -- rejecting it, and this index is what tells it a collision happened.
 CREATE UNIQUE INDEX users_display_name_key ON users (lower(display_name));
 
--- The board scope groups on this, so it is worth an index even at V1 scale —
--- unindexed it would seq-scan every user on every age-band board.
-CREATE INDEX users_birth_year_band_idx ON users (birth_year_band)
-  WHERE birth_year_band IS NOT NULL;
+-- No index on `birth_year_band`. The board queries reach `users` by primary key
+-- through a join and filter the band with `$n IS NULL OR band = $n`, which the
+-- planner cannot turn into an index scan against a parameter — so an index here
+-- would cost a write on every profile save and serve no read.
 
 CREATE TABLE sessions (
   user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
@@ -72,16 +72,27 @@ CREATE TABLE sessions (
 CREATE INDEX sessions_user_started_at_idx ON sessions (user_id, started_at DESC);
 
 CREATE TABLE bolt_scores (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-
   user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+
+  -- Minted by the client, exactly as `sessions.client_session_id` is: both
+  -- streams drain through one sync queue, so both need a resend to be free.
+  -- A generated identity here instead would make the client's own ledger the
+  -- only thing preventing duplicates, and a cleared ledger would quietly
+  -- inflate somebody's pause history.
+  client_score_id uuid NOT NULL,
 
   -- Seconds. Bounded well above any comfortable pause so the column rejects a
   -- client sending milliseconds by mistake, which would otherwise install an
   -- unbeatable personal best.
   seconds integer NOT NULL CHECK (seconds > 0 AND seconds <= 600),
 
-  measured_at timestamptz NOT NULL DEFAULT now()
+  measured_at timestamptz NOT NULL DEFAULT now(),
+
+  PRIMARY KEY (user_id, client_score_id)
 );
 
-CREATE INDEX bolt_scores_user_measured_at_idx ON bolt_scores (user_id, measured_at DESC);
+-- Ordered by score, not by date: both readers ask for a maximum — one person's
+-- personal best, and the best per person for the board — so leading with
+-- `seconds` answers them from the index instead of aggregating the heap. Nothing
+-- yet reads this history in date order; index that when something does.
+CREATE INDEX bolt_scores_user_seconds_idx ON bolt_scores (user_id, seconds DESC);

@@ -29,14 +29,37 @@ public struct JourneyStats: Sendable, Equatable {
     public let currentStreakDays: Int
     public let bestStreakDays: Int
 
-    /// What somebody has before their first session.
-    public static let none = Self(
-        sessions: 0,
-        breaths: 0,
-        minutes: 0,
-        currentStreakDays: 0,
-        bestStreakDays: 0
-    )
+    /// What somebody has before their first session — the fold itself over no
+    /// sessions, rather than a hand-written set of zeros that could fall out of
+    /// step with it.
+    public static let none = Self(sessions: [])
+
+    /// The streak, said in a way nobody has to brace for.
+    ///
+    /// The product's copy rule is a rule, not a preference — celebrate
+    /// consistency, never pressure — so it lives beside the numbers it reads
+    /// rather than in a view the app target has no test bundle to pin.
+    public var streakHeadline: String {
+        switch currentStreakDays {
+        case 0: bestStreakDays == 0 ? "Ready when you are" : "Your streak is paused"
+        case 1: "One day in"
+        case let days: "\(days) days in a row"
+        }
+    }
+
+    /// The best streak is always there to fall back on, which is the point of
+    /// keeping it: a run that has paused is still a run somebody did.
+    public var streakDetail: String {
+        if currentStreakDays == 0 {
+            return bestStreakDays == 0
+                ? "Your first session starts the count."
+                : "Your longest run was \(bestStreakDays) days. One session picks it up again."
+        }
+
+        return currentStreakDays >= bestStreakDays
+            ? "That's your longest run yet."
+            : "Your longest run is \(bestStreakDays) days."
+    }
 
     /// - Parameters:
     ///   - sessions: every session on this device, in any order.
@@ -77,19 +100,5 @@ public struct JourneyStats: Sendable, Equatable {
             calendar.dateComponents([.day], from: $0, to: today).day
         }
         currentStreakDays = (daysSinceLast ?? .max) <= 1 ? run : 0
-    }
-
-    private init(
-        sessions: Int,
-        breaths: Int,
-        minutes: Int,
-        currentStreakDays: Int,
-        bestStreakDays: Int
-    ) {
-        self.sessions = sessions
-        self.breaths = breaths
-        self.minutes = minutes
-        self.currentStreakDays = currentStreakDays
-        self.bestStreakDays = bestStreakDays
     }
 }

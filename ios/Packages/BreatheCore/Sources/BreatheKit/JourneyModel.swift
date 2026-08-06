@@ -36,20 +36,17 @@ public final class JourneyModel {
     private let scores: any BoltScoreRecording
     private let journeys: any JourneySyncing
     private let queue: SessionSyncQueue
-    private let calendar: Calendar
 
     public init(
         sessions: any SessionRecording,
         scores: any BoltScoreRecording,
         journeys: any JourneySyncing,
-        queue: SessionSyncQueue,
-        calendar: Calendar = .autoupdatingCurrent
+        queue: SessionSyncQueue
     ) {
         self.sessions = sessions
         self.scores = scores
         self.journeys = journeys
         self.queue = queue
-        self.calendar = calendar
     }
 
     /// Reads the local stores and fills the screen.
@@ -60,7 +57,7 @@ public final class JourneyModel {
     public func refresh() async {
         let recorded = await sessions.recordedSessions()
 
-        stats = JourneyStats(sessions: recorded, calendar: calendar)
+        stats = JourneyStats(sessions: recorded)
         history = recorded.sorted { $0.startedAt > $1.startedAt }
         personalBest = await scores.personalBest()
     }
@@ -71,8 +68,12 @@ public final class JourneyModel {
     /// Deliberately separate from `refresh()` so the screen is drawn before this
     /// is even started.
     public func sync() async {
-        await queue.sync()
-        await refresh()
+        // Only a restore changes what is on this device, and it happens once
+        // after a reinstall — re-reading both files on every sync would be work
+        // for nothing on every run after it.
+        if await queue.sync() {
+            await refresh()
+        }
     }
 
     /// Stores a controlled-pause measurement and answers whether it is a new
@@ -85,7 +86,9 @@ public final class JourneyModel {
     public func record(boltSeconds seconds: Int) async -> Bool {
         let previous = personalBest
         await scores.record(BoltScore(seconds: seconds))
-        personalBest = await scores.personalBest()
+        // Derived from what is already in hand rather than re-read: the file was
+        // just written, and the new best can only be one of these two.
+        personalBest = max(previous ?? 0, seconds)
 
         // Not awaited: the result screen is already on its way, and the upload
         // has the rest of the app's lifetime to succeed in.
