@@ -1,0 +1,30 @@
+//! Domain enums, mirroring the Postgres types declared in
+//! `0004_users_and_profiles.sql`.
+//!
+//! Neither carries an "unspecified" variant, for the same reason the technique
+//! enums don't: a value that reaches the repository is already one the database
+//! accepts. Where the proto's zero value is meaningful — an experience level
+//! nobody has answered — it is modelled as `Option`, not as a variant.
+
+/// Mirrors the `experience_level` Postgres enum.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, sqlx::Type)]
+#[sqlx(type_name = "experience_level", rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ExperienceLevel {
+    New,
+    Occasional,
+    Regular,
+}
+
+/// Mirrors the `reminder_intensity` Postgres enum.
+///
+/// `Never` is the default in every direction — the column default, the proto
+/// zero value, and the variant a decode falls back to — so nothing that goes
+/// wrong along the way can turn silence into a notification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, sqlx::Type)]
+#[sqlx(type_name = "reminder_intensity", rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ReminderIntensity {
+    #[default]
+    Never,
+    Gentle,
+    Daily,
+}

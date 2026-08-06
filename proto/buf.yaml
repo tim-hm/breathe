@@ -10,6 +10,14 @@ lint:
     # the directory. `breathe.v1` in `breathe/v1/` already carries the version;
     # the rule fires on the *file* path convention we don't follow.
     - PACKAGE_VERSION_SUFFIX
+  ignore_only:
+    # ReminderIntensity puts NEVER at zero on purpose: proto3 cannot tell an
+    # unset field from its zero value, so whichever member sits there is what an
+    # absent field means — and for a reminder setting that has to be silence.
+    # Scoped to the one file rather than excepted outright, so every other enum
+    # still has to carry an UNSPECIFIED zero.
+    ENUM_ZERO_VALUE_SUFFIX:
+      - breathe/v1/profile_service.proto
 breaking:
   use:
     - FILE

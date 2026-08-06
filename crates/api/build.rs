@@ -8,7 +8,10 @@
 use std::path::PathBuf;
 
 const PROTO_ROOT: &str = "../../proto";
-const SERVICE_PROTOS: &[&str] = &["../../proto/breathe/v1/technique_service.proto"];
+const SERVICE_PROTOS: &[&str] = &[
+    "../../proto/breathe/v1/profile_service.proto",
+    "../../proto/breathe/v1/technique_service.proto",
+];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let out_dir = PathBuf::from(std::env::var("OUT_DIR")?);

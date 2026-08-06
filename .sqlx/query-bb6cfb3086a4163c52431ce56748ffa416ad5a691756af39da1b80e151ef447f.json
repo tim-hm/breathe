@@ -1,0 +1,60 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users\n            SET goals = $2,\n                experience_level = $3,\n                reminder_intensity = $4,\n                intent_note = $5,\n                updated_at = now()\n          WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "technique_goal[]",
+            "kind": {
+              "Array": {
+                "Custom": {
+                  "name": "technique_goal",
+                  "kind": {
+                    "Enum": [
+                      "CALM",
+                      "SLEEP",
+                      "ENERGY",
+                      "RESET",
+                      "FOCUS"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "experience_level",
+            "kind": {
+              "Enum": [
+                "NEW",
+                "OCCASIONAL",
+                "REGULAR"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "reminder_intensity",
+            "kind": {
+              "Enum": [
+                "NEVER",
+                "GENTLE",
+                "DAILY"
+              ]
+            }
+          }
+        },
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bb6cfb3086a4163c52431ce56748ffa416ad5a691756af39da1b80e151ef447f"
+}
