@@ -304,49 +304,78 @@ struct FoundationSeed {
 }
 
 /// Array order is reading order, same as the catalogue. These are ordered the
-/// way the questions occur to someone learning: what moves, what it goes
-/// through, where to sit, what to do with your eyes.
+/// way the questions occur to someone learning: why bother at all, what moves,
+/// what it goes through, how slow to go, where to sit, what to do with your
+/// eyes.
 const FOUNDATIONS: &[FoundationSeed] = &[
+    FoundationSeed {
+        slug: "why-it-works",
+        question: "Why does this work at all?",
+        answer: "Breathing is the one automatic thing you can take over whenever you like, and \
+                 taking it over reaches further than the lungs. Your heart speeds up a little on \
+                 every breath in and slows on every breath out, so a long exhale leans on the \
+                 brake rather than the accelerator. That is the mechanism under every slow \
+                 pattern here, and it is why the change arrives sooner than talking yourself \
+                 down does — the body settles first and the thinking follows it.",
+    },
     FoundationSeed {
         slug: "belly-or-chest",
         question: "Belly or chest?",
-        answer: "Belly, if you can. Rest a hand just below your ribs and let that be the hand \
-                 that moves — the diaphragm does the work and the chest goes along with it. \
-                 Chest breathing is not a mistake, only a shallower version of the same thing, \
-                 and the belly comes with practice faster than you would expect.",
+        answer: "Belly, if you can. Rest a hand just below your ribs and let the breath drop low \
+                 enough that this hand moves before your chest does — that is the diaphragm \
+                 doing the work, which makes each breath deeper for less effort. Chest \
+                 breathing is not a mistake, only a shallower version of the same thing, though \
+                 it is the hurried version your body already associates with stress. The belly \
+                 comes with practice faster than you would expect.",
     },
     FoundationSeed {
         slug: "nose-or-mouth",
         question: "In through the nose?",
-        answer: "Where you can. The nose filters and warms the air, picks up nitric oxide from \
-                 the sinuses on the way past, and slows the breath down without you deciding to. \
-                 It is genuinely hard at first if you are congested or used to breathing through \
-                 your mouth — and it does get easier. Start with your mouth if you need to; the \
-                 breathing still works while you are learning.",
+        answer: "Where you can. The nose filters, warms, and humidifies the air, and picks up \
+                 nitric oxide from the sinuses on the way past, which helps the oxygen cross \
+                 into your blood. It is also the narrower path, so it slows the breath down \
+                 without you deciding to. It is genuinely hard at first if you are congested or \
+                 used to breathing through your mouth — and it does get easier. Start with your \
+                 mouth if you need to; the breathing still works while you are learning.",
     },
     FoundationSeed {
         slug: "how-to-exhale",
         question: "And out through what?",
-        answer: "Nose or pursed lips, whichever you can keep going. Pursed lips — the shape for \
-                 cooling a spoonful of soup — give you something to push against, which makes a \
-                 long exhale much easier to hold onto. Most of the calming happens on the way \
-                 out, so the extra length is worth a little effort.",
+        answer: "Nose or pursed lips, whichever you can keep going. Out through the nose stays \
+                 slow by default. Pursed lips — the shape for cooling a spoonful of soup — give \
+                 you something to push against, which makes a long exhale much easier to hold \
+                 onto. The out-breath is where most of the settling happens, so its length \
+                 matters more than anywhere else in the round: whatever keeps yours smooth and \
+                 unhurried is the right answer.",
+    },
+    FoundationSeed {
+        slug: "how-slow",
+        question: "How slow should it be?",
+        answer: "Slower than usual, and never so slow that you are straining for air. Somewhere \
+                 around five or six breaths a minute your breathing, heart rhythm, and blood \
+                 pressure fall into step with one another, and that is the pace most of the \
+                 research keeps landing on. You do not have to find it yourself — the guided \
+                 patterns are built around it. If one leaves you short of air, it is too slow \
+                 for today: shorten it, and come back to it in a week.",
     },
     FoundationSeed {
         slug: "sitting-or-lying",
         question: "Sit or lie down?",
         answer: "Sit for anything alerting, lie down for anything meant to end in sleep. Upright \
-                 with your feet on the floor keeps you from drifting off halfway; on your back \
-                 the belly moves more freely and nothing has to hold you up. Fast-breathing \
-                 techniques are seated or lying down every time — that one is not a suggestion.",
+                 with a tall, easy back and your feet on the floor keeps you from drifting off \
+                 halfway; on your back the belly moves more freely and nothing has to hold you \
+                 up. Fast-breathing techniques are seated or lying down every time, never in \
+                 water and never while driving — that one is not a suggestion.",
     },
     FoundationSeed {
         slug: "eyes-open-or-closed",
         question: "Eyes open or closed?",
-        answer: "Closed is usually simpler: less to look at, less to think about. If closing them \
-                 makes you uneasy, leave them open and rest your gaze on something dull a metre \
-                 or two ahead. Watching the animation is the third option, and it is the one \
-                 that makes the counting effortless.",
+        answer: "Closed is usually simpler: less to look at, less to think about, and it is \
+                 where the haptics earn their keep — the phone taps out the rhythm, so nothing \
+                 needs the screen. If closing them makes you uneasy, leave them open and rest \
+                 your gaze on something dull a metre or two ahead; a soft gaze works just as \
+                 well, and it is the easier choice in public. Watching the animation is the \
+                 third option, and it is the one that makes the counting effortless.",
     },
 ];
 
