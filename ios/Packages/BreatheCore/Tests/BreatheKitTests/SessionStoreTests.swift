@@ -30,7 +30,7 @@ struct SessionStoreTests {
     /// the idempotency the sync retries on, and a dropped `completed` would turn
     /// an abandoned session into a finished one.
     @Test("A session survives the round trip through disk intact")
-    func roundTripsASession() async throws {
+    func roundTripsASession() async {
         let directory = temporaryDirectory()
         let written = record(completed: false)
 

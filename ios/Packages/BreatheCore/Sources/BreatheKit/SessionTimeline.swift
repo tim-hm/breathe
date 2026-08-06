@@ -132,6 +132,19 @@ public struct SessionTimeline: Sendable, Equatable {
     }
 }
 
+public extension Duration {
+    /// Seconds as a `Double`, for the frameworks that measure time that way —
+    /// CoreHaptics pattern events, SwiftUI geometry.
+    ///
+    /// Never for deciding which phase is current: that stays on the integer
+    /// milliseconds below, where a boundary cannot land on the wrong side of
+    /// itself by a float's breadth.
+    var seconds: Double {
+        let (seconds, attoseconds) = components
+        return Double(seconds) + Double(attoseconds) * 1e-18
+    }
+}
+
 extension Duration {
     /// Whole milliseconds, truncating.
     ///

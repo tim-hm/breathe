@@ -5,14 +5,22 @@ import SwiftUI
 struct TechniqueListView: View {
     @State private var model: TechniqueListModel
 
-    init(model: TechniqueListModel) {
+    /// Handed down from the composition root and passed to each session, so
+    /// every session in the app writes to the one store.
+    private let sessions: any SessionRecording
+
+    init(model: TechniqueListModel, sessions: any SessionRecording) {
         _model = State(wrappedValue: model)
+        self.sessions = sessions
     }
 
     var body: some View {
         NavigationStack {
             content
                 .navigationTitle("Breathe")
+                .navigationDestination(for: Technique.self) { technique in
+                    TechniqueDetailView(technique: technique, sessions: sessions)
+                }
         }
         .task { await model.load() }
     }
@@ -24,8 +32,12 @@ struct TechniqueListView: View {
             ProgressView()
 
         case let .loaded(techniques):
-            List(techniques) { TechniqueRow(technique: $0) }
-                .listStyle(.plain)
+            List(techniques) { technique in
+                NavigationLink(value: technique) {
+                    TechniqueRow(technique: technique)
+                }
+            }
+            .listStyle(.plain)
 
         case let .failed(message):
             ContentUnavailableView {
@@ -69,29 +81,5 @@ private struct TechniqueRow: View {
     private var cycleDescription: String {
         let seconds = technique.cycleDuration.components.seconds
         return "\(technique.phases.count) phases · \(seconds)s cycle"
-    }
-}
-
-private struct GoalBadge: View {
-    let goal: TechniqueGoal
-
-    var body: some View {
-        Text(goal.title.uppercased())
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, Theme.Spacing.close)
-            .padding(.vertical, Theme.Spacing.tight)
-            .background(accent.opacity(0.15), in: Capsule())
-            .foregroundStyle(accent)
-    }
-
-    /// Maps a domain value onto the palette. Lives here rather than in BreatheUI
-    /// so that the design package stays free of domain types.
-    private var accent: Color {
-        switch goal {
-        case .calm: Theme.Accent.settle
-        case .sleep: Theme.Accent.night
-        case .energy: Theme.Accent.spark
-        case .reset: Theme.Accent.restore
-        }
     }
 }

@@ -14,14 +14,14 @@ public enum TechniqueGoal: Sendable, CaseIterable {
 }
 
 /// One segment of a breathing cycle.
-public enum PhaseKind: Sendable {
+public enum PhaseKind: Sendable, Hashable {
     case inhale
     case holdIn
     case exhale
     case holdOut
 }
 
-public struct Phase: Sendable, Equatable {
+public struct Phase: Sendable, Hashable {
     public let kind: PhaseKind
     public let duration: Duration
 
@@ -31,7 +31,9 @@ public struct Phase: Sendable, Equatable {
     }
 }
 
-public struct Technique: Sendable, Identifiable, Equatable {
+/// `Hashable` so a list row can push one as a `NavigationStack` value rather
+/// than pushing a pre-built destination view.
+public struct Technique: Sendable, Identifiable, Hashable {
     public let id: String
     /// The stable key this app pins artwork and haptic patterns to.
     public let slug: String
@@ -76,6 +78,31 @@ public extension TechniqueGoal {
         case .sleep: "Sleep"
         case .energy: "Energy"
         case .reset: "Reset"
+        }
+    }
+}
+
+public extension PhaseKind {
+    /// What to do, on screen. Two words, present tense, legible at a glance
+    /// through half-closed eyes.
+    var instruction: String {
+        switch self {
+        case .inhale: "Breathe in"
+        case .holdIn: "Hold"
+        case .exhale: "Breathe out"
+        case .holdOut: "Hold"
+        }
+    }
+
+    /// What VoiceOver announces. Longer than `instruction` because the two holds
+    /// read identically aloud, and someone who cannot see the orb has only this
+    /// to tell them which one they are in.
+    var spokenInstruction: String {
+        switch self {
+        case .inhale: "Breathe in"
+        case .holdIn: "Hold, lungs full"
+        case .exhale: "Breathe out"
+        case .holdOut: "Hold, lungs empty"
         }
     }
 }
