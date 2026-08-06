@@ -121,13 +121,13 @@ public actor SessionSyncQueue {
             let stored = try await journeys.storedSessions()
             guard !stored.isEmpty else { return false }
 
-            await sessions.merge(stored)
+            let changed = await sessions.merge(stored)
             // Union rather than a fresh prune: `sendSessions` has already pruned
             // this key on the way past, and re-deriving the present ids would
             // mean reading the whole session file again to learn what was just
             // written to it.
             ledger.acknowledge(stored.map(\.id), at: Self.acknowledgedSessionsKey)
-            return true
+            return changed
         } catch {
             Self.logger.notice("journey restore deferred: \(error.localizedDescription)")
             return false

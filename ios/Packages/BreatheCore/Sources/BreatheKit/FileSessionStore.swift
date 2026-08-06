@@ -31,15 +31,16 @@ public actor FileSessionStore: SessionRecording {
     /// lives in the Keychain and survives a reinstall, so somebody who deletes
     /// the app and comes back has a server full of sessions and an empty file.
     /// Matching on id is what makes this safe to call after every sync.
-    public func merge(_ sessions: [SessionRecord]) async {
+    public func merge(_ sessions: [SessionRecord]) async -> Bool {
         var existing = file.load()
         let known = Set(existing.map(\.id))
         let missing = sessions.filter { !known.contains($0.id) }
-        guard !missing.isEmpty else { return }
+        guard !missing.isEmpty else { return false }
 
         existing.append(contentsOf: missing)
         existing.sort { $0.startedAt < $1.startedAt }
         file.save(existing)
+        return true
     }
 
     public func recordedSessions() async -> [SessionRecord] {

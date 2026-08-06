@@ -24,9 +24,11 @@ struct SessionSyncQueueTests {
             stored
         }
 
-        func merge(_ sessions: [SessionRecord]) async {
+        func merge(_ sessions: [SessionRecord]) async -> Bool {
             let known = Set(stored.map(\.id))
-            stored.append(contentsOf: sessions.filter { !known.contains($0.id) })
+            let missing = sessions.filter { !known.contains($0.id) }
+            stored.append(contentsOf: missing)
+            return !missing.isEmpty
         }
     }
 
@@ -171,11 +173,15 @@ struct SessionSyncQueueTests {
             ledger: SyncLedger(defaults: defaults())
         )
 
-        await queue.sync()
+        // The return value is "did local state change": true exactly once, on
+        // the run that brought the history back — a caller re-reads on it, and
+        // the server holding what it already sent us must not trigger that
+        // re-read on every sync for the rest of the install.
+        #expect(await queue.sync())
         #expect(await sessions.stored.map(\.id) == [theirs.id])
         #expect(await server.received.isEmpty, "it came from there")
 
-        await queue.sync()
+        #expect(await !queue.sync())
         #expect(await sessions.stored.count == 1, "and is not duplicated on the way in")
         #expect(await server.received.isEmpty)
     }

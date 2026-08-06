@@ -60,5 +60,10 @@ public protocol SessionRecording: Sendable {
     /// Adds sessions this device does not hold, matching on `id`. The restore
     /// path: the identity survives a reinstall, so the server can hold history
     /// this file has lost.
-    func merge(_ sessions: [SessionRecord]) async
+    ///
+    /// - Returns: whether anything new was added. The answer to "did local
+    ///   state change", which is what decides whether a screen re-reads it —
+    ///   the server holding sessions it already sent us is the common case,
+    ///   and it changes nothing.
+    func merge(_ sessions: [SessionRecord]) async -> Bool
 }
