@@ -10,8 +10,10 @@ struct BreatheApp: App {
     private let identity: any UserIdentityStore = KeychainUserIdentityStore()
 
     /// One store for the whole app: every session ends up in the same file, and
-    /// the journey's sync has one place to drain.
-    private let sessions: any SessionRecording = FileSessionStore()
+    /// the journey's sync has one place to drain. Concrete rather than `any
+    /// SessionRecording`, because the sync queue also needs its other face —
+    /// the tombstones deletions wait in until the server confirms them.
+    private let sessions = FileSessionStore()
 
     /// Controlled-pause scores, kept beside the sessions and for the same
     /// reason — the journey tab reads them with no network at all.
@@ -83,7 +85,12 @@ struct BreatheApp: App {
                 sessions: sessions,
                 scores: scores,
                 journeys: journeys,
-                queue: SessionSyncQueue(sessions: sessions, scores: scores, journeys: journeys)
+                queue: SessionSyncQueue(
+                    sessions: sessions,
+                    scores: scores,
+                    journeys: journeys,
+                    tombstones: sessions
+                )
             )
         )
     }
@@ -118,7 +125,13 @@ struct BreatheApp: App {
             .preferredColorScheme(settings.appearance.colorScheme)
             .environment(settings)
             .fullScreenCover(isPresented: $isOnboarding) {
-                OnboardingView(model: OnboardingModel(store: profiles)) {
+                OnboardingView(
+                    model: OnboardingModel(
+                        store: profiles,
+                        schedules: schedules,
+                        catalogue: catalogue
+                    )
+                ) {
                     isOnboarding = false
                 }
             }
