@@ -32,13 +32,13 @@ ios/            SwiftUI app over one local SwiftPM package, BreatheCore
 
 All breathe ports live in **18100–18199** (API 18100, Postgres 18101). See [docs/contributing.md](docs/contributing.md) for why the block starts there.
 
-| Pattern | One-liner | Details |
-| :-- | :-- | :-- |
-| Transport | One `.proto` generates Rust server stubs and the Swift client; gRPC-Web over HTTP POST | [docs/transport.md](docs/transport.md) |
-| Code structure | Feature-first, three-tier escalation, no junk drawers | [docs/code-structure.md](docs/code-structure.md) |
-| Testing | Write tests. Not too many. Mostly integration. | [docs/testing.md](docs/testing.md) |
-| Observability | Log at boundaries, stay silent in between | [docs/observability.md](docs/observability.md) |
-| Setup & ports | First run, port table, Xcode prerequisites | [docs/contributing.md](docs/contributing.md) |
+| Pattern        | One-liner                                                                              | Details                                          |
+| :------------- | :------------------------------------------------------------------------------------- | :----------------------------------------------- |
+| Transport      | One `.proto` generates Rust server stubs and the Swift client; gRPC-Web over HTTP POST | [docs/transport.md](docs/transport.md)           |
+| Code structure | Feature-first, three-tier escalation, no junk drawers                                  | [docs/code-structure.md](docs/code-structure.md) |
+| Testing        | Write tests. Not too many. Mostly integration.                                         | [docs/testing.md](docs/testing.md)               |
+| Observability  | Log at boundaries, stay silent in between                                              | [docs/observability.md](docs/observability.md)   |
+| Setup & ports  | First run, port table, Xcode prerequisites                                             | [docs/contributing.md](docs/contributing.md)     |
 
 ### Where code lives
 
@@ -80,6 +80,14 @@ mise run check      # 3. Full validation
 ```
 
 `mise run check` does not include `check:swift` or `test:swift`, because both need a full Xcode toolchain that a headless environment may not have. Run them explicitly when touching `ios/`.
+
+### Commit messages
+
+`<prefix>: <description>`, where the prefix names the area, the feature, or the kind of change, and the description says what changed in the imperative.
+
+The prefix is a hint for someone scanning `git log`, not a taxonomy. `technique:`, `ios:`, `proto:`, `migrate:`, `docs:`, `ci:`, `deps:` are all fine, and so is a conventional-commit type like `fix:` or `refactor:` when the _kind_ of change is more useful than the area. No `(scope)` brackets, no fixed vocabulary, nothing enforcing it — this is a convention because a log that reads consistently is faster to scan, not because a tool parses it.
+
+Keep the subject under ~72 characters. The body is for _why_: the constraint that forced the approach, the alternative rejected, the regression it guards. Git already records what changed; it cannot reconstruct the reasoning.
 
 ### Testing
 
