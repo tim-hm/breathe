@@ -21,7 +21,7 @@ pub async fn list_techniques(pool: &PgPool) -> Result<pb::ListTechniquesResponse
     let mut phases_by_technique: HashMap<String, Vec<pb::Phase>> =
         HashMap::with_capacity(techniques.len());
     for phase in phases {
-        let duration_ms = phase_duration(phase.duration_ms)?;
+        let duration_ms = positive_count("phase duration", phase.duration_ms)?;
         phases_by_technique
             .entry(phase.technique_id)
             .or_default()
@@ -37,6 +37,7 @@ pub async fn list_techniques(pool: &PgPool) -> Result<pb::ListTechniquesResponse
             let phases = phases_by_technique.remove(&row.id).ok_or_else(|| {
                 TechniqueError::Inconsistent(format!("technique `{}` has no phases", row.slug))
             })?;
+            let recommended_cycles = positive_count("recommended cycles", row.recommended_cycles)?;
 
             Ok(pb::Technique {
                 id: row.id,
@@ -45,6 +46,7 @@ pub async fn list_techniques(pool: &PgPool) -> Result<pb::ListTechniquesResponse
                 summary: row.summary,
                 goal: goal_to_proto(row.goal) as i32,
                 phases,
+                recommended_cycles,
             })
         })
         .collect::<Result<Vec<_>, TechniqueError>>()?;
@@ -64,13 +66,14 @@ const fn goal_to_proto(goal: TechniqueGoal) -> pb::TechniqueGoal {
     }
 }
 
-/// The schema's `CHECK (duration_ms > 0)` makes a non-positive value
-/// unreachable, so one arriving here is corrupt data — fail loudly rather than
-/// rewrite it (`unsigned_abs` would surface `-4000` to a client as `4000`).
-fn phase_duration(duration_ms: i32) -> Result<u32, TechniqueError> {
-    u32::try_from(duration_ms).map_err(|_| {
-        TechniqueError::Inconsistent(format!("phase duration `{duration_ms}` is negative"))
-    })
+/// Narrows a column the schema already constrains to be positive.
+///
+/// Every `CHECK (… > 0)` makes a negative value unreachable, so one arriving
+/// here is corrupt data — fail loudly rather than rewrite it (`unsigned_abs`
+/// would surface `-4000` to a client as `4000`).
+fn positive_count(field: &str, value: i32) -> Result<u32, TechniqueError> {
+    u32::try_from(value)
+        .map_err(|_| TechniqueError::Inconsistent(format!("{field} `{value}` is negative")))
 }
 
 const fn phase_kind_to_proto(kind: PhaseKind) -> pb::PhaseKind {
@@ -101,10 +104,13 @@ mod tests {
     }
 
     #[test]
-    fn a_negative_duration_is_an_error_not_a_rewrite() {
-        assert_eq!(phase_duration(4000).expect("positive passes through"), 4000);
+    fn a_negative_count_is_an_error_not_a_rewrite() {
+        assert_eq!(
+            positive_count("phase duration", 4000).expect("positive passes through"),
+            4000
+        );
         assert!(matches!(
-            phase_duration(-4000),
+            positive_count("phase duration", -4000),
             Err(TechniqueError::Inconsistent(_))
         ));
     }

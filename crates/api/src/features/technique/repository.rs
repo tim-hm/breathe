@@ -12,6 +12,7 @@ pub struct TechniqueRow {
     pub name: String,
     pub summary: String,
     pub goal: TechniqueGoal,
+    pub recommended_cycles: i32,
 }
 
 /// One phase, carrying the id of the technique it belongs to so the caller can
@@ -31,7 +32,8 @@ pub async fn list_techniques(pool: &PgPool) -> Result<Vec<TechniqueRow>, Techniq
             slug,
             name,
             summary,
-            goal AS "goal: TechniqueGoal"
+            goal AS "goal: TechniqueGoal",
+            recommended_cycles
          FROM techniques
          ORDER BY sort_order"#
     )

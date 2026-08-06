@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            id,\n            slug,\n            name,\n            summary,\n            goal AS \"goal: TechniqueGoal\"\n         FROM techniques\n         ORDER BY sort_order",
+  "query": "SELECT\n            id,\n            slug,\n            name,\n            summary,\n            goal AS \"goal: TechniqueGoal\",\n            recommended_cycles\n         FROM techniques\n         ORDER BY sort_order",
   "describe": {
     "columns": [
       {
@@ -69,6 +69,17 @@
             "name": "goal"
           }
         }
+      },
+      {
+        "ordinal": 5,
+        "name": "recommended_cycles",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "techniques",
+            "name": "recommended_cycles"
+          }
+        }
       }
     ],
     "parameters": {
@@ -79,8 +90,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "0b4ef0965b931550f0370209c18d09a8e0e1cb611a017ab8dfc458da43d078e1"
+  "hash": "7b811278165f40747347a62464caaafe57669e06277a5909ffa135da05a1a607"
 }

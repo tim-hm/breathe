@@ -80,6 +80,13 @@ message Technique {
 
   // The cycle, in play order. A session repeats this list; it is never empty.
   repeated Phase phases = 6;
+
+  // How many times a session should repeat the cycle by default — curated per
+  // technique, because the right dose differs by an order of magnitude across
+  // the catalogue (three sighs reset; twenty bellows breaths energise). Always
+  // at least one. A user's own preference is a client-side override until
+  // identity exists to store it against.
+  uint32 recommended_cycles = 7;
 }
 
 message ListTechniquesRequest {}

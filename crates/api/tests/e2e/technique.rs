@@ -31,6 +31,10 @@ async fn the_seeded_catalogue_arrives_over_grpc_web() {
             "`{slug}` reached the client with an unspecified goal"
         );
         assert!(!technique.phases.is_empty(), "`{slug}` has no phases");
+        assert!(
+            technique.recommended_cycles > 0,
+            "`{slug}` recommends no cycles, which is a session with nothing to play"
+        );
 
         for phase in &technique.phases {
             assert_ne!(
@@ -65,6 +69,33 @@ async fn the_seeded_catalogue_arrives_over_grpc_web() {
             (pb::PhaseKind::HoldOut as i32, 4000),
         ]
     );
+}
+
+/// `recommended_cycles` is the one column with both a proto zero value and a
+/// schema default sitting under it, so a service that never read it would still
+/// return a plausible-looking catalogue. Pinning two techniques that differ by
+/// an order of magnitude is what proves the curated value made the trip rather
+/// than `0` (dropped by the service) or `1` (the column's default).
+#[tokio::test]
+async fn curated_cycle_counts_reach_the_client_per_technique() {
+    let db = TestDatabase::create("recommended_cycles").await;
+
+    let response: pb::ListTechniquesResponse =
+        call_grpc_web(db.app(), LIST_TECHNIQUES, &pb::ListTechniquesRequest {})
+            .await
+            .into_ok();
+
+    let cycles = |slug: &str| {
+        response
+            .techniques
+            .iter()
+            .find(|technique| technique.slug == slug)
+            .unwrap_or_else(|| panic!("the seeded catalogue contains `{slug}`"))
+            .recommended_cycles
+    };
+
+    assert_eq!(cycles("physiological-sigh"), 3);
+    assert_eq!(cycles("bellows-breath"), 20);
 }
 
 /// `service.rs` groups phases through a `HashMap`, so nothing about the query's

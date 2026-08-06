@@ -21,6 +21,10 @@ struct TechniqueSeed {
     goal: &'static str,
     /// `(phase_kind label, duration in milliseconds)`.
     phases: &'static [(&'static str, i32)],
+    /// How many cycles a default session plays. Curated per technique: the
+    /// effective dose ranges from a few sighs to twenty bellows breaths, so a
+    /// single catalogue-wide number would be wrong for most of the list.
+    recommended_cycles: i32,
 }
 
 /// Array order is presentation order — `sort_order` is the index, so reordering
@@ -38,6 +42,10 @@ const TECHNIQUES: &[TechniqueSeed] = &[
             ("EXHALE", 4000),
             ("HOLD_OUT", 4000),
         ],
+        // Eight sixteen-second cycles — a little over two minutes, the length a
+        // first session should be to feel worth doing and still fit in a gap
+        // between meetings.
+        recommended_cycles: 8,
     },
     TechniqueSeed {
         slug: "four-seven-eight",
@@ -46,6 +54,9 @@ const TECHNIQUES: &[TechniqueSeed] = &[
                   work; if the hold feels strained, shorten all three and keep the ratio.",
         goal: "SLEEP",
         phases: &[("INHALE", 4000), ("HOLD_IN", 7000), ("EXHALE", 8000)],
+        // Four is the count the technique is taught with, and the count its
+        // originator caps beginners at.
+        recommended_cycles: 4,
     },
     TechniqueSeed {
         slug: "physiological-sigh",
@@ -57,6 +68,9 @@ const TECHNIQUES: &[TechniqueSeed] = &[
         // collapsed alveoli, and it is a distinct beat the client must cue
         // separately — merging them into one long inhale loses the technique.
         phases: &[("INHALE", 1500), ("INHALE", 700), ("EXHALE", 5000)],
+        // The summary promises "one or two rounds"; three is the generous end of
+        // that, and the technique loses its point when stretched into a session.
+        recommended_cycles: 3,
     },
     TechniqueSeed {
         slug: "bellows-breath",
@@ -65,6 +79,9 @@ const TECHNIQUES: &[TechniqueSeed] = &[
                   sign of lightheadedness. Never practise this in water or while driving.",
         goal: "ENERGY",
         phases: &[("INHALE", 1000), ("EXHALE", 1000)],
+        // Twenty two-second breaths is forty seconds — a short bout, which is
+        // the only kind this technique should be practised in.
+        recommended_cycles: 20,
     },
 ];
 
@@ -78,13 +95,14 @@ pub async fn run(pool: &PgPool) -> Result<()> {
         // `id` is only consumed on first insert; on conflict the existing row
         // keeps its id, so reseeding never invalidates a reference held elsewhere.
         let id: String = sqlx::query_scalar(
-            r"INSERT INTO techniques (id, slug, name, summary, goal, sort_order)
-               VALUES ($1, $2, $3, $4, $5::technique_goal, $6)
+            r"INSERT INTO techniques (id, slug, name, summary, goal, sort_order, recommended_cycles)
+               VALUES ($1, $2, $3, $4, $5::technique_goal, $6, $7)
                ON CONFLICT (slug) DO UPDATE SET
                  name = EXCLUDED.name,
                  summary = EXCLUDED.summary,
                  goal = EXCLUDED.goal,
                  sort_order = EXCLUDED.sort_order,
+                 recommended_cycles = EXCLUDED.recommended_cycles,
                  updated_at = now()
                RETURNING id",
         )
@@ -94,6 +112,7 @@ pub async fn run(pool: &PgPool) -> Result<()> {
         .bind(technique.summary)
         .bind(technique.goal)
         .bind(i32::try_from(index).context("catalogue is impossibly large")?)
+        .bind(technique.recommended_cycles)
         .fetch_one(&mut *tx)
         .await
         .with_context(|| format!("failed to upsert technique `{}`", technique.slug))?;

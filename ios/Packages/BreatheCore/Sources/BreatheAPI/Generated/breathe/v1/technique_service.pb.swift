@@ -170,6 +170,13 @@ public nonisolated struct Breathe_V1_Technique: Sendable {
   /// The cycle, in play order. A session repeats this list; it is never empty.
   public var phases: [Breathe_V1_Phase] = []
 
+  /// How many times a session should repeat the cycle by default — curated per
+  /// technique, because the right dose differs by an order of magnitude across
+  /// the catalogue (three sighs reset; twenty bellows breaths energise). Always
+  /// at least one. A user's own preference is a client-side override until
+  /// identity exists to store it against.
+  public var recommendedCycles: UInt32 = 0
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -248,7 +255,7 @@ nonisolated extension Breathe_V1_Phase: SwiftProtobuf.Message, SwiftProtobuf._Me
 
 nonisolated extension Breathe_V1_Technique: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Technique"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}slug\0\u{1}name\0\u{1}summary\0\u{1}goal\0\u{1}phases\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}slug\0\u{1}name\0\u{1}summary\0\u{1}goal\0\u{1}phases\0\u{3}recommended_cycles\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -262,6 +269,7 @@ nonisolated extension Breathe_V1_Technique: SwiftProtobuf.Message, SwiftProtobuf
       case 4: try { try decoder.decodeSingularStringField(value: &self.summary) }()
       case 5: try { try decoder.decodeSingularEnumField(value: &self.goal) }()
       case 6: try { try decoder.decodeRepeatedMessageField(value: &self.phases) }()
+      case 7: try { try decoder.decodeSingularUInt32Field(value: &self.recommendedCycles) }()
       default: break
       }
     }
@@ -286,6 +294,9 @@ nonisolated extension Breathe_V1_Technique: SwiftProtobuf.Message, SwiftProtobuf
     if !self.phases.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.phases, fieldNumber: 6)
     }
+    if self.recommendedCycles != 0 {
+      try visitor.visitSingularUInt32Field(value: self.recommendedCycles, fieldNumber: 7)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -296,6 +307,7 @@ nonisolated extension Breathe_V1_Technique: SwiftProtobuf.Message, SwiftProtobuf
     if lhs.summary != rhs.summary {return false}
     if lhs.goal != rhs.goal {return false}
     if lhs.phases != rhs.phases {return false}
+    if lhs.recommendedCycles != rhs.recommendedCycles {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
