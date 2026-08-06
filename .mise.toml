@@ -241,7 +241,13 @@ description = "Assert the committed Swift protobuf matches proto/"
 # regenerate, compare, fail on drift. Needed because the Xcode build never runs
 # buf, so a .proto edit committed without `mise run generate:proto` surfaces much
 # later as a confusing Swift compile error.
-run = ["mise run generate:proto", "git diff --exit-code -- ios/Packages/BreatheCore/Sources/BreatheAPI/Generated"]
+#
+# Against HEAD rather than the index, because "committed" is what the check is
+# about: a bare `git diff` compares against the index, which passes on drift that
+# happens to be staged — and in a GitButler workspace, where the index is not
+# kept in step with the virtual branches, fails on generated files that are
+# already committed.
+run = ["mise run generate:proto", "git diff --exit-code HEAD -- ios/Packages/BreatheCore/Sources/BreatheAPI/Generated"]
 
 [tasks."check:deps"]
 description = "Report crate dependencies nothing imports"
