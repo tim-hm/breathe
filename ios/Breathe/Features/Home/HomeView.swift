@@ -152,9 +152,15 @@ struct HomeView: View {
                 .font(.title2)
                 .foregroundStyle(Theme.Ink.secondary)
 
-            GoalWheel(goals: goals, selection: wheelBinding(over: goals))
-                .frame(width: 235, height: 172)
-                .accessibilityLabel("I want to")
+            Picker("I want to", selection: wheelBinding(over: goals)) {
+                ForEach(goals, id: \.self) { goal in
+                    Text(goal.intentObject)
+                        .font(.title2.weight(.semibold))
+                        .tag(goal)
+                }
+            }
+            .pickerStyle(.wheel)
+            .frame(width: 205, height: 132)
         }
         // The detent click a hardware wheel would give: one tick per option as
         // the spin passes it. Skipped for the settle on launch — that is the
