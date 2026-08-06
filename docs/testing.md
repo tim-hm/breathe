@@ -48,13 +48,16 @@ Swift tests run on the **host**, not a simulator — every package declares a ma
 
 **Why the real gRPC-Web framing.** `harness::call_grpc_web` writes the length-prefixed frame and parses the trailer frame by hand, exactly as the Swift client does. gRPC-Web reports call outcomes in trailers, so a _failed_ call still returns HTTP 200 — a harness that called `service::list_techniques` directly could never catch an error that fails to reach the client.
 
-The four tests and what they pin:
+The tests and what they pin:
 
 | Test                                                         | Guards                                                                                                              |
 | :----------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------ |
 | `the_seeded_catalogue_arrives_over_grpc_web`                 | The bootstrap's acceptance criterion, minus the simulator                                                           |
+| `the_wim_hof_rounds_arrive_as_ordered_stages`                | Stage order, the open-ended flag, and per-stage cycles — the whole reason the stage model exists                    |
+| `phase_dial_ranges_reach_the_client`                         | Every phase arrives with a range containing its default, so a client can render a dial from it                      |
+| `the_foundations_arrive_over_grpc_web`                       | The second RPC, and that the foundations keep their curated reading order                                           |
 | `phase_order_follows_ordinal_not_insertion_order`            | The service groups phases through a `HashMap`; the fixture inserts a cycle out of order so ignoring `ordinal` fails |
-| `a_phaseless_technique_fails_the_call_rather_than_vanishing` | A corrupt row surfaces as a non-zero `grpc-status`, not a quietly shortened list                                    |
+| `a_stageless_technique_fails_the_call_rather_than_vanishing` | A corrupt row surfaces as a non-zero `grpc-status`, not a quietly shortened list                                    |
 | `health_answers_without_a_reachable_database`                | `/health` is liveness-only; its pool points at a dead port, so answering at all proves it issued no query           |
 
 Each was verified by breaking the code it covers and confirming it fails.

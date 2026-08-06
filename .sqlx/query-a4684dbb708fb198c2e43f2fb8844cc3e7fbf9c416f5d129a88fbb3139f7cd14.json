@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH days AS (\n            SELECT DISTINCT\n                ((started_at AT TIME ZONE 'UTC') + make_interval(mins => $2))::date AS day\n            FROM sessions\n            WHERE user_id = $1\n        ),\n        grouped AS (\n            SELECT day, day - (row_number() OVER (ORDER BY day))::integer AS run\n            FROM days\n        ),\n        runs AS (\n            SELECT max(day) AS last_day, count(*)::integer AS length\n            FROM grouped\n            GROUP BY run\n        )\n        SELECT\n            coalesce(max(length) FILTER (\n                WHERE last_day >= ((now() AT TIME ZONE 'UTC') + make_interval(mins => $2))::date - 1\n            ), 0) AS \"current!\",\n            coalesce(max(length), 0) AS \"best!\"\n        FROM runs",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "current!",
+        "type_info": "Int4",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "best!",
+        "type_info": "Int4",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "a4684dbb708fb198c2e43f2fb8844cc3e7fbf9c416f5d129a88fbb3139f7cd14"
+}

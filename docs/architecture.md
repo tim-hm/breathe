@@ -40,9 +40,9 @@ proto/  ──────────────────►  generates bot
 
 **PostgreSQL enums, not text columns.** `technique_goal` and `phase_kind` are native enums. The proto contract already fixes both value sets, so the database rejecting a fifth value at write time is strictly better than it reaching a client as something unmapped.
 
-**Phases are a child table.** `technique_phases` is ordered by a `(technique_id, ordinal)` primary key rather than a JSON column on `techniques`. The cycle is queried as a set and its shape is fixed by the contract; JSON would buy schema flexibility this data does not want, at the cost of the ordering guarantee the key provides for free.
+**Stages and phases are child tables.** A technique owns ordered `technique_stages`, and each stage owns ordered `technique_phases` — both keyed on `(…, ordinal)` rather than held as a JSON column on `techniques`. The session is queried as a set and its shape is fixed by the contract; JSON would buy schema flexibility this data does not want, at the cost of the ordering guarantee the keys provide for free. A plain cyclic technique is one stage; the Wim Hof-style protocol, where a retention the person ends sits between fast breaths and a recovery hold, is why the level exists at all.
 
-**The catalogue lives in code.** `crates/migrate/src/seed.rs` holds the four techniques and reconciles them into the database on every run. They are curated reference data, not user content — editing a summary there and re-running `mise run migrate` is the supported way to change one.
+**The catalogue lives in code.** `crates/migrate/src/seed.rs` holds the nine techniques and the breathing foundations, and reconciles them into the database on every run. They are curated reference data, not user content — editing a summary there and re-running `mise run migrate` is the supported way to change one.
 
 **No `shared` crate.** With one service there is no second consumer, so there is nothing to share. Create it when a second crate genuinely needs a type, not before.
 

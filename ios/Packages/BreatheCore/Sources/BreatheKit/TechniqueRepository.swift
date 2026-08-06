@@ -10,20 +10,24 @@ public enum TechniqueRepositoryError: Error, Equatable {
     case malformedResponse(String)
 }
 
-/// Reads the technique catalogue.
+/// Reads the technique catalogue and the breathing foundations.
 ///
 /// This is the only type that touches generated protobuf types. Everything above
 /// it works in `Technique`, so a change to the wire format is a change to this
 /// file rather than to every view that displays one.
 public protocol TechniqueReading: Sendable {
     func listTechniques() async throws -> [Technique]
+    func listFoundations() async throws -> [FoundationTopic]
 }
 
 public struct TechniqueRepository: TechniqueReading {
     private let client: Breathe_V1_TechniqueServiceClient
 
-    public init(baseURL: URL) {
-        client = BreatheClients.techniqueService(baseURL: baseURL)
+    /// Takes the identity even though the catalogue is public: the server
+    /// creates a person's row on the first RPC of any kind, and this is the
+    /// first one the app makes.
+    public init(baseURL: URL, identity: any UserIdentityStore) {
+        client = BreatheClients.techniqueService(baseURL: baseURL, userId: identity.userId)
     }
 
     public func listTechniques() async throws -> [Technique] {
@@ -40,6 +44,18 @@ public struct TechniqueRepository: TechniqueReading {
 
         return try message.techniques.map(Technique.init(proto:))
     }
+
+    public func listFoundations() async throws -> [FoundationTopic] {
+        let response = await client.listFoundations(request: Breathe_V1_ListFoundationsRequest())
+
+        guard let message = response.message else {
+            throw TechniqueRepositoryError.transport(
+                response.error?.localizedDescription ?? "the request failed with no message"
+            )
+        }
+
+        return message.topics.map(FoundationTopic.init(proto:))
+    }
 }
 
 extension Technique {
@@ -50,9 +66,20 @@ extension Technique {
             )
         }
 
-        guard !proto.phases.isEmpty else {
+        guard !proto.stages.isEmpty else {
             throw TechniqueRepositoryError.malformedResponse(
-                "technique `\(proto.slug)` has no phases"
+                "technique `\(proto.slug)` has no stages"
+            )
+        }
+
+        // Zero is the proto default, so it is what a server that predates the
+        // field sends. Treating it as a decode failure rather than substituting
+        // a guess keeps the same rule the enums follow: a value this app cannot
+        // represent — and a session of no rounds is one — never becomes a
+        // silent default.
+        guard proto.recommendedRounds >= 1 else {
+            throw TechniqueRepositoryError.malformedResponse(
+                "technique `\(proto.slug)` recommends no rounds"
             )
         }
 
@@ -62,7 +89,35 @@ extension Technique {
             name: proto.name,
             summary: proto.summary,
             goal: goal,
-            phases: proto.phases.map(Phase.init(proto:))
+            stages: proto.stages.map { try Stage(proto: $0, slug: proto.slug) },
+            recommendedRounds: Int(proto.recommendedRounds),
+            // Empty is how the contract says "nothing to warn about", and an
+            // empty caution rendered as one would be worse than none.
+            safetyNote: proto.safetyNote.isEmpty ? nil : proto.safetyNote
+        )
+    }
+}
+
+extension Stage {
+    /// Takes the technique's slug only to name it in a failure — a stage has no
+    /// identity of its own beyond its position.
+    init(proto: Breathe_V1_Stage, slug: String) throws {
+        guard !proto.phases.isEmpty else {
+            throw TechniqueRepositoryError.malformedResponse(
+                "technique `\(slug)` has a stage with no phases"
+            )
+        }
+
+        guard proto.cycles >= 1 else {
+            throw TechniqueRepositoryError.malformedResponse(
+                "technique `\(slug)` has a stage playing no cycles"
+            )
+        }
+
+        try self.init(
+            phases: proto.phases.map(Phase.init(proto:)),
+            cycles: Int(proto.cycles),
+            openEnded: proto.openEnded
         )
     }
 }
@@ -75,7 +130,33 @@ extension Phase {
             )
         }
 
-        self.init(kind: kind, duration: .milliseconds(proto.durationMs))
+        // The dial is rendered from this range, so a range that does not contain
+        // its own default leaves a slider with nowhere to put the handle. Same
+        // rule as everywhere else on this boundary: reject rather than repair,
+        // because a repaired range is a safe limit this app invented.
+        guard proto.minDurationMs > 0,
+              proto.minDurationMs <= proto.durationMs,
+              proto.durationMs <= proto.maxDurationMs
+        else {
+            throw TechniqueRepositoryError.malformedResponse(
+                "a \(proto.durationMs)ms phase sits outside its "
+                    + "\(proto.minDurationMs)–\(proto.maxDurationMs)ms range"
+            )
+        }
+
+        self.init(
+            kind: kind,
+            duration: .milliseconds(proto.durationMs),
+            range: .milliseconds(proto.minDurationMs) ... .milliseconds(proto.maxDurationMs)
+        )
+    }
+}
+
+extension FoundationTopic {
+    /// Total, unlike the technique decoders: every field is a string this app
+    /// only ever displays, so there is no value here it could fail to represent.
+    init(proto: Breathe_V1_FoundationTopic) {
+        self.init(slug: proto.slug, question: proto.question, answer: proto.answer)
     }
 }
 
@@ -89,7 +170,23 @@ extension TechniqueGoal {
         case .sleep: self = .sleep
         case .energy: self = .energy
         case .reset: self = .reset
+        case .focus: self = .focus
         case .unspecified, .UNRECOGNIZED: return nil
+        }
+    }
+
+    /// The outbound direction, used by the profile a person picks their goals
+    /// in. Here rather than there so that adding a goal is one file to find:
+    /// both halves of this mapping have to change together, and the asymmetry
+    /// over `unspecified` — rejected coming in, unrepresentable going out — is
+    /// only reviewable if they sit next to each other.
+    var proto: Breathe_V1_TechniqueGoal {
+        switch self {
+        case .calm: .calm
+        case .sleep: .sleep
+        case .energy: .energy
+        case .reset: .reset
+        case .focus: .focus
         }
     }
 }

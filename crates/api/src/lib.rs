@@ -12,6 +12,7 @@ mod grpc;
 
 pub mod config;
 pub mod http;
+pub mod identity;
 pub mod obs;
 pub mod proto;
 pub mod state;
@@ -36,6 +37,15 @@ pub fn build_app(state: Arc<AppState>) -> Result<Router> {
     let grpc_router = grpc::build_services(&state)?
         .prepare()
         .into_axum_router()
+        // Inside `GrpcWebLayer`, so it sees a plain gRPC request and its error
+        // responses are re-framed as gRPC-Web on the way out. Only the gRPC
+        // router carries it: `/health` must answer without a database, and an
+        // identity that upserts a row is exactly the dependency that would
+        // break.
+        .layer(axum::middleware::from_fn_with_state(
+            Arc::clone(&state),
+            identity::resolve,
+        ))
         .layer(tonic_web::GrpcWebLayer::new());
 
     Ok(http::router(state)

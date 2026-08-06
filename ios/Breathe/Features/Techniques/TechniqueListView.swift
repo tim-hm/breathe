@@ -2,19 +2,28 @@ import BreatheKit
 import BreatheUI
 import SwiftUI
 
+/// The whole catalogue, grouped by what each technique is for.
+///
+/// Its own tab rather than part of home: someone who wants to breathe says so
+/// on the wheel, and someone who wants to read about nine techniques has come
+/// here deliberately. The model arrives shared with home — two views onto one
+/// load.
 struct TechniqueListView: View {
-    @State private var model: TechniqueListModel
-
-    init(model: TechniqueListModel) {
-        _model = State(wrappedValue: model)
-    }
+    let model: TechniqueListModel
+    let sessions: any SessionRecording
 
     var body: some View {
         NavigationStack {
             content
-                .navigationTitle("Breathe")
+                .paletteGround()
+                .navigationTitle("Techniques")
+                .navigationDestination(for: Technique.self) { technique in
+                    TechniqueDetailView(technique: technique, sessions: sessions)
+                }
         }
-        .task { await model.load() }
+        // Home usually starts the shared load first, but this tab must not
+        // depend on ever having visited it.
+        .task { await model.loadIfNeeded() }
     }
 
     @ViewBuilder
@@ -23,9 +32,38 @@ struct TechniqueListView: View {
         case .loading:
             ProgressView()
 
+        // Same guard as home: an empty catalogue is an answer worth naming,
+        // not a blank list.
+        case let .loaded(techniques) where techniques.isEmpty:
+            ContentUnavailableView {
+                Label("The catalogue is empty", systemImage: "wind")
+            } description: {
+                Text("The server answered, but with no techniques in it.")
+            } actions: {
+                Button("Try again") {
+                    Task { await model.load() }
+                }
+            }
+
         case let .loaded(techniques):
-            List(techniques) { TechniqueRow(technique: $0) }
-                .listStyle(.plain)
+            List {
+                ForEach(goals(in: techniques), id: \.self) { goal in
+                    Section {
+                        ForEach(techniques.filter { $0.goal == goal }) { technique in
+                            NavigationLink(value: technique) {
+                                TechniqueRow(technique: technique)
+                            }
+                            .listRowBackground(Color.clear)
+                        }
+                    } header: {
+                        Text(goal.intent)
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(Theme.Ink.primary)
+                            .textCase(nil)
+                    }
+                }
+            }
+            .listStyle(.plain)
 
         case let .failed(message):
             ContentUnavailableView {
@@ -39,59 +77,57 @@ struct TechniqueListView: View {
             }
         }
     }
+
+    /// The goals present in the catalogue, in the fixed calm-first order of
+    /// the enum — stable across loads, so sections never reshuffle under a
+    /// person who has learned where sleep lives.
+    private func goals(in techniques: [Technique]) -> [TechniqueGoal] {
+        TechniqueGoal.allCases.filter { goal in
+            techniques.contains { $0.goal == goal }
+        }
+    }
 }
 
 private struct TechniqueRow: View {
     let technique: Technique
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.close) {
-            HStack(spacing: Theme.Spacing.close) {
+        HStack(alignment: .center, spacing: Theme.Spacing.standard) {
+            VStack(alignment: .leading, spacing: Theme.Spacing.close) {
                 Text(technique.name)
                     .font(.headline)
-                Spacer()
-                GoalBadge(goal: technique.goal)
+
+                Text(technique.summary)
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.Ink.secondary)
+
+                Text(technique.shapeDescription)
+                    .font(.caption)
+                    .foregroundStyle(Theme.Ink.tertiary)
             }
 
-            Text(technique.summary)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
 
-            Text(cycleDescription)
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+            BreathRhythmSparkline(technique: technique)
         }
         .padding(.vertical, Theme.Spacing.close)
     }
-
-    /// "4 phases · 16s cycle". Reads the shape of the technique at a glance,
-    /// which is what someone choosing between four of them actually needs.
-    private var cycleDescription: String {
-        let seconds = technique.cycleDuration.components.seconds
-        return "\(technique.phases.count) phases · \(seconds)s cycle"
-    }
 }
 
-private struct GoalBadge: View {
-    let goal: TechniqueGoal
-
-    var body: some View {
-        Text(goal.title.uppercased())
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, Theme.Spacing.close)
-            .padding(.vertical, Theme.Spacing.tight)
-            .background(accent.opacity(0.15), in: Capsule())
-            .foregroundStyle(accent)
-    }
-
-    /// Maps a domain value onto the palette. Lives here rather than in BreatheUI
-    /// so that the design package stays free of domain types.
-    private var accent: Color {
-        switch goal {
-        case .calm: Theme.Accent.settle
-        case .sleep: Theme.Accent.night
-        case .energy: Theme.Accent.spark
-        case .reset: Theme.Accent.restore
+private extension Technique {
+    /// "8 cycles · 16s each", or "3 rounds · you end the holds". The shape of
+    /// the technique at a glance, which is what someone choosing between nine of
+    /// them actually needs — and the staged ones are a different proposition
+    /// from the cyclic ones, so they say so.
+    var shapeDescription: String {
+        guard !isStaged, let stage = stages.first else {
+            let unit = recommendedRounds == 1 ? "round" : "rounds"
+            return hasOpenEndedStage
+                ? "\(recommendedRounds) \(unit) · you end the holds"
+                : "\(recommendedRounds) \(unit) · \(stages.count) stages"
         }
+
+        let seconds = stage.cycleDuration.components.seconds
+        return "\(stage.cycles) cycles · \(seconds)s each"
     }
 }

@@ -39,6 +39,10 @@ public nonisolated enum Breathe_V1_TechniqueGoal: SwiftProtobuf.Enum, Swift.Case
   /// Restore parasympathetic tone after a spike. Short, and effective in one or
   /// two cycles rather than over a timed session.
   case reset // = 4
+
+  /// Hold attention on something deliberate. Longer holds and side-to-side
+  /// patterns, where the counting is as much the point as the breathing.
+  case focus // = 5
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -52,6 +56,7 @@ public nonisolated enum Breathe_V1_TechniqueGoal: SwiftProtobuf.Enum, Swift.Case
     case 2: self = .sleep
     case 3: self = .energy
     case 4: self = .reset
+    case 5: self = .focus
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -63,6 +68,7 @@ public nonisolated enum Breathe_V1_TechniqueGoal: SwiftProtobuf.Enum, Swift.Case
     case .sleep: return 2
     case .energy: return 3
     case .reset: return 4
+    case .focus: return 5
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -74,6 +80,7 @@ public nonisolated enum Breathe_V1_TechniqueGoal: SwiftProtobuf.Enum, Swift.Case
     .sleep,
     .energy,
     .reset,
+    .focus,
   ]
 
 }
@@ -140,14 +147,54 @@ public nonisolated struct Breathe_V1_Phase: Sendable {
 
   /// Milliseconds, not seconds: the physiological sigh's second inhale is a
   /// sub-second beat, and an integer count of seconds cannot express it.
+  ///
+  /// The curated default. Always within [min_duration_ms, max_duration_ms].
   public var durationMs: UInt32 = 0
+
+  /// The evidence-based range this phase may be dialled within, inclusive.
+  ///
+  /// Carried as data so that every client renders its Advanced dials from the
+  /// catalogue rather than hardcoding limits it would then have to keep in step
+  /// with the seed. A phase whose range is a single point is not adjustable —
+  /// an open-ended retention has no dial at all, because the person ends it.
+  public var minDurationMs: UInt32 = 0
+
+  public var maxDurationMs: UInt32 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 }
 
-/// A breathing technique and the cycle that defines it.
+/// A run of cycles sharing one phase pattern.
+///
+/// The general case a plain cyclic technique degenerates to: box breathing is
+/// one stage of eight cycles, while a Wim Hof-style round is three stages —
+/// fast breaths, a retention the person ends, then a recovery hold.
+public nonisolated struct Breathe_V1_Stage: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// The pattern, in play order. Never empty.
+  public var phases: [Breathe_V1_Phase] = []
+
+  /// How many times this stage repeats its pattern before the next stage
+  /// begins. Always at least one.
+  public var cycles: UInt32 = 0
+
+  /// Whether the person, rather than the clock, decides when this stage is
+  /// over — a retention hold in a Wim Hof-style round. A client shows a "tap
+  /// when you're ready" affordance instead of a countdown, and its phases'
+  /// durations describe a typical hold rather than a scheduled one.
+  public var openEnded: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// A breathing technique and the session it describes.
 public nonisolated struct Breathe_V1_Technique: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -167,8 +214,43 @@ public nonisolated struct Breathe_V1_Technique: Sendable {
 
   public var goal: Breathe_V1_TechniqueGoal = .unspecified
 
-  /// The cycle, in play order. A session repeats this list; it is never empty.
-  public var phases: [Breathe_V1_Phase] = []
+  /// The session, in play order. Never empty.
+  public var stages: [Breathe_V1_Stage] = []
+
+  /// How many times a session repeats the whole stage list by default — curated
+  /// per technique. One for everything cyclic; three for a Wim Hof-style round,
+  /// where the round is the unit the protocol is counted in. Always at least
+  /// one. A user's own preference is a client-side override until identity
+  /// exists to store it against.
+  public var recommendedRounds: UInt32 = 0
+
+  /// The caution this technique carries, or empty where it carries none.
+  ///
+  /// Separate from `summary` because it has to reach the person who is already
+  /// breathing: a client shows the summary when choosing and this while doing.
+  public var safetyNote: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// One question a beginner has, and the app's answer to it.
+public nonisolated struct Breathe_V1_FoundationTopic: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Stable key ("nose-or-mouth"), so a client — or M6's assistant, citing the
+  /// same rows — can reference a topic without pinning its wording.
+  public var slug: String = String()
+
+  /// Phrased as the question someone actually asks, not as a heading.
+  public var question: String = String()
+
+  /// A short answer, framed as a suggestion. Never a rule: the breathing works
+  /// while you are still learning.
+  public var answer: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -199,12 +281,36 @@ public nonisolated struct Breathe_V1_ListTechniquesResponse: Sendable {
   public init() {}
 }
 
+public nonisolated struct Breathe_V1_ListFoundationsRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Breathe_V1_ListFoundationsResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Ordered for display: the questions come in the order they occur to someone
+  /// learning, not alphabetically.
+  public var topics: [Breathe_V1_FoundationTopic] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "breathe.v1"
 
 nonisolated extension Breathe_V1_TechniqueGoal: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0TECHNIQUE_GOAL_UNSPECIFIED\0\u{1}TECHNIQUE_GOAL_CALM\0\u{1}TECHNIQUE_GOAL_SLEEP\0\u{1}TECHNIQUE_GOAL_ENERGY\0\u{1}TECHNIQUE_GOAL_RESET\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0TECHNIQUE_GOAL_UNSPECIFIED\0\u{1}TECHNIQUE_GOAL_CALM\0\u{1}TECHNIQUE_GOAL_SLEEP\0\u{1}TECHNIQUE_GOAL_ENERGY\0\u{1}TECHNIQUE_GOAL_RESET\0\u{1}TECHNIQUE_GOAL_FOCUS\0")
 }
 
 nonisolated extension Breathe_V1_PhaseKind: SwiftProtobuf._ProtoNameProviding {
@@ -213,7 +319,7 @@ nonisolated extension Breathe_V1_PhaseKind: SwiftProtobuf._ProtoNameProviding {
 
 nonisolated extension Breathe_V1_Phase: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Phase"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kind\0\u{3}duration_ms\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kind\0\u{3}duration_ms\0\u{3}min_duration_ms\0\u{3}max_duration_ms\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -223,6 +329,8 @@ nonisolated extension Breathe_V1_Phase: SwiftProtobuf.Message, SwiftProtobuf._Me
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularEnumField(value: &self.kind) }()
       case 2: try { try decoder.decodeSingularUInt32Field(value: &self.durationMs) }()
+      case 3: try { try decoder.decodeSingularUInt32Field(value: &self.minDurationMs) }()
+      case 4: try { try decoder.decodeSingularUInt32Field(value: &self.maxDurationMs) }()
       default: break
       }
     }
@@ -235,12 +343,60 @@ nonisolated extension Breathe_V1_Phase: SwiftProtobuf.Message, SwiftProtobuf._Me
     if self.durationMs != 0 {
       try visitor.visitSingularUInt32Field(value: self.durationMs, fieldNumber: 2)
     }
+    if self.minDurationMs != 0 {
+      try visitor.visitSingularUInt32Field(value: self.minDurationMs, fieldNumber: 3)
+    }
+    if self.maxDurationMs != 0 {
+      try visitor.visitSingularUInt32Field(value: self.maxDurationMs, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Breathe_V1_Phase, rhs: Breathe_V1_Phase) -> Bool {
     if lhs.kind != rhs.kind {return false}
     if lhs.durationMs != rhs.durationMs {return false}
+    if lhs.minDurationMs != rhs.minDurationMs {return false}
+    if lhs.maxDurationMs != rhs.maxDurationMs {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Breathe_V1_Stage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".Stage"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}phases\0\u{1}cycles\0\u{3}open_ended\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.phases) }()
+      case 2: try { try decoder.decodeSingularUInt32Field(value: &self.cycles) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.openEnded) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.phases.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.phases, fieldNumber: 1)
+    }
+    if self.cycles != 0 {
+      try visitor.visitSingularUInt32Field(value: self.cycles, fieldNumber: 2)
+    }
+    if self.openEnded != false {
+      try visitor.visitSingularBoolField(value: self.openEnded, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Breathe_V1_Stage, rhs: Breathe_V1_Stage) -> Bool {
+    if lhs.phases != rhs.phases {return false}
+    if lhs.cycles != rhs.cycles {return false}
+    if lhs.openEnded != rhs.openEnded {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -248,7 +404,7 @@ nonisolated extension Breathe_V1_Phase: SwiftProtobuf.Message, SwiftProtobuf._Me
 
 nonisolated extension Breathe_V1_Technique: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Technique"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}slug\0\u{1}name\0\u{1}summary\0\u{1}goal\0\u{1}phases\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}slug\0\u{1}name\0\u{1}summary\0\u{1}goal\0\u{2}\u{3}stages\0\u{3}recommended_rounds\0\u{3}safety_note\0\u{b}phases\0\u{b}recommended_cycles\0\u{c}\u{6}\u{1}\u{c}\u{7}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -261,7 +417,9 @@ nonisolated extension Breathe_V1_Technique: SwiftProtobuf.Message, SwiftProtobuf
       case 3: try { try decoder.decodeSingularStringField(value: &self.name) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.summary) }()
       case 5: try { try decoder.decodeSingularEnumField(value: &self.goal) }()
-      case 6: try { try decoder.decodeRepeatedMessageField(value: &self.phases) }()
+      case 8: try { try decoder.decodeRepeatedMessageField(value: &self.stages) }()
+      case 9: try { try decoder.decodeSingularUInt32Field(value: &self.recommendedRounds) }()
+      case 10: try { try decoder.decodeSingularStringField(value: &self.safetyNote) }()
       default: break
       }
     }
@@ -283,8 +441,14 @@ nonisolated extension Breathe_V1_Technique: SwiftProtobuf.Message, SwiftProtobuf
     if self.goal != .unspecified {
       try visitor.visitSingularEnumField(value: self.goal, fieldNumber: 5)
     }
-    if !self.phases.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.phases, fieldNumber: 6)
+    if !self.stages.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.stages, fieldNumber: 8)
+    }
+    if self.recommendedRounds != 0 {
+      try visitor.visitSingularUInt32Field(value: self.recommendedRounds, fieldNumber: 9)
+    }
+    if !self.safetyNote.isEmpty {
+      try visitor.visitSingularStringField(value: self.safetyNote, fieldNumber: 10)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -295,7 +459,49 @@ nonisolated extension Breathe_V1_Technique: SwiftProtobuf.Message, SwiftProtobuf
     if lhs.name != rhs.name {return false}
     if lhs.summary != rhs.summary {return false}
     if lhs.goal != rhs.goal {return false}
-    if lhs.phases != rhs.phases {return false}
+    if lhs.stages != rhs.stages {return false}
+    if lhs.recommendedRounds != rhs.recommendedRounds {return false}
+    if lhs.safetyNote != rhs.safetyNote {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Breathe_V1_FoundationTopic: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".FoundationTopic"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}slug\0\u{1}question\0\u{1}answer\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.slug) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.question) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.answer) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.slug.isEmpty {
+      try visitor.visitSingularStringField(value: self.slug, fieldNumber: 1)
+    }
+    if !self.question.isEmpty {
+      try visitor.visitSingularStringField(value: self.question, fieldNumber: 2)
+    }
+    if !self.answer.isEmpty {
+      try visitor.visitSingularStringField(value: self.answer, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Breathe_V1_FoundationTopic, rhs: Breathe_V1_FoundationTopic) -> Bool {
+    if lhs.slug != rhs.slug {return false}
+    if lhs.question != rhs.question {return false}
+    if lhs.answer != rhs.answer {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -345,6 +551,55 @@ nonisolated extension Breathe_V1_ListTechniquesResponse: SwiftProtobuf.Message, 
 
   public static func ==(lhs: Breathe_V1_ListTechniquesResponse, rhs: Breathe_V1_ListTechniquesResponse) -> Bool {
     if lhs.techniques != rhs.techniques {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Breathe_V1_ListFoundationsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ListFoundationsRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    // Load everything into unknown fields
+    while try decoder.nextFieldNumber() != nil {}
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Breathe_V1_ListFoundationsRequest, rhs: Breathe_V1_ListFoundationsRequest) -> Bool {
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Breathe_V1_ListFoundationsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ListFoundationsResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}topics\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.topics) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.topics.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.topics, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Breathe_V1_ListFoundationsResponse, rhs: Breathe_V1_ListFoundationsResponse) -> Bool {
+    if lhs.topics != rhs.topics {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

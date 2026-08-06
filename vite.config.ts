@@ -26,8 +26,9 @@ export default {
       // `check:sqlx` regenerates this cache and compares it; a reformat reads
       // as drift.
       ".sqlx/**",
-      // Xcode writes these, and rewrites them whenever the catalogue changes.
-      "ios/Breathe/Assets.xcassets/**",
+      // Xcode writes these, and rewrites them whenever a catalogue changes —
+      // the app's, and BreatheUI's palette.
+      "ios/**/*.xcassets/**",
     ],
   },
 };

@@ -23,10 +23,29 @@ public final class TechniqueListModel {
 
     private let techniques: any TechniqueReading
 
+    /// The first load, once somebody has started it. Model-owned rather than
+    /// structured so that it survives its starter: a tab switch cancels the
+    /// `.task` that called `loadIfNeeded()`, and a cancelled shared fetch
+    /// would land every tab in `.failed` over a catalogue that was one second
+    /// from arriving.
+    private var firstLoad: Task<Void, Never>?
+
     public init(techniques: any TechniqueReading) {
         self.techniques = techniques
     }
 
+    /// Joins the first load, starting it if nobody has.
+    ///
+    /// Every tab root calls this from its `.task` — the model is shared, and
+    /// without the joining, each tab's arrival would tear a good catalogue
+    /// back down to a spinner and a fresh fetch.
+    public func loadIfNeeded() async {
+        let task = firstLoad ?? Task { await self.load() }
+        firstLoad = task
+        await task.value
+    }
+
+    /// Fetches unconditionally — the explicit Try-again under a failure.
     public func load() async {
         state = .loading
         do {

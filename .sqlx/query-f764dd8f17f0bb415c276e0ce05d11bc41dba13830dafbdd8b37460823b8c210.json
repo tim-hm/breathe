@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO sessions (\n            user_id, client_session_id, technique_slug, started_at,\n            duration_ms, cycles_completed, breath_count, completed\n         )\n         SELECT $1, s.id, s.slug, s.started_at, s.duration_ms, s.cycles, s.breaths, s.completed\n         FROM UNNEST(\n                $2::uuid[], $3::text[], $4::timestamptz[],\n                $5::integer[], $6::integer[], $7::integer[], $8::boolean[]\n              ) AS s(id, slug, started_at, duration_ms, cycles, breaths, completed)\n         ON CONFLICT (user_id, client_session_id) DO NOTHING\n         RETURNING client_session_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "client_session_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "sessions",
+            "name": "client_session_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "TextArray",
+        "TimestamptzArray",
+        "Int4Array",
+        "Int4Array",
+        "Int4Array",
+        "BoolArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f764dd8f17f0bb415c276e0ce05d11bc41dba13830dafbdd8b37460823b8c210"
+}

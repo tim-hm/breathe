@@ -1,0 +1,145 @@
+syntax = "proto3";
+
+package breathe.v1;
+
+import "breathe/v1/technique_service.proto";
+
+// ProfileService reads and writes the answers a person gave at onboarding.
+//
+// Unlike TechniqueService, every RPC here is scoped to a caller: the anonymous
+// identity travels in the `breathe-user-id` header, and a call without one is
+// UNAUTHENTICATED. There is no id in any request message, so one client can
+// never read another's profile by guessing a value.
+service ProfileService {
+  // Returns this caller's profile.
+  //
+  // Never NOT_FOUND: the identity layer creates the row on first sight, so a
+  // caller who has answered nothing gets a profile of empty answers rather than
+  // an error the client would have to special-case at every call site.
+  rpc GetProfile(GetProfileRequest) returns (GetProfileResponse);
+
+  // Replaces this caller's profile wholesale.
+  //
+  // A full replacement rather than a patch: onboarding submits every answer at
+  // once, and a field mask would add a contract both ends must honour in
+  // exchange for a partial update nothing performs.
+  rpc UpdateProfile(UpdateProfileRequest) returns (UpdateProfileResponse);
+}
+
+// How much breathwork someone has done before.
+//
+// Chooses what the app explains rather than what it offers — every technique is
+// available at every level. UNSPECIFIED is a real state here: a profile exists
+// from the first RPC, which is before anyone has been asked.
+enum ExperienceLevel {
+  EXPERIENCE_LEVEL_UNSPECIFIED = 0;
+
+  // Has not done this before.
+  EXPERIENCE_LEVEL_NEW = 1;
+
+  // Has tried it, without a routine.
+  EXPERIENCE_LEVEL_OCCASIONAL = 2;
+
+  // Practises already.
+  EXPERIENCE_LEVEL_REGULAR = 3;
+}
+
+// How much the app is invited to ask for someone's attention.
+//
+// The zero value is NEVER, not UNSPECIFIED, and that is the whole design: proto3
+// cannot distinguish an unset field from its zero value, so whichever member
+// sits at zero is what an absent field, an older client, and a partly-written
+// row all mean. Silence has to be the one it means. A client that never sets
+// this, or a server that fails to read it, sends no reminders — which is also
+// why M7 requests notification permission only when this moves off NEVER.
+enum ReminderIntensity {
+  REMINDER_INTENSITY_NEVER = 0;
+
+  // An occasional nudge, and nothing that counts a missed day against you.
+  REMINDER_INTENSITY_GENTLE = 1;
+
+  // One reminder a day, at a time the client picks.
+  REMINDER_INTENSITY_DAILY = 2;
+}
+
+// What someone told the app about themselves.
+//
+// Answers, not derived state: streaks, totals, and entitlements live elsewhere,
+// so this message stays something a person can recognise as the things they
+// typed.
+message Profile {
+  // What they are here for, in the order they picked. May be empty — someone
+  // can skip the question, and an empty list means exactly that rather than
+  // "all of them".
+  //
+  // Reuses TechniqueGoal so a goal picked at onboarding is the same value the
+  // catalogue is grouped by; a parallel enum would need mapping and would drift.
+  repeated TechniqueGoal goals = 1;
+
+  ExperienceLevel experience_level = 2;
+
+  ReminderIntensity reminder_intensity = 3;
+
+  // Why they are here, in their own words. Optional and free-form: M6's
+  // assistant reads it as context, and nothing else parses it. Empty is the
+  // normal state.
+  string intent_note = 4;
+
+  // What the leaderboards call this person, and the whole of the opt-in to
+  // them: empty means invisible to everyone else, which is the state every
+  // profile starts in and stays in until somebody types a name.
+  //
+  // The server owns the final value — it trims, screens, and suffixes a name
+  // somebody else already holds — so what comes back in
+  // `UpdateProfileResponse` is what other people will see, and may not be what
+  // was sent.
+  string display_name = 5;
+
+  // Which decade they were born in, if they said. Optional, and coarse on
+  // purpose: it exists so the age-band leaderboard can compare like with like,
+  // and a birth year would be a more precise fact than that use needs.
+  BirthYearBand birth_year_band = 6;
+}
+
+// The decade somebody was born in.
+//
+// Bands by birth decade rather than by age, so a person's band never changes
+// under them and no stored value silently means something different a year
+// later. UNSPECIFIED is a real state: nobody has to answer, and most will not.
+enum BirthYearBand {
+  BIRTH_YEAR_BAND_UNSPECIFIED = 0;
+
+  BIRTH_YEAR_BAND_BORN_BEFORE_1960 = 1;
+
+  BIRTH_YEAR_BAND_BORN_1960S = 2;
+
+  BIRTH_YEAR_BAND_BORN_1970S = 3;
+
+  BIRTH_YEAR_BAND_BORN_1980S = 4;
+
+  BIRTH_YEAR_BAND_BORN_1990S = 5;
+
+  BIRTH_YEAR_BAND_BORN_2000S = 6;
+
+  BIRTH_YEAR_BAND_BORN_2010_OR_LATER = 7;
+}
+
+message GetProfileRequest {}
+
+message GetProfileResponse {
+  Profile profile = 1;
+}
+
+message UpdateProfileRequest {
+  // Required. Every field is replaced by what this carries, so an omitted
+  // message is rejected rather than read as "clear everything".
+  Profile profile = 1;
+}
+
+message UpdateProfileResponse {
+  // The profile as stored, which is what the client should keep. Returned
+  // rather than assumed so a value the server normalised — a duplicated goal,
+  // say — does not leave the client displaying something the server does not
+  // hold.
+  Profile profile = 1;
+}

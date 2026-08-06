@@ -46,10 +46,18 @@ let package = Package(
         .target(name: "BreatheKit", dependencies: ["BreatheAPI"]),
         // No dependencies, ever. The design system stays free of domain types so
         // that mapping a `TechniqueGoal` to an accent remains the feature's job.
-        .target(name: "BreatheUI"),
+        //
+        // The asset catalogue holds every colour, each with a light and a dark
+        // value. Declaring it is what puts it in `Bundle.module` at all; without
+        // this SwiftPM treats the directory as a stray file and every colour
+        // resolves to nothing. Note that only Xcode compiles a catalogue with
+        // actool — `swift build` copies it verbatim, which is why the palette's
+        // test reads the JSON rather than resolving a `Color`.
+        .target(name: "BreatheUI", resources: [.process("Colors.xcassets")]),
         // Depends on BreatheAPI as well as BreatheKit because it builds proto
         // messages to feed the decoders. That is the boundary being tested, so
         // reaching across it here is the point rather than a leak.
         .testTarget(name: "BreatheKitTests", dependencies: ["BreatheKit", "BreatheAPI"]),
+        .testTarget(name: "BreatheUITests", dependencies: ["BreatheUI"]),
     ]
 )

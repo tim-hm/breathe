@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO bolt_scores (user_id, client_score_id, seconds, measured_at)\n         VALUES ($1, $2, $3, coalesce($4, now()))\n         ON CONFLICT (user_id, client_score_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int4",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "edfea5e315390d39923761c7c8950b04b8dd45d63ea56c967f89de813972d0b9"
+}

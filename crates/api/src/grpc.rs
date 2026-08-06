@@ -5,8 +5,12 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use tonic::service::Routes;
 
+use crate::features::journey::handlers::grpc::JourneyServiceImpl;
+use crate::features::profile::handlers::grpc::ProfileServiceImpl;
 use crate::features::technique::handlers::grpc::TechniqueServiceImpl;
 use crate::proto::breathe::v1::FILE_DESCRIPTOR_SET;
+use crate::proto::breathe::v1::journey_service_server::JourneyServiceServer;
+use crate::proto::breathe::v1::profile_service_server::ProfileServiceServer;
 use crate::proto::breathe::v1::technique_service_server::TechniqueServiceServer;
 use crate::state::AppState;
 
@@ -23,9 +27,14 @@ pub fn build_services(state: &Arc<AppState>) -> Result<Routes> {
         .build_v1()
         .context("failed to build the gRPC reflection service")?;
 
-    Ok(
-        Routes::new(reflection).add_service(TechniqueServiceServer::new(
-            TechniqueServiceImpl::new(Arc::clone(state)),
-        )),
-    )
+    Ok(Routes::new(reflection)
+        .add_service(TechniqueServiceServer::new(TechniqueServiceImpl::new(
+            Arc::clone(state),
+        )))
+        .add_service(ProfileServiceServer::new(ProfileServiceImpl::new(
+            Arc::clone(state),
+        )))
+        .add_service(JourneyServiceServer::new(JourneyServiceImpl::new(
+            Arc::clone(state),
+        ))))
 }

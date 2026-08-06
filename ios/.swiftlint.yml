@@ -26,6 +26,10 @@ disabled_rules:
   # SwiftFormat owns line width (--maxwidth 100); two tools disagreeing about
   # the same thing means one of them is always wrong.
   - line_length
+  # Same rule, same reason: SwiftFormat's `trailingCommas` adds the comma that
+  # this rule removes, so leaving both on makes every multi-line collection
+  # literal unformattable — `fmt` and `check` would undo each other forever.
+  - trailing_comma
   # Domain vocabulary is what it is: `id` is the field name in the proto, and
   # renaming it in Swift alone would break the correspondence deliberately.
   - identifier_name

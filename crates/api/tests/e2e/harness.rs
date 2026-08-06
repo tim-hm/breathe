@@ -158,10 +158,33 @@ where
     Req: Message,
     Res: Message + Default,
 {
+    call_grpc_web_with(app, path, request, &[]).await
+}
+
+/// [`call_grpc_web`], plus the headers the client would send alongside.
+///
+/// Separate rather than a fourth parameter on every call site: identity is the
+/// only thing that travels out-of-band, and the tests that do not exercise it
+/// read better without an empty slice in them.
+pub async fn call_grpc_web_with<Req, Res>(
+    app: Router,
+    path: &str,
+    request: &Req,
+    headers: &[(&str, &str)],
+) -> GrpcWebResponse<Res>
+where
+    Req: Message,
+    Res: Message + Default,
+{
+    let mut builder =
+        Request::post(path).header(header::CONTENT_TYPE, "application/grpc-web+proto");
+    for (name, value) in headers {
+        builder = builder.header(*name, *value);
+    }
+
     let response = app
         .oneshot(
-            Request::post(path)
-                .header(header::CONTENT_TYPE, "application/grpc-web+proto")
+            builder
                 .body(Body::from(frame(request)))
                 .expect("a valid request"),
         )

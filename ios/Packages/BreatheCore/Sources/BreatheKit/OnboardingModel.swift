@@ -1,0 +1,147 @@
+import Foundation
+import Observation
+
+/// Drives the first-run stepper: which question is on screen, what has been
+/// answered, and what happens at the end.
+///
+/// Lives in `BreatheKit` rather than the app target so the flow is testable on
+/// the host — the app target has no test bundle, and a stepper whose transitions
+/// nobody can exercise is where a screen someone cannot get past comes from.
+@MainActor
+@Observable
+public final class OnboardingModel {
+    /// The questions, in the order they are asked.
+    ///
+    /// An enum with an ordinal rather than an index into an array of views: the
+    /// progress indicator, the back button, and the save all need to know where
+    /// they are, and a raw `Int` would let them disagree.
+    public enum Step: Int, CaseIterable, Identifiable, Sendable {
+        /// Says what the app is for before asking anything.
+        case welcome
+        case goals
+        case experience
+        /// The reminder dial. Ordered after the questions about breathing so it
+        /// reads as a preference rather than as the price of entry, and last so
+        /// that saving happens on the way out of it.
+        case reminders
+        /// Everything is saved; the way out.
+        case done
+
+        public var id: Self {
+            self
+        }
+
+        /// The steps that ask something — what a step indicator counts.
+        /// `welcome` is a greeting and `done` a confirmation; neither is a
+        /// question to be part-way through.
+        public static let questions: [Step] = [.goals, .experience, .reminders]
+    }
+
+    public private(set) var step: Step = .welcome
+
+    /// In the order they were picked, which is the order they are shown back.
+    public private(set) var goals: [TechniqueGoal] = []
+    public var experienceLevel: ExperienceLevel?
+    public var reminderIntensity: ReminderIntensity = .never
+
+    private let store: ProfileStore
+
+    public init(store: ProfileStore) {
+        self.store = store
+    }
+
+    /// Adds or removes a goal, keeping the order the person picked in.
+    public func toggle(_ goal: TechniqueGoal) {
+        if let index = goals.firstIndex(of: goal) {
+            goals.remove(at: index)
+        } else {
+            goals.append(goal)
+        }
+    }
+
+    public func isSelected(_ goal: TechniqueGoal) -> Bool {
+        goals.contains(goal)
+    }
+
+    /// Whether the current step has the answer it asks for.
+    ///
+    /// Goals and experience want one before Next lights up — not as a wall,
+    /// but so that Next always means "that's my answer"; Skip is the way past
+    /// without one. Reminders arrives already answered: `never` is selected
+    /// before anyone touches it.
+    public var canAdvance: Bool {
+        switch step {
+        case .goals: !goals.isEmpty
+        case .experience: experienceLevel != nil
+        default: true
+        }
+    }
+
+    /// Whether the current step can be passed by unanswered. True exactly
+    /// where `canAdvance` can be false: a question that insists on an answer
+    /// and offers no way around it is a wall, and a Skip on any other step
+    /// would be a second Next.
+    public var canSkip: Bool {
+        step == .goals || step == .experience
+    }
+
+    /// Moves to the next question, saving on the way out of the last one.
+    public func advance() {
+        guard canAdvance else { return }
+        moveOn()
+    }
+
+    /// Passes an optional question by without answering it. The answer given
+    /// so far is kept — skipping is declining to finish, not undoing.
+    public func skip() {
+        guard canSkip else { return }
+        moveOn()
+    }
+
+    private func moveOn() {
+        if step == .reminders {
+            store.complete(with: profile)
+            // Not awaited: the person is one tap from breathing, and the upload
+            // has a whole app lifetime to succeed in. `ProfileStore` has already
+            // written the answers and closed onboarding by this point.
+            Task { await store.syncIfNeeded() }
+        }
+
+        guard let next = Step(rawValue: step.rawValue + 1) else { return }
+        step = next
+    }
+
+    /// Whether there is a question behind this one to return to.
+    ///
+    /// False on the welcome screen, which has nothing before it, and on `.done`,
+    /// where the answers are already saved and going back would offer to change
+    /// something that has been sent. Exposed rather than left to `back()` alone
+    /// because the view needs the same answer for the button it draws.
+    public var canGoBack: Bool {
+        step != .welcome && step != .done
+    }
+
+    public func back() {
+        guard canGoBack, let previous = Step(rawValue: step.rawValue - 1) else { return }
+        step = previous
+    }
+
+    /// How far through, for a progress indicator. Excludes `.done`, which is a
+    /// confirmation rather than a question.
+    public var progress: Double {
+        let questions = Double(Step.allCases.count - 1)
+        return Double(step.rawValue) / questions
+    }
+
+    /// The answers as they stand. The intent note stays empty: the flow no
+    /// longer asks for one, and the field survives only because the server
+    /// contract still carries it.
+    public var profile: Profile {
+        Profile(
+            goals: goals,
+            experienceLevel: experienceLevel,
+            reminderIntensity: reminderIntensity,
+            intentNote: ""
+        )
+    }
+}

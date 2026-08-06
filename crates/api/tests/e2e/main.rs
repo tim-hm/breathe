@@ -14,4 +14,6 @@
 
 mod harness;
 mod health;
+mod journey;
+mod profile;
 mod technique;

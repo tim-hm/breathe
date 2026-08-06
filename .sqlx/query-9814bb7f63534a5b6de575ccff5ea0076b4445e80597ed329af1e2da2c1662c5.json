@@ -1,0 +1,77 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users\n            SET goals = $2,\n                experience_level = $3,\n                reminder_intensity = $4,\n                intent_note = $5,\n                display_name = $6,\n                birth_year_band = $7,\n                updated_at = now()\n          WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "technique_goal[]",
+            "kind": {
+              "Array": {
+                "Custom": {
+                  "name": "technique_goal",
+                  "kind": {
+                    "Enum": [
+                      "CALM",
+                      "SLEEP",
+                      "ENERGY",
+                      "RESET",
+                      "FOCUS"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "experience_level",
+            "kind": {
+              "Enum": [
+                "NEW",
+                "OCCASIONAL",
+                "REGULAR"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "reminder_intensity",
+            "kind": {
+              "Enum": [
+                "NEVER",
+                "GENTLE",
+                "DAILY"
+              ]
+            }
+          }
+        },
+        "Text",
+        "Text",
+        {
+          "Custom": {
+            "name": "birth_year_band",
+            "kind": {
+              "Enum": [
+                "BORN_BEFORE_1960",
+                "BORN_1960S",
+                "BORN_1970S",
+                "BORN_1980S",
+                "BORN_1990S",
+                "BORN_2000S",
+                "BORN_2010_OR_LATER"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9814bb7f63534a5b6de575ccff5ea0076b4445e80597ed329af1e2da2c1662c5"
+}

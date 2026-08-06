@@ -1,0 +1,145 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n            goals AS \"goals: Vec<TechniqueGoal>\",\n            experience_level AS \"experience_level?: ExperienceLevel\",\n            reminder_intensity AS \"reminder_intensity: ReminderIntensity\",\n            intent_note,\n            display_name,\n            birth_year_band AS \"birth_year_band?: BirthYearBand\"\n         FROM users\n         WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "goals: Vec<TechniqueGoal>",
+        "type_info": {
+          "Custom": {
+            "name": "technique_goal[]",
+            "kind": {
+              "Array": {
+                "Custom": {
+                  "name": "technique_goal",
+                  "kind": {
+                    "Enum": [
+                      "CALM",
+                      "SLEEP",
+                      "ENERGY",
+                      "RESET",
+                      "FOCUS"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "goals"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "experience_level?: ExperienceLevel",
+        "type_info": {
+          "Custom": {
+            "name": "experience_level",
+            "kind": {
+              "Enum": [
+                "NEW",
+                "OCCASIONAL",
+                "REGULAR"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "experience_level"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "reminder_intensity: ReminderIntensity",
+        "type_info": {
+          "Custom": {
+            "name": "reminder_intensity",
+            "kind": {
+              "Enum": [
+                "NEVER",
+                "GENTLE",
+                "DAILY"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "reminder_intensity"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "intent_note",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "intent_note"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "display_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "display_name"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "birth_year_band?: BirthYearBand",
+        "type_info": {
+          "Custom": {
+            "name": "birth_year_band",
+            "kind": {
+              "Enum": [
+                "BORN_BEFORE_1960",
+                "BORN_1960S",
+                "BORN_1970S",
+                "BORN_1980S",
+                "BORN_1990S",
+                "BORN_2000S",
+                "BORN_2010_OR_LATER"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "birth_year_band"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "3c16383b6e3301b317000bf5b5c4e508d137fa53937198a76f7fddbdb2c5209a"
+}
