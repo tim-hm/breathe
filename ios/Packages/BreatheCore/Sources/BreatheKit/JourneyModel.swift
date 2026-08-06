@@ -97,6 +97,14 @@ public final class JourneyModel {
         return previous.map { seconds > $0 } ?? true
     }
 
+    /// Deletes one session from the journal and refolds everything derived
+    /// from it — totals, streaks, the history strip — in the same breath, so
+    /// the screen never shows numbers that still count a row it no longer has.
+    public func delete(_ record: SessionRecord) async {
+        await sessions.remove(record.id)
+        await refresh()
+    }
+
     /// Fetches the current board, if the network allows.
     public func loadLeaderboard() async {
         leaderboard = .loading

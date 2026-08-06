@@ -57,6 +57,10 @@ public protocol SessionRecording: Sendable {
     func record(_ session: SessionRecord) async
     /// Every recorded session, oldest first.
     func recordedSessions() async -> [SessionRecord]
+    /// Forgets a session for good: it leaves the list, the stats, and — via a
+    /// tombstone — stays gone through every later `merge`. The server's copy,
+    /// if one was synced, outlives this; see `FileSessionStore.remove`.
+    func remove(_ id: SessionRecord.ID) async
     /// Adds sessions this device does not hold, matching on `id`. The restore
     /// path: the identity survives a reinstall, so the server can hold history
     /// this file has lost.
