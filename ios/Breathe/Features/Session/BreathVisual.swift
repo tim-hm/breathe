@@ -23,7 +23,7 @@ struct BreathVisual: View {
             }
         }
         .frame(width: 260, height: 260)
-        .animation(.easeInOut(duration: 0.4), value: tint)
+        .animation(.easeInOut(duration: 0.4), value: isStill)
     }
 
     /// Slate blue while the breath is held, the goal's accent while it moves.
@@ -32,9 +32,16 @@ struct BreathVisual: View {
     /// making here: a hold is the one phase where nothing is scaling, so with
     /// haptics and audio off the colour is all that marks the change.
     private var tint: Color {
+        isStill ? Theme.Accent.still : accent
+    }
+
+    /// Whether the breath is being held. The animation keys off this rather than
+    /// off `tint`, so the crossfade runs on the two boundaries that change the
+    /// colour instead of on all four.
+    private var isStill: Bool {
         switch beat?.kind {
-        case .holdIn, .holdOut: Theme.Accent.hold
-        default: accent
+        case .holdIn, .holdOut: true
+        default: false
         }
     }
 

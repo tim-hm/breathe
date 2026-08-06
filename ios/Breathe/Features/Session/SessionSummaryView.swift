@@ -50,7 +50,7 @@ struct SessionSummaryView: View {
     }
 
     private var card: RoundedRectangle {
-        RoundedRectangle(cornerRadius: Theme.Spacing.standard)
+        RoundedRectangle(cornerRadius: Theme.Radius.card)
     }
 
     private var headline: String {

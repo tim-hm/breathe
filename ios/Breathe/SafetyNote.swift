@@ -24,7 +24,7 @@ struct SafetyNote: View {
             .font(font)
             .padding(Theme.Spacing.standard)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: Theme.Spacing.standard))
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
             // One VoiceOver element: the icon says nothing the words do not.
             .accessibilityElement(children: .combine)
         }

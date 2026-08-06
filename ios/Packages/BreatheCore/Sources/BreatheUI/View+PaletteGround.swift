@@ -15,6 +15,11 @@ public extension View {
     /// inside the list, so the row itself carries `.listRowBackground(.clear)`.
     func paletteGround() -> some View {
         scrollContentBackground(.hidden)
+            // Expanded first, because a screen's empty and failed states are a
+            // spinner and a message — and a background painted behind those
+            // alone would ground a rectangle in the middle of a system-black
+            // screen instead of the screen.
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Theme.Surface.ground)
     }
 }

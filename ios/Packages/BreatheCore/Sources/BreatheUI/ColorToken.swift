@@ -23,7 +23,7 @@ enum ColorToken: String, CaseIterable {
     case accentSpark = "Accent/Spark"
     case accentRestore = "Accent/Restore"
     case accentAttend = "Accent/Attend"
-    case accentHold = "Accent/Hold"
+    case accentStill = "Accent/Still"
     case accentCaution = "Accent/Caution"
 
     var color: Color {

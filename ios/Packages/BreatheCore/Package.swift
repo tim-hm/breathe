@@ -48,9 +48,11 @@ let package = Package(
         // that mapping a `TechniqueGoal` to an accent remains the feature's job.
         //
         // The asset catalogue holds every colour, each with a light and a dark
-        // value. `.process` is what runs it through actool and puts the compiled
-        // result in `Bundle.module`; without the declaration SwiftPM treats the
-        // directory as a stray file and the colours resolve to nothing.
+        // value. Declaring it is what puts it in `Bundle.module` at all; without
+        // this SwiftPM treats the directory as a stray file and every colour
+        // resolves to nothing. Note that only Xcode compiles a catalogue with
+        // actool — `swift build` copies it verbatim, which is why the palette's
+        // test reads the JSON rather than resolving a `Color`.
         .target(name: "BreatheUI", resources: [.process("Colors.xcassets")]),
         // Depends on BreatheAPI as well as BreatheKit because it builds proto
         // messages to feed the decoders. That is the boundary being tested, so

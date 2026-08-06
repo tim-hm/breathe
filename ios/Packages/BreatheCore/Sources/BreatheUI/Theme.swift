@@ -24,6 +24,13 @@ public enum Theme {
         public static let loose: CGFloat = 24
     }
 
+    /// Corner radii. Its own scale rather than a reach into `Spacing`: a radius
+    /// that borrows a gap's value is tied to it by coincidence, and retuning the
+    /// space between two labels would reshape every card on the way past.
+    public enum Radius {
+        public static let card: CGFloat = 16
+    }
+
     /// The grounds content sits on. A screen that draws its own background — the
     /// session player, which covers the system's — picks from here rather than
     /// leaving whatever the presentation happened to put behind it.
@@ -68,11 +75,11 @@ public enum Theme {
         public static let restore = ColorToken.accentRestore.color
         /// Deep teal — attention held on something.
         public static let attend = ColorToken.accentAttend.color
-        /// Slate blue — a breath being held. The one accent that belongs to a
-        /// phase rather than a goal, and the same shift the site's orb makes.
-        public static let hold = ColorToken.accentHold.color
-        /// Burnt amber — a caution worth reading, distinct from `spark` so the
-        /// energising accent never reads as a warning.
+        /// Slate blue — suspension, nothing moving. Named for the feeling like
+        /// the rest: the feature decides which of its moments are still ones.
+        public static let still = ColorToken.accentStill.color
+        /// Rust — a caution worth reading. Kept well round the wheel from
+        /// `spark` so the energising accent never reads as a warning.
         public static let caution = ColorToken.accentCaution.color
     }
 }
