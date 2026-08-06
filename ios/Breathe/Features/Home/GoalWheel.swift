@@ -35,9 +35,8 @@ struct GoalWheel: UIViewRepresentable {
 
         // Written back without animation: this is state restoration and the
         // guard against a selection the catalogue no longer serves, not a spin.
-        if let row = goals.firstIndex(of: selection),
-           picker.selectedRow(inComponent: 0) != row
-        {
+        guard let row = goals.firstIndex(of: selection) else { return }
+        if picker.selectedRow(inComponent: 0) != row {
             picker.selectRow(row, inComponent: 0, animated: false)
         }
     }
