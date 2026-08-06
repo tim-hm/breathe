@@ -1,9 +1,12 @@
 version: v2
 inputs:
   - directory: .
+# Plugin versions are pinned and kept in lockstep with the runtime versions in
+# ios/Packages/BreatheCore/Package.resolved: unpinned, a remote plugin release
+# would fail check:generated's byte-exact diff on an untouched tree.
 plugins:
   # Message types and enums.
-  - remote: buf.build/apple/swift
+  - remote: buf.build/apple/swift:v1.38.1
     out: ../ios/Packages/BreatheCore/Sources/BreatheAPI/Generated
     opt:
       - Visibility=Public
@@ -11,7 +14,7 @@ plugins:
   # Service clients for the Connect runtime. `GenerateAsyncMethods` gives the
   # async/await surface; the callback-based one is dead weight in a
   # structured-concurrency codebase.
-  - remote: buf.build/connectrpc/swift
+  - remote: buf.build/connectrpc/swift:v1.2.3
     out: ../ios/Packages/BreatheCore/Sources/BreatheAPI/Generated
     opt:
       - Visibility=Public

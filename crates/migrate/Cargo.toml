@@ -3,6 +3,8 @@ name = "migrate"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
+# Proprietary — never meant for crates.io, so fence off `cargo publish`.
+publish = false
 
 [dependencies]
 anyhow.workspace = true

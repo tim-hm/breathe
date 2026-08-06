@@ -1,23 +1,13 @@
-//! The breathe API.
+//! Process entry point for the breathe API.
 //!
-//! Serves gRPC-Web (the domain API, consumed by the iOS client) and a small JSON
-//! surface (`/health`, `/about`) on a single port. Boot order is: configuration,
-//! telemetry, database pool, routers, serve.
-
-mod config;
-mod features;
-mod grpc;
-mod http;
-mod obs;
-mod proto;
-mod state;
+//! Boot order is: configuration, telemetry, database pool, router, serve. The
+//! router itself is `api::build_app` so that the integration tests exercise the
+//! same stack this binary serves.
 
 use anyhow::{Context, Result};
+use api::state::AppState;
+use api::{config, http, obs};
 use sqlx::postgres::PgPoolOptions;
-use tower_http::cors::{Any, CorsLayer};
-use tower_http::trace::TraceLayer;
-
-use crate::state::AppState;
 
 /// Sized for a local machine and a small deployment. Postgres' own default
 /// `max_connections` is 100, so this leaves ample room for the migrate binary
@@ -47,22 +37,9 @@ async fn main() -> Result<()> {
         .context("failed to connect to the database — is `mise run dev:db` running?")?;
     tracing::info!("connected to the database");
 
-    let port = config.port;
-    let cors = cors_layer(config.is_local());
     let state = AppState::new(pool, config);
-
-    // gRPC paths are `/breathe.v1.<Service>/<Method>` and can never collide with
-    // the JSON routes (`/health`, `/about`), so HTTP matches first and anything
-    // unmatched falls through to gRPC.
-    let grpc_router = grpc::build_services(&state)?
-        .prepare()
-        .into_axum_router()
-        .layer(tonic_web::GrpcWebLayer::new());
-
-    let app = http::router(state)
-        .fallback_service(grpc_router)
-        .layer(cors)
-        .layer(TraceLayer::new_for_http());
+    let port = state.config.port;
+    let app = api::build_app(state)?;
 
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", port))
         .await
@@ -70,31 +47,44 @@ async fn main() -> Result<()> {
     tracing::info!(port, "listening");
 
     axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
         .await
         .context("server terminated unexpectedly")?;
 
     Ok(())
 }
 
-/// gRPC-Web carries its status out-of-band in the `grpc-status` and
-/// `grpc-message` headers, so a client cannot read a response — even a
-/// successful one — unless those headers are explicitly exposed. Omitting them
-/// produces a request that succeeds on the wire and fails in the client.
-fn cors_layer(is_local: bool) -> CorsLayer {
-    let layer = CorsLayer::new()
-        .allow_methods(Any)
-        .allow_headers(Any)
-        .expose_headers([
-            axum::http::HeaderName::from_static("grpc-status"),
-            axum::http::HeaderName::from_static("grpc-message"),
-        ]);
+/// Resolves when the process is asked to stop: SIGINT (^C in a terminal) or
+/// SIGTERM (what container runtimes and supervisors send first). Handing this
+/// to `with_graceful_shutdown` lets in-flight requests drain instead of being
+/// severed mid-response.
+///
+/// A handler that fails to install logs and parks forever rather than
+/// panicking — the other signal (or SIGKILL) still ends the process.
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        if let Err(error) = tokio::signal::ctrl_c().await {
+            tracing::error!(%error, "failed to install the SIGINT handler");
+            std::future::pending::<()>().await;
+        }
+    };
 
-    if is_local {
-        layer.allow_origin(Any)
-    } else {
-        // Deployed origins are not known yet. Refusing every cross-origin
-        // request is the correct placeholder: the iOS client is not a browser
-        // and sends no Origin, so this restricts nothing it needs.
-        layer
+    let terminate = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut signal) => {
+                signal.recv().await;
+            }
+            Err(error) => {
+                tracing::error!(%error, "failed to install the SIGTERM handler");
+                std::future::pending::<()>().await;
+            }
+        }
+    };
+
+    tokio::select! {
+        () = ctrl_c => {},
+        () = terminate => {},
     }
+
+    tracing::info!("shutdown signal received, draining in-flight requests");
 }

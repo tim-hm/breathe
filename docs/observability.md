@@ -29,11 +29,11 @@ The test for `info`: would you still want this line after a million requests? "l
 
 ## Named patterns
 
-**Log before converting.** The `define_feature_error!` macro (`crates/api/src/errors.rs`) logs server-side faults at the point of conversion to `tonic::Status`. This is the whole reason it is a macro rather than a hand-written enum per feature: the client receives an opaque `internal` status, so a conversion that stays silent leaves the failure unreproducible from outside the process. The sqlx error is deliberately *not* forwarded to the client — it can carry table and column names — and the log is where that detail belongs.
+**Log before converting.** Each feature's error enum logs server-side faults in its `From<…> for tonic::Status` impl, at the point of conversion — `crates/api/src/features/technique/errors.rs` is the pattern. The client receives an opaque `internal` status, so a conversion that stays silent leaves the failure unreproducible from outside the process. The sqlx error is deliberately *not* forwarded to the client — it can carry table and column names — and the log is where that detail belongs.
 
 **Correlation ID.** When an HTTP handler returns a failure to a caller, mint a `cuid2`, log it alongside the cause, and return it in the body as `request_id`. A user-reported failure then resolves to one log line instead of a timestamp and a guess. No handler needs this yet — `/health` and `/about` are infallible — so the helper does not exist. Write it with the first fallible route rather than in advance.
 
-**Level escalation.** A retry loop logs each attempt at `debug` and only the final failure at `warn` or `error`. `connect_with_retry` in `crates/migrate/src/main.rs` is the example: a slow Postgres boot is normal, and ten `warn` lines for a situation that resolved itself trains people to ignore warnings.
+**Level escalation.** A retry loop logs each attempt at `debug` and only the final failure at `warn` or `error`. No hand-written retry loop exists yet — `crates/migrate/src/main.rs` deliberately leans on sqlx's pool backoff instead — but the first one should follow this shape: a slow Postgres boot is normal, and ten `warn` lines for a situation that resolved itself trains people to ignore warnings.
 
 ## Format
 

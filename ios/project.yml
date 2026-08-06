@@ -43,6 +43,10 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: xyz.holmie.breathe
         GENERATE_INFOPLIST_FILE: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # The catalogue's AccentColor mirrors Theme.Accent.settle — the asset is
+        # what system controls tint with; the Theme constant is what views use.
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_CFBundleDisplayName: Breathe
         # Portrait only. A breathing session is held still in one hand; a

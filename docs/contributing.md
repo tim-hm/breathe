@@ -61,6 +61,8 @@ mise run check      # 3. full validation
 
 `mise run check` covers Rust, protobuf, markdown, and doc links. It deliberately excludes `check:swift` and `test:swift`, which need the Xcode toolchain — run those yourself when touching `ios/`.
 
+CI (`.github/workflows/checks.yml`) runs the formatting and lint subset on every push to `main` and every pull request: `check:rs`, `check:proto`, `check:md`, and `check:doc-links` on Linux, plus `check:swift` on macOS. Tests and the drift checks (`check:sqlx`, `check:generated`) remain local — CI has neither a database nor BSR access — so the full gate is still `mise run check` before committing.
+
 ## Common tasks
 
 | Intent | Command |
@@ -77,6 +79,8 @@ mise run check      # 3. full validation
 **A stale `DATABASE_URL` in your shell.** If you have used the `connect` repo in the same terminal, `DATABASE_URL` is exported and points at its database. Running `cargo run -p migrate` directly then targets the wrong cluster; sqlx aborts before applying anything, but the error is confusing. Always go through `mise run`, which supplies its own.
 
 **The Xcode project is generated.** `ios/Breathe.xcodeproj` is gitignored and rebuilt from `ios/project.yml`. Changing build settings in Xcode's UI works until the next `mise run ios:gen` throws it away — make the change in `project.yml` instead.
+
+**Device builds need signing; the simulator doesn't.** `project.yml` deliberately carries no `DEVELOPMENT_TEAM`, so simulator builds work on any machine with no Apple ID. To run on a physical iPhone, set your team in Xcode's Signing & Capabilities tab — and expect the previous rule to apply: the next `mise run ios:gen` discards it. If device builds become routine, add `DEVELOPMENT_TEAM` to `project.yml`.
 
 **Regenerated Swift is committed.** After editing a `.proto`, `mise run generate:proto` rewrites files under `ios/Packages/BreatheCore/Sources/BreatheAPI/Generated/`. Commit them; the Xcode build does not run `buf`.
 

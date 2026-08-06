@@ -46,6 +46,14 @@ struct TechniqueDecodingTests {
         }
     }
 
+    /// The phase twin of the goal test above — same boundary, same rule.
+    @Test("An unspecified phase kind is rejected rather than defaulted")
+    func rejectsAnUnspecifiedPhaseKind() {
+        #expect(throws: TechniqueRepositoryError.self) {
+            try Technique(proto: protoTechnique(phases: [Self.phase(.unspecified, 4000)]))
+        }
+    }
+
     /// A phase-less technique would leave the player with an empty loop and no
     /// segment to advance to.
     @Test("A technique with no phases is rejected")
