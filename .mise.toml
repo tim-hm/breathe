@@ -46,6 +46,9 @@ xcodegen = { version = "latest", os = ["macos"] }
 swiftlint = { version = "latest", os = ["macos"] }
 swiftformat = { version = "latest", os = ["macos"] }
 
+# Backs the infra:* tasks. OpenTofu, not Terraform — see infra/versions.tf.
+opentofu = "latest"
+
 [env]
 # Global so every cargo invocation reads the committed .sqlx cache rather than
 # needing a live database. `generate:sqlx` overrides it, because refreshing the
@@ -266,12 +269,50 @@ description = "Serve the marketing one-pager locally"
 # 18102: next free port in the 18100–18199 block (API 18100, Postgres 18101).
 run = "pnpm dlx serve --listen 18102 {{config_root}}/web"
 
+# infra: the AWS deployment, defined in infra/ and applied deliberately —
+# nothing below runs from `check` or CI, and only infra:apply touches AWS.
+
+[tasks."infra:init"]
+description = "Initialise OpenTofu (downloads providers and modules; no AWS access)"
+dir = "{{config_root}}/infra"
+run = "tofu init"
+
+[tasks."infra:plan"]
+description = "Preview infrastructure changes (needs AWS credentials, changes nothing)"
+dir = "{{config_root}}/infra"
+run = ["tofu fmt -check -diff", "tofu validate", "tofu plan"]
+
+[tasks."infra:apply"]
+description = "Apply infrastructure changes to AWS"
+dir = "{{config_root}}/infra"
+run = "tofu apply"
+
+[tasks.deploy]
+description = "Build the release image, ship it to the box over SSH, migrate, restart"
+# No registry: one box makes `docker save | ssh docker load` the whole supply
+# chain. The host derives from the infra state rather than an env var, so there
+# is exactly one answer to where production is.
+run = ["docker build --platform linux/arm64 -t breathe-api:latest .", """
+  set -eu
+  host="ubuntu@$(tofu -chdir=infra output -raw elastic_ip)"
+  docker save breathe-api:latest | gzip | ssh "$host" 'gunzip | docker load'
+  rsync -az infra/box/ "$host":/srv/breathe/
+  ssh "$host" 'cd /srv/breathe && docker compose --profile tools run --rm migrate && docker compose up -d --remove-orphans'
+  """]
+
 # ios
 
 [tasks."ios:gen"]
 description = "Generate Breathe.xcodeproj from ios/project.yml"
 dir = "{{config_root}}/ios"
-run = "xcodegen generate"
+# The plutil step bakes this Mac's Bonjour address into the freshly generated
+# (gitignored) Info.plist. Debug builds fall back to it when the
+# BREATHE_API_BASE_URL environment variable is absent — which is every launch
+# from the home screen, where no debugger means no environment — so a device
+# build keeps working untethered. The Bonjour name rather than the LAN IP
+# because it survives a DHCP renewal, and derives per machine with no config:
+# whoever generates the project gets their own Mac baked in.
+run = ["xcodegen generate", 'plutil -replace BreatheAPIBaseURL -string "http://$(scutil --get LocalHostName).local:18100" Breathe/Info.plist']
 
 [tasks."ios:open"]
 description = "Generate the project and open it in Xcode"

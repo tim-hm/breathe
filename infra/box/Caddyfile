@@ -1,0 +1,10 @@
+# TLS termination and the only public entrance. Caddy provisions and renews
+# the certificate itself via ACME; port 80 exists for the challenge and the
+# HTTPS redirect. gRPC-Web is plain HTTP POST underneath, so an ordinary
+# reverse proxy is all the transport needs.
+#
+# The hostname's A record must point at the elastic_ip output of infra/ before
+# first boot, or certificate issuance fails and retries with backoff.
+api.breathe.holmie.xyz {
+	reverse_proxy api:18100
+}

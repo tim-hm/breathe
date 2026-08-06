@@ -1,0 +1,10 @@
+# The image builds only the Rust workspace: keep the client apps, docs, and
+# especially the multi-gigabyte target/ out of the build context.
+target/
+ios/
+web/
+docs/
+infra/
+.git/
+.github/
+.codegraph/

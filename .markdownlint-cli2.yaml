@@ -3,6 +3,8 @@ globs:
   - "!**/.build/**"
   - "!ios/Packages/*/.build/**"
   - "!target/**"
+  # OpenTofu's downloaded modules — third-party sources, not ours to lint.
+  - "!infra/.terraform/**"
 
 config:
   # Table shape belongs to `vp fmt` (mise run fmt:text). Two tools with opinions

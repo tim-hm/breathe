@@ -8,6 +8,7 @@
 | [transport.md](transport.md)           | Before touching `proto/`, or when a request fails in the client but not the server. |
 | [testing.md](testing.md)               | Before writing a test — particularly the "what not to test" list.                   |
 | [observability.md](observability.md)   | Before adding a log line.                                                           |
+| [deployment.md](deployment.md)         | Before touching `infra/` or shipping a release.                                     |
 
 ## Product
 
