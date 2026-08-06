@@ -46,10 +46,16 @@ let package = Package(
         .target(name: "BreatheKit", dependencies: ["BreatheAPI"]),
         // No dependencies, ever. The design system stays free of domain types so
         // that mapping a `TechniqueGoal` to an accent remains the feature's job.
-        .target(name: "BreatheUI"),
+        //
+        // The asset catalogue holds every colour, each with a light and a dark
+        // value. `.process` is what runs it through actool and puts the compiled
+        // result in `Bundle.module`; without the declaration SwiftPM treats the
+        // directory as a stray file and the colours resolve to nothing.
+        .target(name: "BreatheUI", resources: [.process("Colors.xcassets")]),
         // Depends on BreatheAPI as well as BreatheKit because it builds proto
         // messages to feed the decoders. That is the boundary being tested, so
         // reaching across it here is the point rather than a leak.
         .testTarget(name: "BreatheKitTests", dependencies: ["BreatheKit", "BreatheAPI"]),
+        .testTarget(name: "BreatheUITests", dependencies: ["BreatheUI"]),
     ]
 )
