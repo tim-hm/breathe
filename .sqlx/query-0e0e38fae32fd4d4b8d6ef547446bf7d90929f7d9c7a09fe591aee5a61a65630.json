@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM sessions\n         WHERE user_id = $1 AND client_session_id = ANY($2::uuid[])",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0e0e38fae32fd4d4b8d6ef547446bf7d90929f7d9c7a09fe591aee5a61a65630"
+}

@@ -111,25 +111,25 @@ pub async fn insert_sessions(
 /// so a delete keyed on the id alone would let one caller erase another's
 /// history by sending a value they had no way of knowing was in use.
 ///
-/// `RETURNING` counts the rows that really existed, which is what tells a client
-/// whose tombstone list has run ahead of the server that there was nothing left
-/// to forget.
+/// The affected-row count is what tells a client whose tombstone list has run
+/// ahead of the server that there was nothing left to forget — and unlike
+/// `insert_sessions`, which needs `RETURNING` to learn *which* rows were new,
+/// nothing here reads the ids back.
 pub async fn delete_sessions(
     pool: &PgPool,
     user_id: Uuid,
     client_session_ids: &[Uuid],
-) -> Result<usize, JourneyError> {
-    let deleted = sqlx::query_scalar!(
+) -> Result<u64, JourneyError> {
+    let deleted = sqlx::query!(
         "DELETE FROM sessions
-         WHERE user_id = $1 AND client_session_id = ANY($2::uuid[])
-         RETURNING client_session_id",
+         WHERE user_id = $1 AND client_session_id = ANY($2::uuid[])",
         user_id,
         client_session_ids
     )
-    .fetch_all(pool)
+    .execute(pool)
     .await?;
 
-    Ok(deleted.len())
+    Ok(deleted.rows_affected())
 }
 
 pub async fn totals(pool: &PgPool, user_id: Uuid) -> Result<TotalsRow, JourneyError> {
