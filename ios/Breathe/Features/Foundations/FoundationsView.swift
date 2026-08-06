@@ -34,6 +34,7 @@ struct FoundationsView: View {
             List {
                 ForEach(topics) { topic in
                     VStack(alignment: .leading, spacing: Theme.Spacing.close) {
+                        FoundationIllustration(slug: topic.slug)
                         Text(topic.question)
                             .font(.headline)
                         Text(topic.answer)
