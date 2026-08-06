@@ -68,12 +68,46 @@ public enum ReminderIntensity: String, Sendable, CaseIterable, Codable, Identifi
     }
 }
 
+/// The decade somebody was born in.
+///
+/// Bands by birth decade rather than by age, so a person's band never changes
+/// under them. Optional everywhere: it exists so the age-band leaderboard can
+/// compare like with like, and nobody has to answer it to use the app.
+public enum BirthYearBand: String, Sendable, CaseIterable, Codable, Identifiable {
+    case before1960
+    case sixties
+    case seventies
+    case eighties
+    case nineties
+    case noughties
+    case twentyTensOrLater
+
+    public var id: Self {
+        self
+    }
+
+    /// Phrased as a decade rather than as an age bracket — "born in the 1980s"
+    /// is a fact about someone, where "aged 36–45" is a label being applied to
+    /// them.
+    public var title: String {
+        switch self {
+        case .before1960: "Before 1960"
+        case .sixties: "The 1960s"
+        case .seventies: "The 1970s"
+        case .eighties: "The 1980s"
+        case .nineties: "The 1990s"
+        case .noughties: "The 2000s"
+        case .twentyTensOrLater: "2010 or later"
+        }
+    }
+}
+
 /// What someone told the app about themselves.
 ///
-/// Answers, not derived state: streaks and totals arrive in M5 and live
-/// elsewhere, so this stays something a person would recognise as the things
-/// they typed. `Codable` because it is kept locally as well as on the server —
-/// onboarding has to finish with no network.
+/// Answers, not derived state: streaks and totals are computed from the sessions
+/// on this device (see `JourneyStats`), so this stays something a person would
+/// recognise as the things they typed. `Codable` because it is kept locally as
+/// well as on the server — onboarding has to finish with no network.
 public struct Profile: Sendable, Equatable, Codable {
     /// What they are here for, in the order they picked. Empty is a real
     /// answer: someone can skip the question, and it does not mean "all of
@@ -84,12 +118,27 @@ public struct Profile: Sendable, Equatable, Codable {
     public var reminderIntensity: ReminderIntensity
     /// Why they are here, in their own words. Empty is the normal state.
     public var intentNote: String
+    /// What the leaderboards call this person, and the whole of the opt-in to
+    /// them. Empty means invisible to everyone else, which is where every
+    /// profile starts.
+    ///
+    /// The server owns the final value — it trims, screens, and suffixes a name
+    /// somebody already holds — so what comes back from a sync is what other
+    /// people will see and may not be what was typed.
+    public var displayName: String
+    /// `nil` until they say, which most people never will.
+    public var birthYearBand: BirthYearBand?
 
     /// How long a note may be, in Unicode scalars — the unit the server's
     /// validation and the database `CHECK` both count. Held here so the field
     /// can stop accepting input rather than letting someone write past the
     /// point where saving would fail.
     public static let maxIntentNoteLength = 500
+
+    /// The same rule for a display name, in the same unit. The server also
+    /// insists on a minimum of two.
+    public static let maxDisplayNameLength = 24
+    public static let minDisplayNameLength = 2
 
     /// A profile of unanswered questions — what a person has before onboarding,
     /// and what the server returns for an identity that has never written one.
@@ -104,11 +153,37 @@ public struct Profile: Sendable, Equatable, Codable {
         goals: [TechniqueGoal],
         experienceLevel: ExperienceLevel?,
         reminderIntensity: ReminderIntensity,
-        intentNote: String
+        intentNote: String,
+        displayName: String = "",
+        birthYearBand: BirthYearBand? = nil
     ) {
         self.goals = goals
         self.experienceLevel = experienceLevel
         self.reminderIntensity = reminderIntensity
         self.intentNote = intentNote
+        self.displayName = displayName
+        self.birthYearBand = birthYearBand
+    }
+
+    /// Written by hand for one reason: the synthesised decoder throws on a
+    /// missing key even where the property has a default, so a profile stored
+    /// before `displayName` existed would fail to decode and be discarded —
+    /// silently asking somebody their onboarding questions again after an
+    /// update. Every field is therefore optional on the way in.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        goals = try container.decodeIfPresent([TechniqueGoal].self, forKey: .goals) ?? []
+        experienceLevel = try container.decodeIfPresent(
+            ExperienceLevel.self,
+            forKey: .experienceLevel
+        )
+        reminderIntensity = try container.decodeIfPresent(
+            ReminderIntensity.self,
+            forKey: .reminderIntensity
+        ) ?? .never
+        intentNote = try container.decodeIfPresent(String.self, forKey: .intentNote) ?? ""
+        displayName = try container.decodeIfPresent(String.self, forKey: .displayName) ?? ""
+        birthYearBand = try container.decodeIfPresent(BirthYearBand.self, forKey: .birthYearBand)
     }
 }

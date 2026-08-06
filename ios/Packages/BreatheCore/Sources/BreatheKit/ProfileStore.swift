@@ -77,6 +77,20 @@ public final class ProfileStore {
         hasCompletedOnboarding = true
     }
 
+    /// Stores a change made after onboarding — the leaderboard name, the birth
+    /// year band — and pushes it if it can.
+    ///
+    /// Unlike `complete(with:)` this does await the upload, because the one
+    /// screen that calls it is showing the person a name the server may change
+    /// under them: a taken name comes back suffixed, and they should see that
+    /// rather than discover it on a board later. A failure is still not an
+    /// error — the flag stays set and the next launch retries.
+    public func save(_ profile: Profile) async {
+        self.profile = profile
+        isPendingSync = true
+        await syncIfNeeded()
+    }
+
     /// Pushes anything the server has not seen.
     ///
     /// Safe to call on every launch and after every change: it returns

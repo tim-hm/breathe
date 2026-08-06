@@ -76,7 +76,9 @@ extension Profile {
             goals: goals,
             experienceLevel: ExperienceLevel.decoded(from: proto.experienceLevel),
             reminderIntensity: reminderIntensity,
-            intentNote: proto.intentNote
+            intentNote: proto.intentNote,
+            displayName: proto.displayName,
+            birthYearBand: BirthYearBand.decoded(from: proto.birthYearBand)
         )
     }
 
@@ -86,7 +88,43 @@ extension Profile {
         message.experienceLevel = experienceLevel?.proto ?? .unspecified
         message.reminderIntensity = reminderIntensity.proto
         message.intentNote = intentNote
+        message.displayName = displayName
+        message.birthYearBand = birthYearBand?.proto ?? .unspecified
         return message
+    }
+}
+
+extension BirthYearBand {
+    /// Two non-answers, one initialiser cannot report both — the same shape as
+    /// `ExperienceLevel.decoded(from:)`: `nil` means they did not say, and
+    /// throwing means a band added to the proto after this app shipped.
+    static func decoded(from proto: Breathe_V1_BirthYearBand) throws -> Self? {
+        switch proto {
+        case .bornBefore1960: .before1960
+        case .born1960S: .sixties
+        case .born1970S: .seventies
+        case .born1980S: .eighties
+        case .born1990S: .nineties
+        case .born2000S: .noughties
+        case .born2010OrLater: .twentyTensOrLater
+        case .unspecified: nil
+        case .UNRECOGNIZED:
+            throw ProfileRepositoryError.malformedResponse(
+                "unrecognised birth year band `\(proto)`"
+            )
+        }
+    }
+
+    var proto: Breathe_V1_BirthYearBand {
+        switch self {
+        case .before1960: .bornBefore1960
+        case .sixties: .born1960S
+        case .seventies: .born1970S
+        case .eighties: .born1980S
+        case .nineties: .born1990S
+        case .noughties: .born2000S
+        case .twentyTensOrLater: .born2010OrLater
+        }
     }
 }
 

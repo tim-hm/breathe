@@ -1,71 +1,48 @@
 import Foundation
-import os
 
 /// Session history as one JSON file.
 ///
-/// An actor because the write is read-modify-write and a session ending while a
-/// future sync is draining the file must not interleave.
-///
-/// Rewriting the whole file per session is the deliberate trade: a person
-/// records single-digit sessions a day, the file stays kilobytes for years, and
-/// an append-only format would need its own reader before M5's sync could batch
-/// what it finds. Revisit when there is enough history for that to be false.
+/// An actor because the write is read-modify-write and a session ending while
+/// the sync queue is draining the file must not interleave.
 public actor FileSessionStore: SessionRecording {
-    /// The running app's subsystem, not a hard-coded bundle id: this module is
-    /// shared, and M9's watch app is a second bundle that should log as itself.
-    private static let logger = Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "BreatheKit",
-        category: "session-store"
-    )
-
-    private let fileURL: URL
+    private let file: JSONFileStore<SessionRecord>
 
     /// - Parameter directory: where `sessions.json` lives. Defaults to
     ///   Application Support — user data the system backs up and never purges,
     ///   unlike Caches. Tests pass a temporary directory.
     public init(directory: URL = .applicationSupportDirectory) {
-        fileURL = directory.appending(path: "sessions.json")
+        file = JSONFileStore(
+            directory: directory,
+            fileName: "sessions.json",
+            category: "session-store"
+        )
     }
 
     public func record(_ session: SessionRecord) async {
-        var sessions = await recordedSessions()
+        var sessions = file.load()
         sessions.append(session)
+        file.save(sessions)
+    }
 
-        do {
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    /// Adds sessions the server holds and this device does not, skipping any
+    /// already here.
+    ///
+    /// The restore path, and the one place history flows backwards: the identity
+    /// lives in the Keychain and survives a reinstall, so somebody who deletes
+    /// the app and comes back has a server full of sessions and an empty file.
+    /// Matching on id is what makes this safe to call after every sync.
+    public func merge(_ sessions: [SessionRecord]) async {
+        var existing = file.load()
+        let known = Set(existing.map(\.id))
+        let missing = sessions.filter { !known.contains($0.id) }
+        guard !missing.isEmpty else { return }
 
-            try FileManager.default.createDirectory(
-                at: fileURL.deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
-            // Atomic, so a crash mid-write leaves the previous history rather
-            // than a truncated file that reads back as no history at all.
-            try encoder.encode(sessions).write(to: fileURL, options: .atomic)
-        } catch {
-            Self.logger.error("failed to record session: \(error.localizedDescription)")
-        }
+        existing.append(contentsOf: missing)
+        existing.sort { $0.startedAt < $1.startedAt }
+        file.save(existing)
     }
 
     public func recordedSessions() async -> [SessionRecord] {
-        // No file is the normal state until the first session ends, so it is
-        // checked rather than caught — an expected condition should not spend
-        // every launch before the first session logging an error.
-        guard FileManager.default.fileExists(atPath: fileURL.path(percentEncoded: false)) else {
-            return []
-        }
-
-        do {
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            return try decoder.decode([SessionRecord].self, from: Data(contentsOf: fileURL))
-        } catch {
-            // Unreadable history is not worth failing a session over, and it is
-            // not worth deleting either: leaving the file alone keeps whatever
-            // it holds available to a later version that can read it.
-            Self.logger.error("failed to read session history: \(error.localizedDescription)")
-            return []
-        }
+        file.load()
     }
 }
