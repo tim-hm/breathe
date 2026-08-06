@@ -7,8 +7,12 @@
 //! `tests/e2e` can drive the exact router the binary serves. A harness that
 //! assembled its own router would verify a stack no deployment runs.
 
-mod features;
 mod grpc;
+
+/// Public so the composition root and `tests/e2e` can name the assistant's
+/// model seam — the one dependency this crate takes that a caller has to
+/// choose. Nothing else outside the crate reaches in here.
+pub mod features;
 
 pub mod config;
 pub mod http;

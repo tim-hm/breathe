@@ -5,6 +5,7 @@
 //! same stack this binary serves.
 
 use anyhow::{Context, Result};
+use api::features::assistant;
 use api::state::AppState;
 use api::{config, http, obs};
 use sqlx::postgres::PgPoolOptions;
@@ -37,7 +38,11 @@ async fn main() -> Result<()> {
         .context("failed to connect to the database — is `mise run dev:db` running?")?;
     tracing::info!("connected to the database");
 
-    let state = AppState::new(pool, config);
+    // The composition root's one real choice: which side of the assistant's
+    // model seam this process runs. Logged there, either way.
+    let assistant = assistant::model::from_config(&config);
+
+    let state = AppState::new(pool, config, assistant);
     let port = state.config.port;
     let app = api::build_app(state)?;
 

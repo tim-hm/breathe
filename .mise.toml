@@ -50,6 +50,14 @@ swiftformat = { version = "latest", os = ["macos"] }
 opentofu = "latest"
 
 [env]
+# The one secret this repo takes, and the only reason a dotenv file exists here
+# at all: OPENROUTER_API_KEY, the assistant's provider key. `.env` is gitignored
+# and optional — absent, the API boots with the assistant answering from its
+# rule-based fallback, which is what CI and a fresh clone get. `redact` keeps
+# the value out of `mise env` and task output; nothing else should ever print
+# it.
+_.file = { path = ".env", redact = true }
+
 # Global so every cargo invocation reads the committed .sqlx cache rather than
 # needing a live database. `generate:sqlx` overrides it, because refreshing the
 # cache is precisely the operation that must talk to a real server.
