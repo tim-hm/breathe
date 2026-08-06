@@ -11,25 +11,20 @@ import SwiftUI
 /// offers the technique this person last used towards it, which is as much
 /// context as an on-device rule should claim before M6.
 struct HomeView: View {
-    @State private var model: TechniqueListModel
-
-    private let sessions: any SessionRecording
+    /// The catalogue the composition root owns and every tab shares.
+    let model: TechniqueListModel
+    let sessions: any SessionRecording
 
     @Environment(SessionSettings.self) private var settings
 
     /// What the wheel points at. Set once the catalogue lands — before then
     /// there is no goal known to have a technique behind it.
     @State private var goal: TechniqueGoal?
-    /// Recorded history, oldest first. Refreshed on appear as well as on
-    /// load, because a session finished on a pushed screen has changed what
-    /// to offer by the time the person pops back here.
+    /// Recorded history, oldest first. Re-read on every appearance, because a
+    /// session finished on a pushed screen has changed what to offer by the
+    /// time the person pops back here.
     @State private var history: [SessionRecord] = []
     @State private var started: StartedSession?
-
-    init(model: TechniqueListModel, sessions: any SessionRecording) {
-        _model = State(wrappedValue: model)
-        self.sessions = sessions
-    }
 
     var body: some View {
         NavigationStack {
@@ -44,7 +39,6 @@ struct HomeView: View {
         }
         .task {
             await model.load()
-            history = await sessions.recordedSessions()
             settleGoal()
         }
         .onAppear {
@@ -204,7 +198,13 @@ struct HomeView: View {
     /// repeat functionality: come back and the wheel is where you left it.
     private func wheelBinding(over goals: [TechniqueGoal]) -> Binding<TechniqueGoal> {
         Binding(
-            get: { goal.flatMap { goals.contains($0) ? $0 : nil } ?? goals.first ?? .calm },
+            get: {
+                if let goal, goals.contains(goal) {
+                    goal
+                } else {
+                    goals.first ?? .calm
+                }
+            },
             set: {
                 goal = $0
                 settings.lastGoal = $0

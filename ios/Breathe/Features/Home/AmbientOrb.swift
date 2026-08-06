@@ -19,30 +19,36 @@ struct AmbientOrb: View {
     private static let cycle = 6.0
 
     var body: some View {
-        TimelineView(.animation(paused: reduceMotion)) { context in
+        // Built out here rather than in the closure below, which runs at display
+        // refresh: nothing about the colours depends on the time, and the only
+        // thing that does is the one number the three scales share.
+        let core = RadialGradient(
+            colors: [accent.opacity(0.7), accent.opacity(0.15)],
+            center: .center,
+            startRadius: 4,
+            endRadius: 82
+        )
+        let outerRing = accent.opacity(0.15)
+        let innerRing = accent.opacity(0.3)
+
+        return TimelineView(.animation(paused: reduceMotion)) { context in
             let breath = reduceMotion
                 ? 1.0
                 : fullness(at: context.date.timeIntervalSinceReferenceDate)
+            let travel = 0.08 * breath
 
             ZStack {
                 Circle()
-                    .stroke(accent.opacity(0.15), lineWidth: 1)
-                    .scaleEffect(0.92 + 0.08 * breath)
+                    .stroke(outerRing, lineWidth: 1)
+                    .scaleEffect(0.92 + travel)
 
                 Circle()
-                    .stroke(accent.opacity(0.3), lineWidth: 1)
-                    .scaleEffect(0.73 + 0.08 * breath)
+                    .stroke(innerRing, lineWidth: 1)
+                    .scaleEffect(0.73 + travel)
 
                 Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [accent.opacity(0.7), accent.opacity(0.15)],
-                            center: .center,
-                            startRadius: 4,
-                            endRadius: 82
-                        )
-                    )
-                    .scaleEffect(0.50 + 0.08 * breath)
+                    .fill(core)
+                    .scaleEffect(0.50 + travel)
             }
         }
         .frame(width: 176, height: 176)

@@ -174,7 +174,7 @@ private enum RhythmGeometry {
                     path.move(to: end)
                     continue
                 }
-                if path.currentPoint == nil || path.currentPoint != start {
+                if path.currentPoint != start {
                     path.move(to: start)
                 }
 

@@ -23,9 +23,8 @@ struct JournalView: View {
                 .paletteGround()
                 .navigationTitle("Journal")
         }
-        .task { history = await sessions.recordedSessions() }
         // A session just finished on another tab is the first thing this
-        // screen should show on arrival.
+        // screen should show on arrival — which covers the first one too.
         .onAppear {
             Task { history = await sessions.recordedSessions() }
         }

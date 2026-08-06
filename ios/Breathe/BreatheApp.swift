@@ -9,11 +9,6 @@ struct BreatheApp: App {
     /// person is one identity across the whole app.
     private let identity: any UserIdentityStore = KeychainUserIdentityStore()
 
-    /// Built once, at the composition root, and handed down. Views receive a
-    /// `TechniqueReading` rather than constructing their own, so a preview or a
-    /// test can substitute one without touching the network.
-    private let techniques: any TechniqueReading
-
     /// One store for the whole app: every session ends up in the same file, and
     /// M5's sync has one place to drain.
     private let sessions: any SessionRecording = FileSessionStore()
@@ -31,7 +26,9 @@ struct BreatheApp: App {
     @State private var isOnboarding: Bool
 
     /// One catalogue model for every tab: home's wheel and the techniques list
-    /// are two views onto the same load.
+    /// are two views onto the same load. Built here, at the composition root,
+    /// so a preview or a test can substitute the reading behind it without
+    /// touching the network.
     @State private var catalogue: TechniqueListModel
 
     /// The basics, shared the same way — reference data loaded once.
@@ -42,7 +39,6 @@ struct BreatheApp: App {
         let baseURL = AppConfiguration.apiBaseURL
 
         let techniques = TechniqueRepository(baseURL: baseURL, identity: identity)
-        self.techniques = techniques
         _catalogue = State(wrappedValue: TechniqueListModel(techniques: techniques))
         _foundations = State(wrappedValue: FoundationsModel(topics: techniques))
 

@@ -4,11 +4,15 @@ import Foundation
 /// for techniques where the phase kind alone is not enough to follow — which
 /// nostril, for now.
 ///
-/// Keyed by slug, like the artwork and haptic patterns this app already pins
-/// to `Technique.slug`, and shape-checked against the technique it is asked
-/// about: a reseeded catalogue that reorders or regrows a technique's phases
-/// silently drops the hints rather than pinning "left nostril" to the wrong
-/// breath.
+/// Keyed by slug — the same key `SessionSettings` pins a person's dialled
+/// durations to, and the one the catalogue promises to keep stable across
+/// reseeds — and shape-checked against the technique it is asked about: a
+/// reseeded catalogue that reorders or regrows a technique's phases silently
+/// drops the hints rather than pinning "left nostril" to the wrong breath.
+///
+/// Client-side because the contract has nowhere to put it yet. Its home is a
+/// `hint` field on `breathe.v1.Phase`, seeded beside the durations; that
+/// change retires this table and its shape check together.
 public enum PhaseHints {
     /// Hints for `technique`, indexed `[stage][phase]` to match
     /// `SessionTimeline.Beat`, or nil where it has none. An entry can be nil
