@@ -7,11 +7,17 @@ import SwiftUI
 struct SessionView: View {
     @State private var model: SessionModel
 
+    /// Per-phase hint lines — which nostril — or nil for the techniques that
+    /// need none. Resolved once: the technique cannot change mid-session.
+    private let hints: [[String?]]?
+
+    @Environment(SessionSettings.self) private var settings
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
 
     init(model: SessionModel) {
         _model = State(wrappedValue: model)
+        hints = PhaseHints.hints(for: model.technique)
     }
 
     var body: some View {
@@ -122,17 +128,27 @@ struct SessionView: View {
                 BreathVisual(beat: beat, elapsed: elapsed, accent: model.technique.goal.accent)
                     .accessibilityHidden(true)
 
-                VStack(spacing: Theme.Spacing.close) {
-                    Text(beat?.kind.instruction ?? "")
-                        .font(.title2.weight(.medium))
-                    Text(secondsRemaining(in: beat, at: elapsed))
-                        .font(.system(.largeTitle, design: .rounded).weight(.light))
-                        .monospacedDigit()
-                        .foregroundStyle(Theme.Ink.secondary)
+                // Under Just the visuals the orb carries the session alone;
+                // VoiceOver still announces every phase either way.
+                if settings.guidance == .full {
+                    VStack(spacing: Theme.Spacing.close) {
+                        Text(beat?.kind.instruction ?? "")
+                            .font(.title2.weight(.medium))
+                        if let hint = hint(for: beat) {
+                            Text(hint)
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(model.technique.goal.accent)
+                        }
+                        Text(secondsRemaining(in: beat, at: elapsed))
+                            .font(.system(.largeTitle, design: .rounded).weight(.light))
+                            .monospacedDigit()
+                            .foregroundStyle(Theme.Ink.secondary)
+                    }
+                    // One VoiceOver element for the whole guide: the phase and
+                    // how long is left in it, which is everything the visual
+                    // conveys.
+                    .accessibilityElement(children: .combine)
                 }
-                // One VoiceOver element for the whole guide: the phase and how
-                // long is left in it, which is everything the visual conveys.
-                .accessibilityElement(children: .combine)
 
                 ProgressView(value: model.progress(at: elapsed))
                     .tint(model.technique.goal.accent)
@@ -159,8 +175,12 @@ struct SessionView: View {
                 .accessibilityHidden(true)
 
                 VStack(spacing: Theme.Spacing.close) {
-                    Text(model.currentBeat?.kind.spokenInstruction ?? "")
-                        .font(.title2.weight(.medium))
+                    // The timer stays under Just the visuals — inside a hold
+                    // the orb is frozen, so it is the only feedback there is.
+                    if settings.guidance == .full {
+                        Text(model.currentBeat?.kind.spokenInstruction ?? "")
+                            .font(.title2.weight(.medium))
+                    }
                     Text(model.holdElapsed.formatted(.time(pattern: .minuteSecond)))
                         .font(.system(.largeTitle, design: .rounded).weight(.light))
                         .monospacedDigit()
@@ -218,10 +238,28 @@ struct SessionView: View {
         return "\(max(Int(remaining.rounded(.up)), 1))"
     }
 
+    /// The hint for `beat` — "Left nostril" — or nil for an unhinted phase.
+    private func hint(for beat: SessionTimeline.Beat?) -> String? {
+        guard let beat, let hints,
+              hints.indices.contains(beat.stage),
+              hints[beat.stage].indices.contains(beat.phase)
+        else {
+            return nil
+        }
+        return hints[beat.stage][beat.phase]
+    }
+
     /// VoiceOver reads the screen once and would otherwise never mention that
     /// the phase changed — which is the only information the session carries.
+    /// The nostril hint rides along, whatever the guidance level: wanting a
+    /// quieter screen is not the same as hearing nothing.
     private func announceCurrentPhase() {
         guard let beat = model.currentBeat else { return }
-        AccessibilityNotification.Announcement(beat.kind.spokenInstruction).post()
+        let instruction = if let hint = hint(for: beat) {
+            "\(beat.kind.spokenInstruction), \(hint.lowercased())"
+        } else {
+            beat.kind.spokenInstruction
+        }
+        AccessibilityNotification.Announcement(instruction).post()
     }
 }

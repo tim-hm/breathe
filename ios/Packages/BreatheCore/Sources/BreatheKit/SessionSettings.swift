@@ -32,6 +32,29 @@ public enum SessionCueMode: String, Sendable, CaseIterable, Identifiable {
     }
 }
 
+/// How much the session says while it guides.
+///
+/// The dial a person turns down as a technique stops needing narration: full
+/// keeps the instruction, the countdown, and the phase hints on screen;
+/// essentials leaves the orb to carry the session. Safety copy is not
+/// guidance and never obeys this, and neither do VoiceOver announcements —
+/// wanting less on screen is not the same as hearing nothing.
+public enum SessionGuidance: String, Sendable, CaseIterable, Identifiable {
+    case full
+    case essentials
+
+    public var id: Self {
+        self
+    }
+
+    public var title: String {
+        switch self {
+        case .full: "Full guidance"
+        case .essentials: "Just the visuals"
+        }
+    }
+}
+
 /// The session preferences that survive a launch.
 ///
 /// `UserDefaults` rather than the session store: these are preferences, not
@@ -41,10 +64,15 @@ public enum SessionCueMode: String, Sendable, CaseIterable, Identifiable {
 @Observable
 public final class SessionSettings {
     private static let cueModeKey = "session.cueMode"
+    private static let guidanceKey = "session.guidance"
     private static let overridesKey = "session.techniqueOverrides"
 
     public var cueMode: SessionCueMode {
         didSet { defaults.set(cueMode.rawValue, forKey: Self.cueModeKey) }
+    }
+
+    public var guidance: SessionGuidance {
+        didSet { defaults.set(guidance.rawValue, forKey: Self.guidanceKey) }
     }
 
     /// Every technique the person has dialled, keyed by slug — the key the
@@ -65,6 +93,8 @@ public final class SessionSettings {
         // this from writing back the value it just read.
         cueMode = defaults.string(forKey: Self.cueModeKey)
             .flatMap(SessionCueMode.init(rawValue:)) ?? .hapticsAndAudio
+        guidance = defaults.string(forKey: Self.guidanceKey)
+            .flatMap(SessionGuidance.init(rawValue:)) ?? .full
         overridesBySlug = defaults.data(forKey: Self.overridesKey)
             .flatMap { try? JSONDecoder().decode([String: TechniqueOverrides].self, from: $0) }
             // Unreadable stored preferences are dropped rather than repaired:

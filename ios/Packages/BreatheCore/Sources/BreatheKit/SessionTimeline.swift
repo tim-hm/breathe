@@ -33,6 +33,10 @@ public struct SessionTimeline: Sendable, Equatable {
         public let stage: Int
         /// Zero-based index of the cycle within the stage.
         public let cycle: Int
+        /// Zero-based index of the phase within the cycle's pattern — the key
+        /// `PhaseHints` looks up, since two inhales in one cycle can need two
+        /// different hints (alternate-nostril's left and right).
+        public let phase: Int
         /// Whether the person ends this beat rather than the clock. Its
         /// `duration` is then a typical hold, never a scheduled one.
         public let isOpenEnded: Bool
@@ -85,7 +89,7 @@ public struct SessionTimeline: Sendable, Equatable {
         for round in 0 ..< rounds {
             for (stageIndex, stage) in stages.enumerated() {
                 for cycle in 0 ..< max(stage.cycles, 1) {
-                    for phase in stage.phases {
+                    for (phaseIndex, phase) in stage.phases.enumerated() {
                         beats.append(
                             Beat(
                                 id: beats.count,
@@ -93,6 +97,7 @@ public struct SessionTimeline: Sendable, Equatable {
                                 round: round,
                                 stage: stageIndex,
                                 cycle: cycle,
+                                phase: phaseIndex,
                                 isOpenEnded: stage.openEnded,
                                 start: start,
                                 duration: phase.duration
