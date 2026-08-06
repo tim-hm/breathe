@@ -15,6 +15,7 @@ extension TechniqueGoal {
         case .sleep: Theme.Accent.night
         case .energy: Theme.Accent.spark
         case .reset: Theme.Accent.restore
+        case .focus: Theme.Accent.attend
         }
     }
 }

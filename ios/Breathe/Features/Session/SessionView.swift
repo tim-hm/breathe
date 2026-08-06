@@ -62,8 +62,16 @@ struct SessionView: View {
             header
 
             Spacer()
-            breathGuide
+            if showsHold {
+                hold
+            } else {
+                breathGuide
+            }
             Spacer()
+
+            // The contraindications belong where the person is, not only where
+            // they chose. Compact, because the screen belongs to the breath.
+            SafetyNote(technique: model.technique, font: .caption)
 
             controls
         }
@@ -77,10 +85,19 @@ struct SessionView: View {
         VStack(spacing: Theme.Spacing.tight) {
             Text(model.technique.name)
                 .font(.headline)
-            Text("Cycle \(model.currentCycle) of \(model.timeline.cycles)")
+            Text(position)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    /// "Cycle 3 of 8", or "Round 2 of 3 · cycle 12 of 30" once there are rounds
+    /// to keep track of. The round is the number that matters in a staged
+    /// protocol, and the cycle is meaningless without it.
+    private var position: String {
+        let cycle = "Cycle \(model.currentCycle) of \(model.cyclesInCurrentStage)"
+        guard model.timeline.rounds > 1 else { return cycle }
+        return "Round \(model.currentRound) of \(model.timeline.rounds) · \(cycle.lowercased())"
     }
 
     /// `TimelineView(.animation)` redraws every frame and reads the elapsed time
@@ -111,6 +128,51 @@ struct SessionView: View {
                 ProgressView(value: model.progress(at: elapsed))
                     .tint(model.technique.goal.accent)
                     .accessibilityLabel("Session progress")
+            }
+        }
+    }
+
+    /// The retention. Nothing counts down here, because nothing knows how long
+    /// this is: the timer counts up, and the button is the only thing that ends
+    /// it. No target, no record, no encouragement to go longer — a maximal hold
+    /// is the one thing this app will not ask anyone for.
+    /// A paused retention is still a retention: the hold keeps the screen, or
+    /// the breath guide would take over and show a countdown from a length this
+    /// beat does not really have.
+    private var showsHold: Bool {
+        model.status == .holding
+            || (model.status == .paused && model.currentBeat?.isOpenEnded == true)
+    }
+
+    private var hold: some View {
+        TimelineView(.animation(paused: model.status != .holding)) { _ in
+            VStack(spacing: Theme.Spacing.loose) {
+                BreathVisual(
+                    beat: model.currentBeat,
+                    elapsed: model.elapsed,
+                    accent: model.technique.goal.accent
+                )
+                .accessibilityHidden(true)
+
+                VStack(spacing: Theme.Spacing.close) {
+                    Text("Hold, lungs empty")
+                        .font(.title2.weight(.medium))
+                    Text(model.holdElapsed.formatted(.time(pattern: .minuteSecond)))
+                        .font(.system(.largeTitle, design: .rounded).weight(.light))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
+
+                Button("I'm ready") {
+                    model.release()
+                }
+                .font(.headline)
+                .padding(.horizontal, Theme.Spacing.loose)
+                .padding(.vertical, Theme.Spacing.close)
+                .background(.thinMaterial, in: Capsule())
+                .disabled(model.status != .holding)
+                .accessibilityHint("Ends the hold and takes the recovery breath")
             }
         }
     }

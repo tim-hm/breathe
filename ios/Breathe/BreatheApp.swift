@@ -22,6 +22,7 @@ struct BreatheApp: App {
         WindowGroup {
             TechniqueListView(
                 model: TechniqueListModel(techniques: techniques),
+                foundations: FoundationsModel(topics: techniques),
                 sessions: sessions
             )
             .environment(settings)

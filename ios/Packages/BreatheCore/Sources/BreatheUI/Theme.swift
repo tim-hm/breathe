@@ -26,5 +26,7 @@ public enum Theme {
         public static let spark = Color(red: 0.85, green: 0.60, blue: 0.28)
         /// Muted green — recovery.
         public static let restore = Color(red: 0.40, green: 0.64, blue: 0.51)
+        /// Deep teal — attention held on something.
+        public static let attend = Color(red: 0.24, green: 0.53, blue: 0.56)
     }
 }
