@@ -162,10 +162,12 @@ struct HomeView: View {
             .pickerStyle(.wheel)
             .frame(width: 205, height: 132)
         }
-        // The detent click a hardware wheel would give: one tick per option as
-        // the spin passes it. Skipped for the settle on launch — that is the
-        // app restoring state, not the person choosing.
-        .sensoryFeedback(.selection, trigger: goal) { old, _ in old != nil }
+        // One firm tap as the wheel lands on a choice. An impact rather than
+        // `.selection`, which is the lightest haptic there is — under a finger
+        // that is actively dragging the wheel it disappears entirely. Skipped
+        // for the settle on launch — that is the app restoring state, not the
+        // person choosing.
+        .sensoryFeedback(.impact(weight: .medium), trigger: goal) { old, _ in old != nil }
     }
 
     /// The technique the wheel's goal resolves to, as a way through to its
