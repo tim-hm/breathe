@@ -2,7 +2,7 @@
 import Foundation
 import Testing
 
-/// Drives the real stepper and the real store through the `ProfileWriting`
+/// Drives the real stepper and the real store through the `ProfileSyncing`
 /// seam. What is under test is the promise that onboarding finishes without a
 /// server: the flow is the only screen a first-run user cannot get past.
 @MainActor
@@ -10,9 +10,16 @@ import Testing
 struct OnboardingFlowTests {
     /// Records what it was asked to send, and can be told to refuse — which is
     /// what a first launch on a train looks like.
-    private final class RecordingWriter: ProfileWriting, @unchecked Sendable {
+    private final class RecordingWriter: ProfileSyncing, @unchecked Sendable {
         private(set) var sent: [Profile] = []
         var isReachable = true
+
+        func fetch() async throws -> Profile {
+            guard isReachable else {
+                throw ProfileRepositoryError.transport("offline")
+            }
+            return .unanswered
+        }
 
         @discardableResult
         func update(_ profile: Profile) async throws -> Profile {

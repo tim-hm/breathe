@@ -11,7 +11,11 @@ import Testing
 @Suite("Leaderboard name")
 @MainActor
 struct LeaderboardNameTests {
-    private struct AcceptingProfiles: ProfileWriting {
+    private struct AcceptingProfiles: ProfileSyncing {
+        func fetch() async throws -> Profile {
+            .unanswered
+        }
+
         func update(_ profile: Profile) async throws -> Profile {
             profile
         }
@@ -19,7 +23,11 @@ struct LeaderboardNameTests {
 
     /// Stands in for a server that already holds the name and hands back the
     /// suffixed one it stored instead.
-    private struct SuffixingProfiles: ProfileWriting {
+    private struct SuffixingProfiles: ProfileSyncing {
+        func fetch() async throws -> Profile {
+            .unanswered
+        }
+
         func update(_ profile: Profile) async throws -> Profile {
             var stored = profile
             stored.displayName = "\(profile.displayName)·2"
@@ -27,7 +35,7 @@ struct LeaderboardNameTests {
         }
     }
 
-    private func store(_ profiles: any ProfileWriting = AcceptingProfiles()) -> ProfileStore {
+    private func store(_ profiles: any ProfileSyncing = AcceptingProfiles()) -> ProfileStore {
         let name = "leaderboard-name-tests.\(UUID().uuidString)"
         guard let defaults = UserDefaults(suiteName: name) else {
             Issue.record("a defaults suite is available")

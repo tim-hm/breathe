@@ -10,9 +10,10 @@ import os
 /// attempted, the completion flag is set regardless of whether it succeeds, and
 /// anything unsent is retried on the next launch.
 ///
-/// `UserDefaults` rather than the Keychain, unlike the identity: reinstalling
-/// the app should ask the questions again, because someone who deleted it and
-/// came back is a person the app has not met in a while.
+/// `UserDefaults` rather than the Keychain, unlike the identity: these are
+/// answers rather than credentials, and a reinstall is entitled to lose them.
+/// What stops that reinstall from *asking again* is the server — `restoredProfile()`
+/// reads back what the surviving identity already answered.
 @MainActor
 @Observable
 public final class ProfileStore {
@@ -46,10 +47,10 @@ public final class ProfileStore {
         didSet { defaults.set(isPendingSync, forKey: Self.pendingKey) }
     }
 
-    private let profiles: any ProfileWriting
+    private let profiles: any ProfileSyncing
     private let defaults: UserDefaults
 
-    public init(profiles: any ProfileWriting, defaults: UserDefaults = .standard) {
+    public init(profiles: any ProfileSyncing, defaults: UserDefaults = .standard) {
         self.profiles = profiles
         self.defaults = defaults
 
@@ -74,6 +75,40 @@ public final class ProfileStore {
     public func complete(with profile: Profile) {
         self.profile = profile
         isPendingSync = true
+        hasCompletedOnboarding = true
+    }
+
+    /// The answers the server holds, when they are worth adopting.
+    ///
+    /// The reinstall case: the identity lives in the Keychain and survives one,
+    /// while these answers live in `UserDefaults` and do not — so the person the
+    /// app has met before arrives looking exactly like a new one, and completing
+    /// onboarding again would overwrite the profile they already had.
+    ///
+    /// Nil covers everything that is not a restore: a local flow that has
+    /// already finished, which owns the answers; a server that has never been
+    /// told anything; and any failure at all — a first run with no signal is the
+    /// normal case, not an error anybody can act on.
+    public func restoredProfile() async -> Profile? {
+        guard !hasCompletedOnboarding else { return nil }
+
+        do {
+            let stored = try await profiles.fetch()
+            return stored.hasAnswers ? stored : nil
+        } catch {
+            Self.logger.notice("profile restore deferred: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    /// Takes the server's answers as this device's own and closes onboarding.
+    ///
+    /// Nothing is left pending: what is being stored *came from* the server, and
+    /// sending it back would be a write nobody made — which is the asymmetry
+    /// that made a reinstall overwrite a good profile in the first place.
+    public func adopt(_ profile: Profile) {
+        self.profile = profile
+        isPendingSync = false
         hasCompletedOnboarding = true
     }
 

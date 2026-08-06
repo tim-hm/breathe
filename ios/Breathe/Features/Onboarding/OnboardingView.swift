@@ -46,6 +46,14 @@ struct OnboardingView: View {
         .padding(.vertical, Theme.Spacing.loose)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.Surface.ground)
+        // Somebody reinstalling has answered all this before, and the identity
+        // that survived in the Keychain can prove it. The flow is drawn first
+        // and leaves by itself if the answers arrive.
+        .task {
+            if await model.restoreIfPossible() {
+                onFinished()
+            }
+        }
     }
 
     /// One dot per question, the current one stretched — where you are and how

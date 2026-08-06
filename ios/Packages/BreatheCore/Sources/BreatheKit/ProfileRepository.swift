@@ -12,13 +12,20 @@ public enum ProfileRepositoryError: Error, Equatable {
     case malformedResponse(String)
 }
 
-/// Sends the answers someone gave at onboarding.
+/// Carries the answers someone gave at onboarding, in both directions.
 ///
-/// Write-only, because nothing reads yet: this device is the source of truth for
-/// the profile until M5 has a second one to reconcile with, and a `GetProfile`
-/// call no screen consumes would be a decode path nothing exercises. The RPC
-/// exists on the contract and is covered by the server's own tests.
-public protocol ProfileWriting: Sendable {
+/// This device is the source of truth while somebody is using it, but the
+/// Keychain identity outlives an install and the sessions file does not — so on
+/// a launch that has no local answers the server may still hold them. That is
+/// the only thing the read is for; see `ProfileStore.restoredProfile()`.
+public protocol ProfileSyncing: Sendable {
+    /// The profile as the server holds it.
+    ///
+    /// Never a not-found: the identity layer creates the row on first sight, so
+    /// a caller who has answered nothing reads back `Profile.unanswered` rather
+    /// than an error to special-case.
+    func fetch() async throws -> Profile
+
     /// Stores `profile` and returns it as the server holds it, which is not
     /// always what was sent — the server drops a duplicated goal and trims the
     /// note.
@@ -28,11 +35,23 @@ public protocol ProfileWriting: Sendable {
 
 /// The only type that touches the generated profile types, mirroring
 /// `TechniqueRepository`.
-public struct ProfileRepository: ProfileWriting {
+public struct ProfileRepository: ProfileSyncing {
     private let client: Breathe_V1_ProfileServiceClient
 
     public init(baseURL: URL, identity: any UserIdentityStore) {
         client = BreatheClients.profileService(baseURL: baseURL, userId: identity.userId)
+    }
+
+    public func fetch() async throws -> Profile {
+        let response = await client.getProfile(request: Breathe_V1_GetProfileRequest())
+
+        guard let message = response.message else {
+            throw ProfileRepositoryError.transport(
+                response.error?.localizedDescription ?? "the request failed with no message"
+            )
+        }
+
+        return try Profile(proto: message.profile)
     }
 
     @discardableResult

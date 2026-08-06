@@ -50,6 +50,39 @@ public final class OnboardingModel {
         self.store = store
     }
 
+    /// Whether this person has told the flow anything yet.
+    ///
+    /// Reminders count as answered only once moved: `never` is what the dial
+    /// holds before anybody touches it, so treating it as an answer would make
+    /// every launch look half-completed.
+    public var hasAnswered: Bool {
+        !goals.isEmpty || experienceLevel != nil || reminderIntensity != .never
+    }
+
+    /// Adopts the answers the server already holds for this identity, closing
+    /// the flow if it finds them.
+    ///
+    /// Runs *alongside* the questions rather than in front of them. The
+    /// alternative — racing the fetch against a short timeout before drawing
+    /// anything — puts a network wait between launch and the welcome screen for
+    /// every genuinely new user, which is nearly all of them and none of whom
+    /// have a profile to restore. Here the flow is on screen immediately, and
+    /// somebody with no signal never learns this was attempted.
+    ///
+    /// - Returns: whether the flow should close, having adopted a profile.
+    public func restoreIfPossible() async -> Bool {
+        guard !hasAnswered else { return false }
+        guard let restored = await store.restoredProfile() else { return false }
+
+        // Asked again on the way back: the request was in flight while the
+        // person could answer, and an answer given here is both the more recent
+        // of the two and the one they are looking at.
+        guard !hasAnswered else { return false }
+
+        store.adopt(restored)
+        return true
+    }
+
     /// Adds or removes a goal, keeping the order the person picked in.
     public func toggle(_ goal: TechniqueGoal) {
         if let index = goals.firstIndex(of: goal) {
