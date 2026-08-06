@@ -179,17 +179,23 @@ public extension TechniqueGoal {
         }
     }
 
-    /// The goal as the person would say it — the home screen's entry points
-    /// ("I want to calm down"), where `title` is the badge's noun. First
-    /// person on purpose: choosing an outcome you want is a more assertive
-    /// start than reading a category label.
+    /// The goal as the person would say it — "I want to calm down" — for
+    /// wherever a full sentence fits, like the catalogue's section headers.
+    /// First person on purpose: choosing an outcome you want is a more
+    /// assertive start than reading a category label.
     var intent: String {
+        "I want to \(intentObject)"
+    }
+
+    /// The intent without its "I want to" prefix, for the home screen's
+    /// wheel, which renders the prefix as a fixed label beside the options.
+    var intentObject: String {
         switch self {
-        case .calm: "I want to calm down"
-        case .sleep: "I want to go to sleep"
-        case .energy: "I want more energy"
-        case .reset: "I want to reset"
-        case .focus: "I want to focus"
+        case .calm: "calm down"
+        case .sleep: "go to sleep"
+        case .energy: "wake up"
+        case .reset: "reset"
+        case .focus: "focus"
         }
     }
 }

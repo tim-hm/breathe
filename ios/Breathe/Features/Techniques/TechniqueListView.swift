@@ -2,63 +2,20 @@ import BreatheKit
 import BreatheUI
 import SwiftUI
 
+/// The whole catalogue, grouped by what each technique is for.
+///
+/// Pushed from home rather than shown there: someone who wants to breathe
+/// says so on the wheel, and someone who wants to read about nine techniques
+/// has come here deliberately. The model arrives already loaded, so this
+/// screen never fetches — it is a second view onto the catalogue home holds.
 struct TechniqueListView: View {
-    @State private var model: TechniqueListModel
-
-    /// Handed down like everything else from the composition root, and held for
-    /// the life of the app: the basics are seeded reference data, so the model
-    /// keeps them across pushes of the screen rather than refetching.
-    private let foundations: FoundationsModel
-
-    /// Handed down from the composition root and passed to each session, so
-    /// every session in the app writes to the one store.
-    private let sessions: any SessionRecording
-
-    @Environment(SessionSettings.self) private var settings
-
-    /// Recorded history, oldest first, feeding the hero card. Refreshed on
-    /// appear as well as on load, because a session finished on the pushed
-    /// detail screen has changed what "begin again" should offer by the time
-    /// the person pops back.
-    @State private var history: [SessionRecord] = []
-    @State private var started: StartedSession?
-
-    init(
-        model: TechniqueListModel,
-        foundations: FoundationsModel,
-        sessions: any SessionRecording
-    ) {
-        _model = State(wrappedValue: model)
-        self.foundations = foundations
-        self.sessions = sessions
-    }
+    let model: TechniqueListModel
 
     var body: some View {
-        NavigationStack {
-            content
-                .paletteGround()
-                .navigationTitle("Breathe")
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        NavigationLink("The basics") {
-                            FoundationsView(model: foundations)
-                        }
-                    }
-                }
-                .navigationDestination(for: Technique.self) { technique in
-                    TechniqueDetailView(technique: technique, sessions: sessions)
-                }
-        }
-        .task {
-            await model.load()
-            history = await sessions.recordedSessions()
-        }
-        .onAppear {
-            Task { history = await sessions.recordedSessions() }
-        }
-        .fullScreenCover(item: $started) { session in
-            SessionView(model: session.model)
-        }
+        content
+            .paletteGround()
+            .navigationTitle("Techniques")
+            .navigationBarTitleDisplayMode(.inline)
     }
 
     @ViewBuilder
@@ -69,10 +26,6 @@ struct TechniqueListView: View {
 
         case let .loaded(techniques):
             List {
-                if let suggestion = suggestion(from: techniques) {
-                    heroSection(for: suggestion)
-                }
-
                 ForEach(goals(in: techniques), id: \.self) { goal in
                     Section {
                         ForEach(techniques.filter { $0.goal == goal }) { technique in
@@ -104,36 +57,6 @@ struct TechniqueListView: View {
         }
     }
 
-    private func heroSection(for suggestion: HomeSuggestion) -> some View {
-        // Dialled here for the same reason the detail screen dials before
-        // Begin: the card's shape line and the session it starts must both
-        // describe what will actually play.
-        let dialled = suggestion.technique
-            .dialled(with: settings.overrides(for: suggestion.technique))
-
-        return Section {
-            HeroCard(prompt: suggestion.prompt, technique: dialled) {
-                started = StartedSession(
-                    model: SessionModel(
-                        technique: dialled,
-                        cues: SessionCues(mode: settings.cueMode),
-                        recorder: sessions
-                    )
-                )
-            }
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
-        }
-    }
-
-    private func suggestion(from techniques: [Technique]) -> HomeSuggestion? {
-        HomeSuggestion.make(
-            techniques: techniques,
-            history: history,
-            hour: Calendar.current.component(.hour, from: .now)
-        )
-    }
-
     /// The goals present in the catalogue, in the fixed calm-first order of
     /// the enum — stable across loads, so sections never reshuffle under a
     /// person who has learned where sleep lives.
@@ -141,49 +64,6 @@ struct TechniqueListView: View {
         TechniqueGoal.allCases.filter { goal in
             techniques.contains { $0.goal == goal }
         }
-    }
-}
-
-/// The one suggestion above the catalogue: the person's last exercise, or the
-/// time of day's. One Begin on it starts the session directly — the card is a
-/// shortcut past the detail screen, whose dials stay a tap away in the list.
-private struct HeroCard: View {
-    let prompt: String
-    /// Already dialled by the caller.
-    let technique: Technique
-    let begin: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.close) {
-            Text(prompt)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(technique.goal.accent)
-
-            Text(technique.name)
-                .font(.title2.weight(.semibold))
-
-            Text("\(technique.shapeDescription) · about \(inWords(technique.plannedDuration))")
-                .font(.footnote)
-                .foregroundStyle(Theme.Ink.secondary)
-
-            Button(action: begin) {
-                Text("Begin")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, Theme.Spacing.close)
-                    // The ground, so the label inverts with the fill — same
-                    // rationale as the detail screen's Begin.
-                    .foregroundStyle(Theme.Surface.ground)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(technique.goal.accent)
-        }
-        .padding(Theme.Spacing.standard)
-        .background(Theme.Surface.raised, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
-    }
-
-    private func inWords(_ duration: Duration) -> String {
-        duration.formatted(.units(allowed: [.minutes, .seconds], width: .abbreviated))
     }
 }
 
@@ -223,12 +103,4 @@ private extension Technique {
         let seconds = stage.cycleDuration.components.seconds
         return "\(stage.cycles) cycles · \(seconds)s each"
     }
-}
-
-/// Wraps the model so `fullScreenCover(item:)` has something `Identifiable` to
-/// present. The identity is the presentation's, not the session's — a new tap on
-/// Begin is a new session, and this is what makes that unambiguous.
-private struct StartedSession: Identifiable {
-    let id = UUID()
-    let model: SessionModel
 }

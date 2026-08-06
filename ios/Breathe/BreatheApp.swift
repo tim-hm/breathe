@@ -44,7 +44,7 @@ struct BreatheApp: App {
 
     var body: some Scene {
         WindowGroup {
-            TechniqueListView(
+            HomeView(
                 model: TechniqueListModel(techniques: techniques),
                 foundations: FoundationsModel(topics: techniques),
                 sessions: sessions
