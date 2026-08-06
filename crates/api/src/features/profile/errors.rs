@@ -17,6 +17,12 @@ pub enum ProfileError {
     #[error("no profile row for the calling user")]
     Missing,
 
+    /// Every suffixed variant of a requested display name is taken. Reported to
+    /// the caller rather than hidden, because the fix is theirs: pick a
+    /// different name.
+    #[error("that display name and every variant of it are taken — try another")]
+    DisplayNameUnavailable,
+
     #[error("database error: {0}")]
     Database(#[from] sqlx::Error),
 }
@@ -25,12 +31,16 @@ pub enum ProfileError {
 ///
 /// Same rule as `technique::errors`: the client receives an opaque `internal`
 /// status, so a silent conversion would leave the failure unreproducible from
-/// outside the process. `Invalid` is the exception — it describes the caller's
-/// own request, so it travels.
+/// outside the process. `Invalid` and `DisplayNameUnavailable` are the
+/// exceptions — both describe the caller's own request and name something they
+/// can change, so they travel.
 impl From<ProfileError> for Status {
     fn from(error: ProfileError) -> Self {
         match error {
             ProfileError::Invalid(message) => Self::invalid_argument(message),
+            ProfileError::DisplayNameUnavailable => {
+                Self::already_exists("that display name and every variant of it are taken")
+            }
             ProfileError::Missing => {
                 tracing::error!(feature = "profile", "the calling user has no row");
                 Self::internal("internal error")

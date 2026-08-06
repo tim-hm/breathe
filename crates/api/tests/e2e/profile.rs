@@ -30,6 +30,8 @@ async fn onboarding_answers_survive_a_second_call() {
         experience_level: pb::ExperienceLevel::Occasional as i32,
         reminder_intensity: pb::ReminderIntensity::Gentle as i32,
         intent_note: "  I want to stop clenching my jaw  ".to_owned(),
+        display_name: "  Tim  ".to_owned(),
+        birth_year_band: pb::BirthYearBand::Born1980s as i32,
     };
 
     let updated = update(&db, USER, Some(submitted)).await.into_ok();
@@ -44,6 +46,10 @@ async fn onboarding_answers_survive_a_second_call() {
         ]
     );
     assert_eq!(stored.intent_note, "I want to stop clenching my jaw");
+    assert_eq!(
+        stored.display_name, "Tim",
+        "the name is trimmed before it is stored"
+    );
 
     let fetched = get(&db, USER).await.into_ok();
     assert_eq!(fetched.profile, Some(stored));
@@ -69,6 +75,10 @@ async fn an_unanswered_profile_reads_back_as_never() {
     );
     assert!(profile.goals.is_empty());
     assert!(profile.intent_note.is_empty());
+    assert!(
+        profile.display_name.is_empty(),
+        "nobody is on a leaderboard until they choose a name"
+    );
 }
 
 /// The lazy upsert, from both sides: the first RPC of any kind creates the row,
@@ -102,6 +112,8 @@ async fn the_first_rpc_creates_the_row_and_later_ones_reuse_it() {
             experience_level: pb::ExperienceLevel::New as i32,
             reminder_intensity: pb::ReminderIntensity::Daily as i32,
             intent_note: String::new(),
+            display_name: String::new(),
+            birth_year_band: pb::BirthYearBand::Unspecified as i32,
         }),
     )
     .await
@@ -182,6 +194,8 @@ async fn profiles_are_scoped_to_the_calling_identity() {
             experience_level: pb::ExperienceLevel::Regular as i32,
             reminder_intensity: pb::ReminderIntensity::Daily as i32,
             intent_note: "mine".to_owned(),
+            display_name: String::new(),
+            birth_year_band: pb::BirthYearBand::Unspecified as i32,
         }),
     )
     .await
@@ -213,6 +227,8 @@ async fn an_unrepresentable_answer_is_rejected_with_its_reason() {
             experience_level: pb::ExperienceLevel::Unspecified as i32,
             reminder_intensity: pb::ReminderIntensity::Never as i32,
             intent_note: String::new(),
+            display_name: String::new(),
+            birth_year_band: pb::BirthYearBand::Unspecified as i32,
         }),
     )
     .await;
@@ -222,6 +238,66 @@ async fn an_unrepresentable_answer_is_rejected_with_its_reason() {
 
     let missing_message = update(&db, USER, None).await;
     assert_eq!(missing_message.status, tonic::Code::InvalidArgument as i32);
+}
+
+/// Two people who both go by Tim is the normal case, not an error: the second
+/// keeps their name and gains a suffix, and the response is what tells them so.
+/// Re-saving an unchanged profile must not suffix a name somebody already holds
+/// — the unique index has to see their own row as theirs.
+#[tokio::test]
+async fn a_taken_display_name_is_suffixed_rather_than_refused() {
+    let db = TestDatabase::create("profile_name_collision").await;
+    let other = "3f2b1c4d-0000-4000-8000-000000000003";
+
+    assert_eq!(named(&db, USER, "Tim").await, "Tim");
+    assert_eq!(
+        named(&db, other, "tim").await,
+        "tim·2",
+        "the index folds case"
+    );
+    assert_eq!(
+        named(&db, USER, "Tim").await,
+        "Tim",
+        "their own name is not a collision"
+    );
+}
+
+/// A name the app will not print comes back as `INVALID_ARGUMENT` rather than
+/// being stored and quietly hidden — somebody who cannot see themselves on a
+/// board should know why.
+#[tokio::test]
+async fn a_denied_display_name_is_refused_with_its_reason() {
+    let db = TestDatabase::create("profile_name_denied").await;
+
+    let response = update(
+        &db,
+        USER,
+        Some(pb::Profile {
+            display_name: "Breathe Team".to_owned(),
+            ..pb::Profile::default()
+        }),
+    )
+    .await;
+
+    assert_eq!(response.status, tonic::Code::InvalidArgument as i32);
+    assert!(response.status_message.contains("display_name"));
+}
+
+/// Sets `user`'s display name and returns the one the server actually stored.
+async fn named(db: &TestDatabase, user: &str, display_name: &str) -> String {
+    update(
+        db,
+        user,
+        Some(pb::Profile {
+            display_name: display_name.to_owned(),
+            ..pb::Profile::default()
+        }),
+    )
+    .await
+    .into_ok()
+    .profile
+    .expect("the update echoes what it stored")
+    .display_name
 }
 
 async fn get(db: &TestDatabase, user: &str) -> GrpcWebResponse<pb::GetProfileResponse> {

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            goals AS \"goals: Vec<TechniqueGoal>\",\n            experience_level AS \"experience_level?: ExperienceLevel\",\n            reminder_intensity AS \"reminder_intensity: ReminderIntensity\",\n            intent_note\n         FROM users\n         WHERE id = $1",
+  "query": "SELECT\n            goals AS \"goals: Vec<TechniqueGoal>\",\n            experience_level AS \"experience_level?: ExperienceLevel\",\n            reminder_intensity AS \"reminder_intensity: ReminderIntensity\",\n            intent_note,\n            display_name,\n            birth_year_band AS \"birth_year_band?: BirthYearBand\"\n         FROM users\n         WHERE id = $1",
   "describe": {
     "columns": [
       {
@@ -88,6 +88,43 @@
             "name": "intent_note"
           }
         }
+      },
+      {
+        "ordinal": 4,
+        "name": "display_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "display_name"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "birth_year_band?: BirthYearBand",
+        "type_info": {
+          "Custom": {
+            "name": "birth_year_band",
+            "kind": {
+              "Enum": [
+                "BORN_BEFORE_1960",
+                "BORN_1960S",
+                "BORN_1970S",
+                "BORN_1980S",
+                "BORN_1990S",
+                "BORN_2000S",
+                "BORN_2010_OR_LATER"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "birth_year_band"
+          }
+        }
       }
     ],
     "parameters": {
@@ -99,8 +136,10 @@
       false,
       true,
       false,
-      false
+      false,
+      true,
+      true
     ]
   },
-  "hash": "3d2544e7bd586807633c136b79bae488517ddff3e9a0607649e9057a9b3a72c7"
+  "hash": "3c16383b6e3301b317000bf5b5c4e508d137fa53937198a76f7fddbdb2c5209a"
 }

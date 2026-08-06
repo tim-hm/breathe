@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT birth_year_band AS \"birth_year_band?: BirthYearBand\"\n           FROM users WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "birth_year_band?: BirthYearBand",
+        "type_info": {
+          "Custom": {
+            "name": "birth_year_band",
+            "kind": {
+              "Enum": [
+                "BORN_BEFORE_1960",
+                "BORN_1960S",
+                "BORN_1970S",
+                "BORN_1980S",
+                "BORN_1990S",
+                "BORN_2000S",
+                "BORN_2010_OR_LATER"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "birth_year_band"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "d5026e8c5334f1c1d37b0ab6eff1afdd125f2235379148d4b89082b66ff18596"
+}

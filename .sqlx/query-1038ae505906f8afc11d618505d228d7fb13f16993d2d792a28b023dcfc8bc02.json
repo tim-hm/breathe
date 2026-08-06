@@ -1,0 +1,101 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT client_session_id, technique_slug, started_at,\n                duration_ms, cycles_completed, breath_count, completed\n         FROM sessions\n         WHERE user_id = $1\n         ORDER BY started_at DESC\n         LIMIT $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "client_session_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "sessions",
+            "name": "client_session_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "technique_slug",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "sessions",
+            "name": "technique_slug"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "started_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "sessions",
+            "name": "started_at"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "duration_ms",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "sessions",
+            "name": "duration_ms"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "cycles_completed",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "sessions",
+            "name": "cycles_completed"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "breath_count",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "sessions",
+            "name": "breath_count"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "completed",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "sessions",
+            "name": "completed"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "1038ae505906f8afc11d618505d228d7fb13f16993d2d792a28b023dcfc8bc02"
+}

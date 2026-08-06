@@ -15,6 +15,30 @@ pub enum ExperienceLevel {
     Regular,
 }
 
+/// Mirrors the `birth_year_band` Postgres enum.
+///
+/// Every variant is renamed explicitly rather than through `rename_all`: the
+/// labels contain digits, and no case convention maps `Born1960s` onto
+/// `BORN_1960S` in a way anybody should have to guess at.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, sqlx::Type)]
+#[sqlx(type_name = "birth_year_band")]
+pub enum BirthYearBand {
+    #[sqlx(rename = "BORN_BEFORE_1960")]
+    BornBefore1960,
+    #[sqlx(rename = "BORN_1960S")]
+    Born1960s,
+    #[sqlx(rename = "BORN_1970S")]
+    Born1970s,
+    #[sqlx(rename = "BORN_1980S")]
+    Born1980s,
+    #[sqlx(rename = "BORN_1990S")]
+    Born1990s,
+    #[sqlx(rename = "BORN_2000S")]
+    Born2000s,
+    #[sqlx(rename = "BORN_2010_OR_LATER")]
+    Born2010OrLater,
+}
+
 /// Mirrors the `reminder_intensity` Postgres enum.
 ///
 /// `Never` is the default in every direction — the column default, the proto
