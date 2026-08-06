@@ -4,10 +4,10 @@ import SwiftUI
 /// The marketing site's orb, idling on home: a filled dot inside two rings,
 /// breathing whether or not anyone has begun.
 ///
-/// It breathes at coherent pace — eleven seconds a cycle, five and a half
-/// breaths a minute, the most-studied pace in the catalogue's own copy — so
-/// the first thing the app does is model the calm it sells. Anything quicker
-/// reads as impatience.
+/// It breathes like a person at rest — ten breaths a minute, and only a few
+/// points of travel. Ambience, not instruction: the session orb swells to
+/// be followed, this one moves just enough to feel alive, and anything
+/// bigger or slower reads as a demonstration the person hasn't asked for.
 struct AmbientOrb: View {
     /// The wheel's current goal accent, so the orb takes the colour of what
     /// the person is about to do.
@@ -16,7 +16,7 @@ struct AmbientOrb: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// One breath, in seconds.
-    private static let cycle = 11.0
+    private static let cycle = 6.0
 
     var body: some View {
         TimelineView(.animation(paused: reduceMotion)) { context in
@@ -27,11 +27,11 @@ struct AmbientOrb: View {
             ZStack {
                 Circle()
                     .stroke(accent.opacity(0.15), lineWidth: 1)
-                    .scaleEffect(0.90 + 0.10 * breath)
+                    .scaleEffect(0.95 + 0.05 * breath)
 
                 Circle()
                     .stroke(accent.opacity(0.3), lineWidth: 1)
-                    .scaleEffect(0.72 + 0.09 * breath)
+                    .scaleEffect(0.76 + 0.05 * breath)
 
                 Circle()
                     .fill(
@@ -42,7 +42,7 @@ struct AmbientOrb: View {
                             endRadius: 82
                         )
                     )
-                    .scaleEffect(0.48 + 0.10 * breath)
+                    .scaleEffect(0.52 + 0.05 * breath)
             }
         }
         .frame(width: 176, height: 176)
