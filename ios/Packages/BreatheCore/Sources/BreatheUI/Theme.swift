@@ -7,6 +7,11 @@ import SwiftUI
 /// the system picks a variant per appearance, so no view branches on
 /// `colorScheme` and no screen can be themed for only one of them.
 ///
+/// Each token also carries an Apple Watch idiom entry holding its dark value,
+/// because watchOS resolves the Any slot rather than an appearance — without it
+/// the wrist renders light-mode ink on an always-black screen. A new colour is
+/// not done until it has all three values.
+///
 /// The palette is the marketing site's (`web/style.css`) — sea glass on white,
 /// sea glass on a near-black with a green cast — so the app and the page a
 /// person arrives from are recognisably the same product.
