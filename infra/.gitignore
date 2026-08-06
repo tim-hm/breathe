@@ -1,0 +1,9 @@
+# Local state (see versions.tf for when this moves to S3) and operator-specific
+# variable values — the state file can contain secrets and must never be
+# committed. `.terraform.lock.hcl` is deliberately NOT here: it is this
+# directory's Cargo.lock, and committing it keeps provider versions reproducible
+# across machines.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars

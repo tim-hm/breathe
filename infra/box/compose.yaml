@@ -1,0 +1,61 @@
+# What runs on the box, rsynced to /srv/breathe by `mise run deploy`. The
+# ${POSTGRES_PASSWORD} interpolations read /srv/breathe/.env — a symlink onto
+# the data volume, written once at first boot by cloud-init.
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates. Losing this volume means re-issuing against ACME rate
+      # limits, so it persists across deploys like any other data.
+      - caddy-data:/data
+      - caddy-config:/config
+
+  api:
+    image: breathe-api:latest
+    restart: unless-stopped
+    environment:
+      BREATHE_ENV: production
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@db:5432/breathe?sslmode=disable
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # One-shot, run by `mise run deploy` before the api restarts — never resident.
+  migrate:
+    image: breathe-api:latest
+    profiles:
+      - tools
+    command: migrate
+    environment:
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@db:5432/breathe?sslmode=disable
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    # No host port mapping: only the compose network can reach Postgres. Admin
+    # access goes through `docker compose exec db psql` over SSH.
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
+    volumes:
+      # The EBS data volume. `/var/lib/postgresql`, not `/data` — same Postgres
+      # 18 path caveat as the dev compose.yaml at the repo root.
+      - /srv/data/postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  caddy-data:
+  caddy-config:

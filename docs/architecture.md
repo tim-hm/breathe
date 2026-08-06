@@ -26,15 +26,15 @@ proto/  ──────────────────►  generates bot
 
 ## Components
 
-| Component | Role |
-| :-- | :-- |
-| `proto/` | The API contract. The only description of the wire format. |
-| `crates/api` | The service. Serves gRPC-Web on `/breathe.v1.*` and JSON on `/health`, `/about`. |
-| `crates/migrate` | Owns the schema and the seeded technique catalogue. Runs to completion and exits. |
+| Component                          | Role                                                                                                       |
+| :--------------------------------- | :--------------------------------------------------------------------------------------------------------- |
+| `proto/`                           | The API contract. The only description of the wire format.                                                 |
+| `crates/api`                       | The service. Serves gRPC-Web on `/breathe.v1.*` and JSON on `/health`, `/about`.                           |
+| `crates/migrate`                   | Owns the schema and the seeded technique catalogue. Runs to completion and exits.                          |
 | `…/BreatheCore/Sources/BreatheAPI` | Generated protobuf and the Connect client factory. Not a package product, so only BreatheKit can reach it. |
-| `…/BreatheCore/Sources/BreatheKit` | Domain types and repositories. The only Swift code that touches generated types. |
-| `…/BreatheCore/Sources/BreatheUI` | Spacing and accent tokens. Domain-free. |
-| `ios/Breathe` | The app: composition root plus features. |
+| `…/BreatheCore/Sources/BreatheKit` | Domain types and repositories. The only Swift code that touches generated types.                           |
+| `…/BreatheCore/Sources/BreatheUI`  | Spacing and accent tokens. Domain-free.                                                                    |
+| `ios/Breathe`                      | The app: composition root plus features.                                                                   |
 
 ## Decisions worth knowing
 

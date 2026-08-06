@@ -46,6 +46,9 @@ xcodegen = { version = "latest", os = ["macos"] }
 swiftlint = { version = "latest", os = ["macos"] }
 swiftformat = { version = "latest", os = ["macos"] }
 
+# Backs the infra:* tasks. OpenTofu, not Terraform — see infra/versions.tf.
+opentofu = "latest"
+
 [env]
 # Global so every cargo invocation reads the committed .sqlx cache rather than
 # needing a live database. `generate:sqlx` overrides it, because refreshing the
@@ -138,9 +141,9 @@ description = "Format everything that is not Rust or Swift (markdown, YAML, JSON
 # rather than three tools.
 #
 # `proseWrap: "never"` in vite.config.ts is the load-bearing setting: a paragraph
-# is one physical line and the reader's editor decides where it breaks. It also
-# keeps tables compact rather than column-aligned, which is the trade — aligned
-# tables reflow every row when one cell changes.
+# is one physical line and the reader's editor decides where it breaks. The
+# `printWidth` beside it is not a line limit — see the comment there for what it
+# actually decides.
 #
 # vp refuses to run outside a JS workspace, which is the only reason the root
 # package.json exists — it declares no dependencies and installs nothing. The
@@ -170,14 +173,7 @@ description = "Full validation (the gate)"
 # The Rust tasks share one cargo artifact lock, so running them concurrently just
 # stalls on "Blocking waiting for file lock" — they are serialised in `run` while
 # everything genuinely independent fans out through `depends`.
-depends = [
-  "check:proto",
-  "check:generated",
-  "check:text",
-  "check:md",
-  "check:doc-links",
-  "check:deps",
-]
+depends = ["check:proto", "check:generated", "check:text", "check:md", "check:doc-links", "check:deps"]
 run = ["mise run check:rs", "mise run check:sqlx", "mise run test:rs", "mise run test:e2e"]
 
 [tasks."check:rs"]
@@ -207,10 +203,7 @@ run = ["buf lint", """
 
 [tasks."check:swift"]
 description = "Validate Swift (format + lint)"
-run = [
-  "swiftformat --lint ios --config ios/.swiftformat",
-  "swiftlint lint --strict --config ios/.swiftlint.yml ios",
-]
+run = ["swiftformat --lint ios --config ios/.swiftformat", "swiftlint lint --strict --config ios/.swiftlint.yml ios"]
 
 [tasks."check:text"]
 description = "Assert markdown, YAML, JSON, and TOML are formatted"
@@ -233,10 +226,7 @@ description = "Assert the committed Swift protobuf matches proto/"
 # regenerate, compare, fail on drift. Needed because the Xcode build never runs
 # buf, so a .proto edit committed without `mise run generate:proto` surfaces much
 # later as a confusing Swift compile error.
-run = [
-  "mise run generate:proto",
-  "git diff --exit-code -- ios/Packages/BreatheCore/Sources/BreatheAPI/Generated",
-]
+run = ["mise run generate:proto", "git diff --exit-code -- ios/Packages/BreatheCore/Sources/BreatheAPI/Generated"]
 
 [tasks."check:deps"]
 description = "Report crate dependencies nothing imports"
@@ -279,12 +269,50 @@ description = "Serve the marketing one-pager locally"
 # 18102: next free port in the 18100–18199 block (API 18100, Postgres 18101).
 run = "pnpm dlx serve --listen 18102 {{config_root}}/web"
 
+# infra: the AWS deployment, defined in infra/ and applied deliberately —
+# nothing below runs from `check` or CI, and only infra:apply touches AWS.
+
+[tasks."infra:init"]
+description = "Initialise OpenTofu (downloads providers and modules; no AWS access)"
+dir = "{{config_root}}/infra"
+run = "tofu init"
+
+[tasks."infra:plan"]
+description = "Preview infrastructure changes (needs AWS credentials, changes nothing)"
+dir = "{{config_root}}/infra"
+run = ["tofu fmt -check -diff", "tofu validate", "tofu plan"]
+
+[tasks."infra:apply"]
+description = "Apply infrastructure changes to AWS"
+dir = "{{config_root}}/infra"
+run = "tofu apply"
+
+[tasks.deploy]
+description = "Build the release image, ship it to the box over SSH, migrate, restart"
+# No registry: one box makes `docker save | ssh docker load` the whole supply
+# chain. The host derives from the infra state rather than an env var, so there
+# is exactly one answer to where production is.
+run = ["docker build --platform linux/arm64 -t breathe-api:latest .", """
+  set -eu
+  host="ubuntu@$(tofu -chdir=infra output -raw elastic_ip)"
+  docker save breathe-api:latest | gzip | ssh "$host" 'gunzip | docker load'
+  rsync -az infra/box/ "$host":/srv/breathe/
+  ssh "$host" 'cd /srv/breathe && docker compose --profile tools run --rm migrate && docker compose up -d --remove-orphans'
+  """]
+
 # ios
 
 [tasks."ios:gen"]
 description = "Generate Breathe.xcodeproj from ios/project.yml"
 dir = "{{config_root}}/ios"
-run = "xcodegen generate"
+# The plutil step bakes this Mac's Bonjour address into the freshly generated
+# (gitignored) Info.plist. Debug builds fall back to it when the
+# BREATHE_API_BASE_URL environment variable is absent — which is every launch
+# from the home screen, where no debugger means no environment — so a device
+# build keeps working untethered. The Bonjour name rather than the LAN IP
+# because it survives a DHCP renewal, and derives per machine with no config:
+# whoever generates the project gets their own Mac baked in.
+run = ["xcodegen generate", 'plutil -replace BreatheAPIBaseURL -string "http://$(scutil --get LocalHostName).local:18100" Breathe/Info.plist']
 
 [tasks."ios:open"]
 description = "Generate the project and open it in Xcode"

@@ -1,0 +1,57 @@
+#cloud-config
+# First-boot setup only. Everything that changes per release — the image, the
+# compose file, the Caddyfile — arrives via `mise run deploy`, so this file
+# never needs to change to ship code, and the instance never needs replacing to
+# pick a release up.
+
+package_update: true
+packages:
+  - docker.io
+  - docker-compose-v2
+  - awscli
+  # For mapping the EBS attachment name to the NVMe device below.
+  - nvme-cli
+
+write_files:
+  # Nightly dump straight to S3 — credentials come from the instance profile,
+  # never from a key on disk. Restore procedure lives in docs/deployment.md.
+  - path: /etc/cron.d/breathe-backup
+    content: |
+      AWS_DEFAULT_REGION=${region}
+      17 2 * * * root docker compose -f /srv/breathe/compose.yaml exec -T db pg_dump -U postgres breathe | gzip | aws s3 cp - s3://${backup_bucket}/breathe-$(date +\%F).sql.gz
+
+runcmd:
+  - usermod -aG docker ubuntu
+  # rsync target for `mise run deploy`.
+  - install -d -o ubuntu -g ubuntu /srv/breathe
+  # The data volume attaches as /dev/sdf but surfaces as an unpredictable
+  # /dev/nvme*n1 on Nitro instances; the attachment name survives in the NVMe
+  # controller's vendor field, which is what the nvme-cli probe reads. The wait
+  # loop exists because the attachment is a separate resource that can land
+  # after first boot starts.
+  - |
+    DEV=""
+    for i in $(seq 1 60); do
+      for d in /dev/nvme*n1; do
+        if nvme id-ctrl -v "$d" 2>/dev/null | grep -q sdf; then DEV="$d"; fi
+      done
+      if [ -n "$DEV" ]; then break; fi
+      sleep 2
+    done
+    test -n "$DEV"
+    # blkid finds nothing only on a never-formatted volume — this can never
+    # reformat data.
+    blkid "$DEV" || mkfs.ext4 -L breathe-data "$DEV"
+    printf 'LABEL=breathe-data /srv/data ext4 defaults,nofail 0 2\n' >> /etc/fstab
+    install -d /srv/data
+    mount -a
+  # The database password lives on the data volume, not the instance: Postgres
+  # keeps its own hash inside the cluster files, so a regenerated password on a
+  # fresh instance would strand the existing data. The symlink is where Docker
+  # Compose picks it up for interpolation.
+  - |
+    if [ ! -f /srv/data/breathe.env ]; then
+      printf 'POSTGRES_PASSWORD=%s\n' "$(openssl rand -hex 24)" > /srv/data/breathe.env
+      chmod 600 /srv/data/breathe.env
+    fi
+    ln -sf /srv/data/breathe.env /srv/breathe/.env

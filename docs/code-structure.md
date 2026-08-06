@@ -32,11 +32,11 @@ Swift splits one layer further than Rust: the view stays in the app feature dire
 
 Inside a Rust feature, three layers with fixed responsibilities:
 
-| Layer | Receives | Owns | Never does |
-| :-- | :-- | :-- | :-- |
-| `handlers/` | `Arc<AppState>` | Transport concerns, auth, request unwrapping | Business rules |
-| `service.rs` | `&PgPool` and other explicit dependencies | Validation, orchestration, proto conversion | Raw SQL; taking `Arc<AppState>` |
-| `repository.rs` | `&PgPool` | All SQL | Anything else |
+| Layer           | Receives                                  | Owns                                         | Never does                      |
+| :-------------- | :---------------------------------------- | :------------------------------------------- | :------------------------------ |
+| `handlers/`     | `Arc<AppState>`                           | Transport concerns, auth, request unwrapping | Business rules                  |
+| `service.rs`    | `&PgPool` and other explicit dependencies | Validation, orchestration, proto conversion  | Raw SQL; taking `Arc<AppState>` |
+| `repository.rs` | `&PgPool`                                 | All SQL                                      | Anything else                   |
 
 A service that takes `Arc<AppState>` can reach anything, which makes its real dependencies invisible at the call site and untestable in isolation. Explicit parameters are the point.
 
@@ -79,12 +79,12 @@ Every piece of code has a default home. Start at the lowest tier and escalate on
 
 All Swift library code lives in **one** SwiftPM package, `ios/Packages/BreatheCore`, split into targets. One package rather than three because SwiftPM cannot share a tools-version or platform list across packages — and, more importantly, because each package carries its own `Package.resolved`, so a split means several lockfiles free to pin different versions of the same dependency.
 
-| Target | Product? | Role | May depend on |
-| :-- | :-- | :-- | :-- |
-| `BreatheAPI` | **no** | Generated protobuf + the Connect client factory | Connect, SwiftProtobuf |
-| `BreatheKit` | yes | Domain models, observable feature models, and repositories | `BreatheAPI` |
-| `BreatheUI` | yes | Design tokens and shared components | nothing |
-| `Breathe` (app) | — | Features, composition root | `BreatheKit`, `BreatheUI` |
+| Target          | Product? | Role                                                       | May depend on             |
+| :-------------- | :------- | :--------------------------------------------------------- | :------------------------ |
+| `BreatheAPI`    | **no**   | Generated protobuf + the Connect client factory            | Connect, SwiftProtobuf    |
+| `BreatheKit`    | yes      | Domain models, observable feature models, and repositories | `BreatheAPI`              |
+| `BreatheUI`     | yes      | Design tokens and shared components                        | nothing                   |
+| `Breathe` (app) | —        | Features, composition root                                 | `BreatheKit`, `BreatheUI` |
 
 Two invariants hold here, and the target graph enforces both:
 

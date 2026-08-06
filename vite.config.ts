@@ -2,16 +2,24 @@
 // JSON, and TOML. There is no Vite app here — vp reads its options from this
 // file, and refuses to run outside a JS workspace at all, which is also why the
 // root package.json exists.
-//
-// Formatting options are left at their defaults deliberately: vp is version-
-// pinned in .mise.toml, so the defaults cannot shift underneath a commit.
 export default {
   fmt: {
     // A paragraph is one physical line; where it breaks on screen is the
-    // reader's editor's business, not the file's. This also joins any paragraph
-    // someone hard-wrapped by hand, and keeps tables compact instead of
-    // column-aligned — aligned tables reflow every row when one cell changes.
+    // reader's editor's business, not the file's. This also joins back any
+    // paragraph someone hard-wrapped by hand.
     proseWrap: "never",
+
+    // Not a line limit — nothing here wraps prose. It is the threshold vp uses
+    // to decide whether a markdown table fits when column-aligned: narrower and
+    // it pads the cells, wider and it leaves them compact. At the default 80
+    // this repo landed on both styles at once, twice within one file. 200 clears
+    // the widest table we have, so every table aligns and the choice is uniform.
+    //
+    // Compact-everywhere is not reachable: it would need a width below the
+    // narrowest table (~70), which is under the longest TOML and YAML arrays and
+    // explodes them one element per line.
+    printWidth: 200,
+
     // vp already honours .gitignore. These are the tracked files another tool
     // owns the format of, where a reformat is churn at best.
     ignorePatterns: [

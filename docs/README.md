@@ -1,21 +1,22 @@
 # Documentation
 
-| Doc | When to read |
-| :-- | :-- |
-| [contributing.md](contributing.md) | First. Setup, ports, the gate, and the things that will bite you. |
-| [architecture.md](architecture.md) | To see the whole shape and the decisions behind it. |
-| [code-structure.md](code-structure.md) | Before adding a file. Where code goes and why. |
-| [transport.md](transport.md) | Before touching `proto/`, or when a request fails in the client but not the server. |
-| [testing.md](testing.md) | Before writing a test — particularly the "what not to test" list. |
-| [observability.md](observability.md) | Before adding a log line. |
+| Doc                                    | When to read                                                                        |
+| :------------------------------------- | :---------------------------------------------------------------------------------- |
+| [contributing.md](contributing.md)     | First. Setup, ports, the gate, and the things that will bite you.                   |
+| [architecture.md](architecture.md)     | To see the whole shape and the decisions behind it.                                 |
+| [code-structure.md](code-structure.md) | Before adding a file. Where code goes and why.                                      |
+| [transport.md](transport.md)           | Before touching `proto/`, or when a request fails in the client but not the server. |
+| [testing.md](testing.md)               | Before writing a test — particularly the "what not to test" list.                   |
+| [observability.md](observability.md)   | Before adding a log line.                                                           |
+| [deployment.md](deployment.md)         | Before touching `infra/` or shipping a release.                                     |
 
 ## Product
 
-| Doc | When to read |
-| :-- | :-- |
-| [product/business-plan.md](product/business-plan.md) | What we are building, for whom, and how it pays for itself. |
-| [product/roadmap.md](product/roadmap.md) | The build order to V1 and the technical decisions behind each milestone. |
-| [product/naming.md](product/naming.md) | The market-facing name: shortlist and validation checklist. |
+| Doc                                                  | When to read                                                             |
+| :--------------------------------------------------- | :----------------------------------------------------------------------- |
+| [product/business-plan.md](product/business-plan.md) | What we are building, for whom, and how it pays for itself.              |
+| [product/roadmap.md](product/roadmap.md)             | The build order to V1 and the technical decisions behind each milestone. |
+| [product/naming.md](product/naming.md)               | The market-facing name: shortlist and validation checklist.              |
 
 ## Documentation policy
 

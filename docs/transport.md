@@ -6,10 +6,10 @@ How a value gets from a Postgres row to a SwiftUI view, and why the pipeline is 
 
 `proto/breathe/v1/` holds the only definition of the API. Nothing else describes it — there is no OpenAPI document, no hand-written Swift model, no shared types package. Two generators read it:
 
-| Target | Generator | Output | Committed? |
-| :-- | :-- | :-- | :-- |
-| Rust server | `tonic-prost-build`, from `crates/api/build.rs` | `OUT_DIR`, re-exported via `crates/api/src/proto.rs` | No |
-| Swift client | `buf generate` (`protoc-gen-swift` + `protoc-gen-connect-swift`) | `ios/Packages/BreatheCore/Sources/BreatheAPI/Generated/` | Yes |
+| Target       | Generator                                                        | Output                                                   | Committed? |
+| :----------- | :--------------------------------------------------------------- | :------------------------------------------------------- | :--------- |
+| Rust server  | `tonic-prost-build`, from `crates/api/build.rs`                  | `OUT_DIR`, re-exported via `crates/api/src/proto.rs`     | No         |
+| Swift client | `buf generate` (`protoc-gen-swift` + `protoc-gen-connect-swift`) | `ios/Packages/BreatheCore/Sources/BreatheAPI/Generated/` | Yes        |
 
 The asymmetry is deliberate. Rust regenerates on every `cargo build`, so a stale artefact is impossible and committing one would only create merge noise. Xcode has no equivalent hook, and requiring `buf` to be installed before the app compiles would put a Go toolchain between a new contributor and their first build — so the Swift output is committed and refreshed by `mise run generate:proto`.
 
