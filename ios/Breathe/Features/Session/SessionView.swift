@@ -15,6 +15,11 @@ struct SessionView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
 
+    /// The seconds left before the session starts, or nil once it has. The
+    /// count is presentation, not part of the session: the recorded duration
+    /// starts when the first breath does.
+    @State private var countdown: Int?
+
     init(model: SessionModel) {
         _model = State(wrappedValue: model)
         hints = PhaseHints.hints(for: model.technique)
@@ -26,6 +31,8 @@ struct SessionView: View {
 
             if model.status == .finished, let record = model.record {
                 SessionSummaryView(record: record, technique: model.technique) { dismiss() }
+            } else if let countdown {
+                getReady(countdown)
             } else {
                 player
             }
@@ -36,8 +43,10 @@ struct SessionView: View {
             // three phases in. Restored on the way out — this is a system-wide
             // setting and leaving it on would outlive the session.
             UIApplication.shared.isIdleTimerDisabled = true
-            model.start()
         }
+        // `.task` rather than `onAppear`, so dismissing mid-count cancels it
+        // and the session is never started under a screen that has gone.
+        .task { await runCountdown() }
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
             model.dismiss()
@@ -50,6 +59,55 @@ struct SessionView: View {
             }
         }
         .onChange(of: model.currentBeat?.id) { _, _ in announceCurrentPhase() }
+    }
+
+    /// The breath before the breathing: a beat to settle before the plan's
+    /// clock starts. Three seconds, not a preference — long enough to put the
+    /// phone somewhere and soften the shoulders, short enough that nobody
+    /// reaches for a skip.
+    private func getReady(_ count: Int) -> some View {
+        VStack(spacing: Theme.Spacing.loose) {
+            VStack(spacing: Theme.Spacing.close) {
+                Text("Get comfortable")
+                    .font(.title2.weight(.medium))
+                Text("Starting in")
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.Ink.secondary)
+            }
+
+            Text("\(count)")
+                .font(.system(size: 96, design: .rounded).weight(.light))
+                .monospacedDigit()
+                .contentTransition(.numericText(countsDown: true))
+                .animation(.easeInOut(duration: 0.3), value: count)
+        }
+        .foregroundStyle(Theme.Ink.primary)
+        // The announcements in `runCountdown` carry this for VoiceOver, on
+        // the same beat the sighted see.
+        .accessibilityHidden(true)
+        .sensoryFeedback(.impact(weight: .light), trigger: count) { _, _ in
+            settings.cueMode.playsHaptics
+        }
+    }
+
+    /// Counts three seconds down and then starts the session. The guard makes
+    /// a re-fired task (or a session already under way) a no-op rather than a
+    /// second countdown over a running breath.
+    private func runCountdown() async {
+        guard model.status == .ready, countdown == nil else { return }
+
+        for count in [3, 2, 1] {
+            countdown = count
+            let lead = count == 3 ? "Get comfortable. Starting in " : ""
+            AccessibilityNotification.Announcement("\(lead)\(count)").post()
+            try? await Task.sleep(for: .seconds(1))
+            if Task.isCancelled {
+                return
+            }
+        }
+
+        countdown = nil
+        model.start()
     }
 
     /// The accent, washed over the palette's own ground rather than over
