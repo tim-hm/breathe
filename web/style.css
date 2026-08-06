@@ -1,0 +1,518 @@
+/* One stylesheet, no build step. Tokens first; components read only tokens so
+   the dark redefinition stays a short block. */
+
+:root {
+  --ground: #ffffff;
+  --ink: #1d2523;
+  --ink-soft: #5c6a66;
+  --line: #e3e8e6;
+  --accent: #397a6e;
+  --orb: #64b0a2;
+  /* The orb and captions shift to this during the two holds. */
+  --hold: #7286b8;
+
+  --serif: "Iowan Old Style", "Palatino Nova", Palatino, Georgia, serif;
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* One breath cycle: 4s out, 4s hold, 4s in, 4s hold (box breathing). */
+  --cycle: 16s;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #101413;
+    --ink: #e2e9e6;
+    --ink-soft: #94a29d;
+    --line: #242c29;
+    --accent: #6fbcad;
+    --orb: #4d9184;
+    --hold: #8497c4;
+  }
+}
+
+* {
+  margin: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+main {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 0 1.5rem 6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 6rem;
+}
+
+h1,
+h2 {
+  font-family: var(--serif);
+  font-weight: 500;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+h1 {
+  font-size: clamp(2.1rem, 6vw, 3rem);
+}
+
+h2 {
+  font-size: clamp(1.5rem, 4vw, 1.9rem);
+  margin-bottom: 1rem;
+}
+
+p + p {
+  margin-top: 1rem;
+}
+
+.eyebrow {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 0.75rem;
+}
+
+/* Hero */
+
+.hero {
+  min-height: 92svh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 1.5rem;
+  padding-top: 2rem;
+}
+
+.wordmark {
+  font-family: var(--serif);
+  font-size: 1.1rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.lede {
+  max-width: 34rem;
+  color: var(--ink-soft);
+  text-wrap: pretty;
+}
+
+/* The orb — the page's one moment of motion. One box-breathing cycle:
+   a filled dot swells to full size on the exhale, holds there while the color
+   shifts, shrinks back to the dot on the inhale, and holds again. The rings
+   travel with it, collapsing into the dot so only one circle remains. */
+
+.orb {
+  position: relative;
+  width: min(46vw, 15rem);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  margin: 1rem 0 2.5rem;
+}
+
+.orb-ring,
+.orb-core {
+  grid-area: 1 / 1;
+  border-radius: 50%;
+  animation-duration: var(--cycle);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+.orb-core {
+  width: 56%;
+  height: 56%;
+  background: var(--orb);
+  animation-name: core-breathe;
+}
+
+.orb-ring {
+  border: 1.5px solid var(--orb);
+}
+
+.orb-ring-mid {
+  width: 78%;
+  height: 78%;
+  animation-name: ring-mid-breathe;
+}
+
+.orb-ring-outer {
+  width: 100%;
+  height: 100%;
+  animation-name: ring-outer-breathe;
+}
+
+/* Shared timeline for all three circles:
+   0%        dot — everything collapsed
+   0→25%     exhale — expand to full
+   25→50%    hold — full size, color shifts to --hold
+   50→75%    inhale — shrink back to the dot
+   75→100%   hold — dot, color shifts again */
+
+@keyframes core-breathe {
+  0% {
+    transform: scale(0.45);
+    background: var(--orb);
+  }
+
+  25% {
+    transform: scale(1);
+    background: var(--orb);
+  }
+
+  37.5%,
+  50% {
+    transform: scale(1);
+    background: var(--hold);
+  }
+
+  75% {
+    transform: scale(0.45);
+    background: var(--orb);
+  }
+
+  87.5%,
+  100% {
+    transform: scale(0.45);
+    background: var(--hold);
+  }
+}
+
+@keyframes ring-mid-breathe {
+  0% {
+    transform: scale(0.32);
+    border-color: var(--orb);
+    opacity: 0;
+  }
+
+  25% {
+    transform: scale(1);
+    border-color: var(--orb);
+    opacity: 0.65;
+  }
+
+  37.5%,
+  50% {
+    transform: scale(1);
+    border-color: var(--hold);
+    opacity: 0.65;
+  }
+
+  75% {
+    transform: scale(0.32);
+    border-color: var(--orb);
+    opacity: 0;
+  }
+
+  87.5%,
+  100% {
+    transform: scale(0.32);
+    border-color: var(--hold);
+    opacity: 0;
+  }
+}
+
+@keyframes ring-outer-breathe {
+  0% {
+    transform: scale(0.25);
+    border-color: var(--orb);
+    opacity: 0;
+  }
+
+  25% {
+    transform: scale(1);
+    border-color: var(--orb);
+    opacity: 0.4;
+  }
+
+  37.5%,
+  50% {
+    transform: scale(1);
+    border-color: var(--hold);
+    opacity: 0.4;
+  }
+
+  75% {
+    transform: scale(0.25);
+    border-color: var(--orb);
+    opacity: 0;
+  }
+
+  87.5%,
+  100% {
+    transform: scale(0.25);
+    border-color: var(--hold);
+    opacity: 0;
+  }
+}
+
+.orb-phase {
+  position: absolute;
+  top: calc(100% + 0.75rem);
+  width: 100%;
+  display: grid;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.phase {
+  grid-area: 1 / 1;
+  opacity: 0;
+  animation: phase-caption var(--cycle) infinite;
+}
+
+.phase-hold-full {
+  animation-delay: calc(var(--cycle) * 0.25);
+  color: var(--hold);
+}
+
+.phase-in {
+  animation-delay: calc(var(--cycle) * 0.5);
+}
+
+.phase-hold-empty {
+  animation-delay: calc(var(--cycle) * 0.75);
+  color: var(--hold);
+}
+
+@keyframes phase-caption {
+  0%,
+  3% {
+    opacity: 0;
+  }
+
+  8%,
+  20% {
+    opacity: 1;
+  }
+
+  25%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orb-ring,
+  .orb-core,
+  .phase {
+    animation: none;
+  }
+
+  .orb-ring-mid {
+    opacity: 0.65;
+  }
+
+  .orb-ring-outer {
+    opacity: 0.4;
+  }
+
+  .phase-out {
+    opacity: 1;
+  }
+}
+
+/* App Store badge — black in both themes like Apple's own artwork; the
+   hairline border is what the official badge uses on dark grounds. */
+
+.appstore {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  background: #000;
+  color: #fff;
+  border: 1px solid #a6a6a6;
+  border-radius: 13px;
+  padding: 0.55rem 1.15rem 0.55rem 1rem;
+  text-decoration: none;
+}
+
+.appstore:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.appstore-apple {
+  width: 1.7rem;
+  height: 2.1rem;
+}
+
+.appstore-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.15;
+}
+
+.appstore-small {
+  font-size: 0.68rem;
+}
+
+.appstore-large {
+  font-size: 1.35rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+/* Technique explorer — goal-led tabs, one technique per panel. */
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1.5rem 0 2rem;
+}
+
+.tab {
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.45rem 1rem;
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    color 0.2s;
+}
+
+.tab:hover {
+  border-color: var(--accent);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.tab[aria-selected="true"] {
+  color: var(--ground);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem 2.5rem;
+}
+
+/* `display: flex` above outranks the UA's `[hidden] { display: none }`, so the
+   attribute needs restating here or every panel shows at once. */
+.panel[hidden] {
+  display: none;
+}
+
+.panel-copy {
+  flex: 1 1 18rem;
+}
+
+.panel-copy h3 {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 1.2rem;
+  margin-bottom: 0.5rem;
+}
+
+.panel-copy p {
+  color: var(--ink-soft);
+}
+
+/* Line diagrams — inline SVG, stroked in tokens, no fills. */
+
+.diagram {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.diagram svg {
+  max-width: 100%;
+  height: auto;
+  color: var(--ink-soft);
+}
+
+.diagram .stroke-accent {
+  stroke: var(--accent);
+}
+
+.diagram figcaption {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.diagram text {
+  font-family: var(--sans);
+  font-size: 11px;
+  fill: var(--ink-soft);
+  letter-spacing: 0.04em;
+}
+
+/* Points list */
+
+.points {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+  border-top: 1px solid var(--line);
+  padding-top: 1.75rem;
+}
+
+.points dt {
+  font-family: var(--serif);
+  font-size: 1.2rem;
+  margin-bottom: 0.25rem;
+}
+
+.points dd {
+  color: var(--ink-soft);
+}
+
+.price {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Footer */
+
+footer {
+  border-top: 1px solid var(--line);
+  padding: 2rem 1.5rem 3rem;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+
+.footer-links {
+  margin-top: 0.5rem;
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+}
+
+.footer-links a {
+  color: var(--accent);
+}

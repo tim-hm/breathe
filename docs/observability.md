@@ -4,11 +4,11 @@
 
 **Log at boundaries, stay silent in between.**
 
-Handlers log outcomes. `service.rs` and `repository.rs` say nothing — they communicate through typed errors, and the boundary that catches one decides whether it is worth a line. A repository that logs its own failure *and* returns an error produces two records of one event, and the one with context is the one further out.
+Handlers log outcomes. `service.rs` and `repository.rs` say nothing — they communicate through typed errors, and the boundary that catches one decides whether it is worth a line. A repository that logs its own failure _and_ returns an error produces two records of one event, and the one with context is the one further out.
 
 ## Levels
 
-Keyed on a single question: *was this expected?*
+Keyed on a single question: _was this expected?_
 
 | Level | Means | Example |
 | :-- | :-- | :-- |
@@ -16,7 +16,7 @@ Keyed on a single question: *was this expected?*
 | `warn` | A handled failure mode. Degraded but understood. | A dependency was unreachable and the fallback ran |
 | `info` | A lifecycle milestone. Rare, and permanent. | "connected to the database", "listening" |
 | `debug` | Detail for an investigation in progress | A connection retry attempt |
-| `trace` | Per-request hot path | |
+| `trace` | Per-request hot path |  |
 
 The test for `info`: would you still want this line after a million requests? "listening" yes; "handled a request" no — that is what the `TraceLayer` span is for.
 
@@ -29,7 +29,7 @@ The test for `info`: would you still want this line after a million requests? "l
 
 ## Named patterns
 
-**Log before converting.** Each feature's error enum logs server-side faults in its `From<…> for tonic::Status` impl, at the point of conversion — `crates/api/src/features/technique/errors.rs` is the pattern. The client receives an opaque `internal` status, so a conversion that stays silent leaves the failure unreproducible from outside the process. The sqlx error is deliberately *not* forwarded to the client — it can carry table and column names — and the log is where that detail belongs.
+**Log before converting.** Each feature's error enum logs server-side faults in its `From<…> for tonic::Status` impl, at the point of conversion — `crates/api/src/features/technique/errors.rs` is the pattern. The client receives an opaque `internal` status, so a conversion that stays silent leaves the failure unreproducible from outside the process. The sqlx error is deliberately _not_ forwarded to the client — it can carry table and column names — and the log is where that detail belongs.
 
 **Correlation ID.** When an HTTP handler returns a failure to a caller, mint a `cuid2`, log it alongside the cause, and return it in the body as `request_id`. A user-reported failure then resolves to one log line instead of a timestamp and a guess. No handler needs this yet — `/health` and `/about` are infallible — so the helper does not exist. Write it with the first fallible route rather than in advance.
 

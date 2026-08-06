@@ -5,14 +5,14 @@ globs:
   - "!target/**"
 
 config:
+  # Table shape belongs to `vp fmt` (mise run fmt:text). Two tools with opinions
+  # about the same bytes is a fight, not a check — and this one is unwinnable:
+  # vp writes an empty cell as `|  |`, which MD060 reads as stray padding.
+  MD060: false
+
   # Prose is wrapped for reading, not to a column. A hard limit here would either
   # be ignored or would start dictating how sentences are written.
   MD013: false
-
-  # Tables in these docs use a leading pipe and no trailing alignment padding;
-  # enforcing padding produces large diffs for no readability gain.
-  MD055: false
-  MD056: false
 
   # `mise run check` output and shell transcripts are fenced without a language,
   # which is correct — they are not any language.

@@ -48,22 +48,22 @@ The module path provides context — **don't prefix filenames with the feature n
 
 ### Rust
 
-| Element | Convention | Example |
-| :-- | :-- | :-- |
-| Files/modules | snake_case | `repository.rs` |
-| Module entry | `mod.rs` | |
-| Doc comments | `//!` at the top of every file | `//! Technique SQL.` |
+| Element       | Convention                     | Example              |
+| :------------ | :----------------------------- | :------------------- |
+| Files/modules | snake_case                     | `repository.rs`      |
+| Module entry  | `mod.rs`                       |                      |
+| Doc comments  | `//!` at the top of every file | `//! Technique SQL.` |
 
 ### Swift
 
 Swift diverges from Rust here, and deliberately: the language convention is one principal type per file, named after it. Following the Rust convention instead would fight every tool in the ecosystem.
 
-| Element | Convention | Example |
-| :-- | :-- | :-- |
-| All files | PascalCase, named for the principal type | `TechniqueListView.swift` |
-| Views | `-View` suffix | `TechniqueListView.swift` |
-| Observable models | `-Model` suffix | `TechniqueListModel.swift` |
-| Tests | `-Tests` suffix | `TechniqueDecodingTests.swift` |
+| Element           | Convention                               | Example                        |
+| :---------------- | :--------------------------------------- | :----------------------------- |
+| All files         | PascalCase, named for the principal type | `TechniqueListView.swift`      |
+| Views             | `-View` suffix                           | `TechniqueListView.swift`      |
+| Observable models | `-Model` suffix                          | `TechniqueListModel.swift`     |
+| Tests             | `-Tests` suffix                          | `TechniqueDecodingTests.swift` |
 
 ## Three-Tier Escalation
 

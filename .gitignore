@@ -36,3 +36,7 @@ mise.local.toml
 /tmp/
 .claude/*
 !.claude/skills/
+
+# vp needs a package.json at the root; nothing here installs dependencies, but
+# a stray `pnpm dlx` can still leave this behind.
+node_modules/

@@ -9,6 +9,14 @@
 | [testing.md](testing.md) | Before writing a test — particularly the "what not to test" list. |
 | [observability.md](observability.md) | Before adding a log line. |
 
+## Product
+
+| Doc | When to read |
+| :-- | :-- |
+| [product/business-plan.md](product/business-plan.md) | What we are building, for whom, and how it pays for itself. |
+| [product/roadmap.md](product/roadmap.md) | The build order to V1 and the technical decisions behind each milestone. |
+| [product/naming.md](product/naming.md) | The market-facing name: shortlist and validation checklist. |
+
 ## Documentation policy
 
 **Document rationale next to the pattern.** There is no separate decision log. When a design decision is made, the reasoning goes in the doc that covers that area, or in the doc comment on the code itself. A decision log rots because nothing forces it to be read; a paragraph above the code that surprised you gets read by the next person to touch it.

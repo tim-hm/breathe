@@ -19,7 +19,7 @@ The server is tonic wrapped in `tonic_web::GrpcWebLayer` (`crates/api/src/main.r
 
 connect-swift speaks three protocols — Connect, gRPC, and gRPC-Web — and the server has to speak the same one:
 
-- **Connect** would be the nicer protocol: plain HTTP with JSON or binary bodies, trivially curl-able. There is no mature Connect-protocol *server* for Rust, so this would mean writing the protocol adapter by hand.
+- **Connect** would be the nicer protocol: plain HTTP with JSON or binary bodies, trivially curl-able. There is no mature Connect-protocol _server_ for Rust, so this would mean writing the protocol adapter by hand.
 - **gRPC** proper needs HTTP/2 with trailers. That works, but it puts an HTTP/2-capable path between the app and the server for every proxy that will ever sit in between.
 - **gRPC-Web** is a POST with a binary body and the status carried in headers. tonic ships a production layer for it, connect-swift supports it as a first-class client protocol, and it survives ordinary HTTP/1.1 infrastructure.
 

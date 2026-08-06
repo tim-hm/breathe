@@ -57,19 +57,19 @@ This rule has teeth: a shell that has visited the sibling `connect` repo exports
 
 **Toolkit-first rule**: helper tooling is a mise task or a subcommand of a future `toolkit` crate — never a loose bash/python script. `scripts/` does not exist and should stay that way.
 
-| Intent | Task |
-| :-- | :-- |
-| Full validation (the gate) | `mise run check` |
-| Auto-fix formatting + lint | `mise run fix` |
-| Regenerate proto types + SQLx cache | `mise run generate` |
-| Start Postgres | `mise run dev:db` |
-| Apply migrations + seed | `mise run migrate` |
-| Run the API with reload | `mise run dev` |
-| Query the database | `echo 'select …;' \| mise run db:psql` |
-| Rebuild the DB from scratch | `mise run dev:db:reset` |
-| Generate + open the Xcode project | `mise run ios:gen` / `mise run ios:open` |
-| Build the app headlessly | `mise run ios:build` |
-| Tests | `mise run test` (`test:rs`, `test:e2e`, `test:swift`) |
+| Intent                              | Task                                                  |
+| :---------------------------------- | :---------------------------------------------------- |
+| Full validation (the gate)          | `mise run check`                                      |
+| Auto-fix formatting + lint          | `mise run fix`                                        |
+| Regenerate proto types + SQLx cache | `mise run generate`                                   |
+| Start Postgres                      | `mise run dev:db`                                     |
+| Apply migrations + seed             | `mise run migrate`                                    |
+| Run the API with reload             | `mise run dev`                                        |
+| Query the database                  | `echo 'select …;' \| mise run db:psql`                |
+| Rebuild the DB from scratch         | `mise run dev:db:reset`                               |
+| Generate + open the Xcode project   | `mise run ios:gen` / `mise run ios:open`              |
+| Build the app headlessly            | `mise run ios:build`                                  |
+| Tests                               | `mise run test` (`test:rs`, `test:e2e`, `test:swift`) |
 
 **Before committing** — three commands, in this order:
 
