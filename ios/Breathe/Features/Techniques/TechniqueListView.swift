@@ -4,18 +4,38 @@ import SwiftUI
 
 /// The whole catalogue, grouped by what each technique is for.
 ///
-/// Pushed from home rather than shown there: someone who wants to breathe
-/// says so on the wheel, and someone who wants to read about nine techniques
-/// has come here deliberately. The model arrives already loaded, so this
-/// screen never fetches — it is a second view onto the catalogue home holds.
+/// Its own tab rather than part of home: someone who wants to breathe says so
+/// on the wheel, and someone who wants to read about nine techniques has come
+/// here deliberately. The model arrives shared with home — two views onto one
+/// load.
 struct TechniqueListView: View {
     let model: TechniqueListModel
+    let foundations: FoundationsModel
+    let sessions: any SessionRecording
 
     var body: some View {
-        content
-            .paletteGround()
-            .navigationTitle("Techniques")
-            .navigationBarTitleDisplayMode(.inline)
+        NavigationStack {
+            content
+                .paletteGround()
+                .navigationTitle("Techniques")
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        NavigationLink("The basics") {
+                            FoundationsView(model: foundations)
+                        }
+                    }
+                }
+                .navigationDestination(for: Technique.self) { technique in
+                    TechniqueDetailView(technique: technique, sessions: sessions)
+                }
+        }
+        // Home usually loads the catalogue first, but this tab must not depend
+        // on ever having visited it.
+        .task {
+            if case .loading = model.state {
+                await model.load()
+            }
+        }
     }
 
     @ViewBuilder
@@ -71,17 +91,23 @@ private struct TechniqueRow: View {
     let technique: Technique
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.close) {
-            Text(technique.name)
-                .font(.headline)
+        HStack(alignment: .center, spacing: Theme.Spacing.standard) {
+            VStack(alignment: .leading, spacing: Theme.Spacing.close) {
+                Text(technique.name)
+                    .font(.headline)
 
-            Text(technique.summary)
-                .font(.subheadline)
-                .foregroundStyle(Theme.Ink.secondary)
+                Text(technique.summary)
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.Ink.secondary)
 
-            Text(technique.shapeDescription)
-                .font(.caption)
-                .foregroundStyle(Theme.Ink.tertiary)
+                Text(technique.shapeDescription)
+                    .font(.caption)
+                    .foregroundStyle(Theme.Ink.tertiary)
+            }
+
+            Spacer(minLength: 0)
+
+            BreathRhythmSparkline(technique: technique)
         }
         .padding(.vertical, Theme.Spacing.close)
     }

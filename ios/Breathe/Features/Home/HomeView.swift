@@ -4,15 +4,15 @@ import SwiftUI
 
 /// The way in: say what you want, start breathing.
 ///
-/// One decision on the screen — the intent wheel — with everything else a
-/// step to the side: the catalogue and the basics are pushed, the dials live
-/// on the technique's own screen. The wheel wakes up on the hour's goal and
+/// One decision on the screen — the intent wheel — under the brand's own
+/// breathing orb. Everything else lives in the tab bar's other tabs; the only
+/// extras here are the technique the wheel resolves to and a repeat shortcut
+/// for the person's last exercise. The wheel wakes up on the hour's goal and
 /// offers the technique this person last used towards it, which is as much
 /// context as an on-device rule should claim before M6.
 struct HomeView: View {
     @State private var model: TechniqueListModel
 
-    private let foundations: FoundationsModel
     private let sessions: any SessionRecording
 
     @Environment(SessionSettings.self) private var settings
@@ -26,13 +26,8 @@ struct HomeView: View {
     @State private var history: [SessionRecord] = []
     @State private var started: StartedSession?
 
-    init(
-        model: TechniqueListModel,
-        foundations: FoundationsModel,
-        sessions: any SessionRecording
-    ) {
+    init(model: TechniqueListModel, sessions: any SessionRecording) {
         _model = State(wrappedValue: model)
-        self.foundations = foundations
         self.sessions = sessions
     }
 
@@ -40,17 +35,11 @@ struct HomeView: View {
         NavigationStack {
             content
                 .paletteGround()
-                .navigationTitle("Breathe")
+                // The wordmark below is this screen's title; the bar would
+                // duplicate it and cage the orb under a hairline.
+                .toolbar(.hidden, for: .navigationBar)
                 .navigationDestination(for: Technique.self) { technique in
                     TechniqueDetailView(technique: technique, sessions: sessions)
-                }
-                .navigationDestination(for: Destination.self) { destination in
-                    switch destination {
-                    case .techniques:
-                        TechniqueListView(model: model)
-                    case .basics:
-                        FoundationsView(model: foundations)
-                    }
                 }
         }
         .task {
@@ -97,14 +86,25 @@ struct HomeView: View {
     }
 
     private func loaded(_ techniques: [Technique]) -> some View {
-        VStack(spacing: Theme.Spacing.loose) {
+        let chosen = chosen(from: techniques)
+
+        return VStack(spacing: 0) {
+            wordmark
+                .padding(.top, Theme.Spacing.standard)
+
             Spacer()
 
-            intentWheel(over: goals(in: techniques))
+            VStack(spacing: Theme.Spacing.loose) {
+                AmbientOrb(accent: chosen?.goal.accent ?? Theme.Accent.brand)
 
-            if let chosen = chosen(from: techniques) {
-                chosenTechnique(chosen)
-                beginButton(chosen)
+                intentWheel(over: goals(in: techniques))
+
+                if let chosen {
+                    VStack(spacing: Theme.Spacing.standard) {
+                        chosenTechnique(chosen)
+                        beginButton(chosen)
+                    }
+                }
             }
 
             Spacer()
@@ -112,10 +112,17 @@ struct HomeView: View {
             if let last = HomeSuggestion.lastExercise(techniques: techniques, history: history) {
                 repeatRow(last)
             }
-
-            menu
         }
         .padding(Theme.Spacing.standard)
+    }
+
+    /// The site's wordmark, in the site's voice: serif, letterspaced, quiet.
+    private var wordmark: some View {
+        Text("BREATHE")
+            .font(.system(size: 15, weight: .medium, design: .serif))
+            .tracking(6)
+            .foregroundStyle(Theme.Ink.secondary)
+            .accessibilityAddTraits(.isHeader)
     }
 
     /// The one control: "I want to" beside a wheel of outcomes, reading as
@@ -192,15 +199,6 @@ struct HomeView: View {
         }
     }
 
-    private var menu: some View {
-        HStack(spacing: Theme.Spacing.loose) {
-            NavigationLink("All techniques", value: Destination.techniques)
-            NavigationLink("The basics", value: Destination.basics)
-        }
-        .font(.footnote)
-        .tint(Theme.Accent.brand)
-    }
-
     /// Starts `technique` as this person dialled it — the same resolution the
     /// detail screen's Begin makes, so the two cannot start different sessions.
     private func begin(_ technique: Technique) {
@@ -248,14 +246,6 @@ struct HomeView: View {
             techniques.contains { $0.goal == goal }
         }
     }
-}
-
-/// The screens reachable from home that are not a technique. A value rather
-/// than a pushed view so every destination on this stack is resolved in one
-/// place.
-private enum Destination: Hashable {
-    case techniques
-    case basics
 }
 
 /// Wraps the model so `fullScreenCover(item:)` has something `Identifiable` to

@@ -1,4 +1,5 @@
 import BreatheKit
+import BreatheUI
 import SwiftUI
 
 @main
@@ -29,11 +30,21 @@ struct BreatheApp: App {
     /// would vanish before the person saw the last card.
     @State private var isOnboarding: Bool
 
+    /// One catalogue model for every tab: home's wheel and the techniques list
+    /// are two views onto the same load.
+    @State private var catalogue: TechniqueListModel
+
+    /// The basics, shared the same way — reference data loaded once.
+    @State private var foundations: FoundationsModel
+
     init() {
         let identity = identity
         let baseURL = AppConfiguration.apiBaseURL
 
-        techniques = TechniqueRepository(baseURL: baseURL, identity: identity)
+        let techniques = TechniqueRepository(baseURL: baseURL, identity: identity)
+        self.techniques = techniques
+        _catalogue = State(wrappedValue: TechniqueListModel(techniques: techniques))
+        _foundations = State(wrappedValue: FoundationsModel(topics: techniques))
 
         let profiles = ProfileStore(
             profiles: ProfileRepository(baseURL: baseURL, identity: identity)
@@ -44,11 +55,24 @@ struct BreatheApp: App {
 
     var body: some Scene {
         WindowGroup {
-            HomeView(
-                model: TechniqueListModel(techniques: techniques),
-                foundations: FoundationsModel(topics: techniques),
-                sessions: sessions
-            )
+            // The chrome future features land in: journey joins as a tab (M5),
+            // reminders and the subscription live under Settings (M7, M8).
+            TabView {
+                Tab("Breathe", systemImage: "smallcircle.filled.circle") {
+                    HomeView(model: catalogue, sessions: sessions)
+                }
+                Tab("Techniques", systemImage: "square.grid.2x2") {
+                    TechniqueListView(
+                        model: catalogue,
+                        foundations: foundations,
+                        sessions: sessions
+                    )
+                }
+                Tab("Settings", systemImage: "gearshape") {
+                    SettingsView()
+                }
+            }
+            .tint(Theme.Accent.brand)
             .environment(settings)
             .fullScreenCover(isPresented: $isOnboarding) {
                 OnboardingView(model: OnboardingModel(store: profiles)) {
