@@ -9,6 +9,7 @@ options:
   bundleIdPrefix: xyz.holmie
   deploymentTarget:
     iOS: "18.0"
+    watchOS: "11.0"
   # Mirrors the on-disk folder structure in Xcode's navigator, so Features/
   # reads the same in the IDE as it does in the repo.
   createIntermediateGroups: true
@@ -20,6 +21,14 @@ settings:
     # is worth far more in an app built around a timing loop than it costs here.
     SWIFT_STRICT_CONCURRENCY: complete
     ENABLE_USER_SCRIPT_SANDBOXING: YES
+    # XcodeGen substitutes this from the environment at generate time, so the
+    # team id stays out of the repo and each developer supplies their own.
+    # Unset, XcodeGen writes the reference through verbatim and Xcode resolves
+    # it as an undefined build setting — i.e. no team, which is exactly what a
+    # simulator build wants. Only a device or archive build needs the variable,
+    # and now that the phone app embeds the watch app both bundles must be
+    # signed by the same team, which is why this sits at project level.
+    DEVELOPMENT_TEAM: ${BREATHE_DEV_TEAM}
 
 packages:
   BreatheCore:
@@ -39,6 +48,11 @@ targets:
         product: BreatheKit
       - package: BreatheCore
         product: BreatheUI
+      # Embeds the watch app in the phone app's bundle, which is the only way
+      # the pair reaches a device or App Store Connect as one submission.
+      # XcodeGen reads the dependency's platform and emits the embed build
+      # phase itself, so a plain target dependency is the whole declaration.
+      - target: BreatheWatch
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: xyz.holmie.breathe
@@ -78,6 +92,47 @@ targets:
         NSLocalNetworkUsageDescription: >-
           During development, Breathe connects to the development server on your local network to load the technique catalogue.
 
+  BreatheWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - path: BreatheWatch
+    dependencies:
+      # Same two products, and BreatheAPI absent for the same reason: the watch
+      # is another client of the domain, not a second place generated protobuf
+      # is allowed to surface.
+      - package: BreatheCore
+        product: BreatheKit
+      - package: BreatheCore
+        product: BreatheUI
+    settings:
+      base:
+        # A companion watch app's bundle id must be the phone app's with one
+        # component appended; the system pairs the two by that prefix and
+        # rejects the bundle outright if it does not hold.
+        PRODUCT_BUNDLE_IDENTIFIER: xyz.holmie.breathe.watchkitapp
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Breathe
+    info:
+      path: BreatheWatch/Info.plist
+      properties:
+        # Marks the bundle as a modern single-target watch app rather than a
+        # WatchKit app plus extension, which is what lets it be built from one
+        # target at all.
+        WKApplication: true
+        WKCompanionAppBundleIdentifier: xyz.holmie.breathe
+        # The watch talks to the backend itself — it holds its own copy of the
+        # identity and its own catalogue cache (roadmap M9), so a session on the
+        # wrist must not stall waiting for a phone that is in another room.
+        WKRunsIndependentlyOfCompanionApp: true
+        # Both keys carry the same meaning as on the phone target above: the
+        # narrow cleartext exemption for a dev backend on the LAN, and the
+        # string iOS shows in the local-network prompt.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        NSLocalNetworkUsageDescription: >-
+          During development, Breathe connects to the development server on your local network to load the technique catalogue.
+
 schemes:
   Breathe:
     build:
@@ -100,3 +155,13 @@ schemes:
       # into the gitignored Info.plist — the generating Mac's Bonjour address.
       # The variable remains an override for pointing one debug run somewhere
       # unusual.
+
+  BreatheWatch:
+    build:
+      targets:
+        BreatheWatch: all
+    # No `test:` block. Every Swift suite lives in BreatheCore and runs on the
+    # host through `mise run test:swift`; wiring them here as well would mean a
+    # watch simulator boot for tests that need no watch.
+    run:
+      config: Debug

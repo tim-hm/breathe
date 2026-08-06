@@ -1,5 +1,6 @@
 included:
   - Breathe
+  - BreatheWatch
   - Packages/BreatheCore/Sources
   - Packages/BreatheCore/Tests
 
