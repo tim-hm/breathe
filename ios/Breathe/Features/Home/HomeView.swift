@@ -96,6 +96,10 @@ struct HomeView: View {
         }
     }
 
+    /// Three regions, one per third: the orb centred in the open air at the
+    /// top, the wheel down where a thumb rests, and Begin flush against the
+    /// tab bar. The orb's region is all the leftover space, which is what
+    /// keeps the breathing feeling unhurried on any screen height.
     private func loaded(_ techniques: [Technique]) -> some View {
         let chosen = chosen(from: techniques)
 
@@ -103,29 +107,24 @@ struct HomeView: View {
             wordmark
                 .padding(.top, Theme.Spacing.standard)
 
-            Spacer()
+            Color.clear
+                .overlay(AmbientOrb(accent: chosen?.goal.accent ?? Theme.Accent.brand))
 
-            VStack(spacing: Theme.Spacing.loose) {
-                AmbientOrb(accent: chosen?.goal.accent ?? Theme.Accent.brand)
+            intentWheel(over: goals(in: techniques))
 
-                intentWheel(over: goals(in: techniques))
-
-                // Begin sits directly under the wheel — it acts on what the
-                // wheel says, and the technique row is a footnote to both.
-                // The extra top padding keeps a thumb finishing a spin from
-                // landing on it.
-                if let chosen {
-                    VStack(spacing: Theme.Spacing.standard) {
-                        beginButton(chosen)
-                        chosenTechnique(chosen)
-                    }
-                    .padding(.top, Theme.Spacing.standard)
+            // Begin acts on what the wheel says, and the technique row is a
+            // footnote to both. The top padding keeps a thumb finishing a
+            // spin from landing on the button.
+            if let chosen {
+                VStack(spacing: Theme.Spacing.standard) {
+                    beginButton(chosen)
+                    chosenTechnique(chosen)
                 }
+                .padding(.top, Theme.Spacing.loose)
             }
-
-            Spacer()
         }
-        .padding(Theme.Spacing.standard)
+        .padding(.horizontal, Theme.Spacing.standard)
+        .padding(.bottom, Theme.Spacing.close)
     }
 
     /// The site's wordmark, in the site's voice: serif, letterspaced, quiet.
