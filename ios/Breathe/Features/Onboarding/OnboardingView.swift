@@ -2,14 +2,19 @@ import BreatheKit
 import BreatheUI
 import SwiftUI
 
-/// The first thing anyone sees: five questions and a way out.
+/// The first thing anyone sees: a welcome, three questions, and a way out.
 ///
 /// Drawn in the brand accent rather than a goal's, because nothing here belongs
-/// to a technique yet. Every question but the experience one can be left blank —
-/// the flow exists to make the app better at its job, not to collect a record
-/// before someone is allowed to breathe.
+/// to a technique yet. Every question can be passed by — Skip where an answer
+/// is wanted, Next where a default already stands — the flow exists to make the
+/// app better at its job, not to collect a record before someone is allowed to
+/// breathe.
 struct OnboardingView: View {
     @State private var model: OnboardingModel
+
+    /// Whether the welcome copy has floated in yet. Starts false so the first
+    /// screen arrives rather than being merely there.
+    @State private var hasArrived = false
 
     /// Called when the person leaves the flow. Presentation is the app's
     /// business; by the time this fires the answers are already stored.
@@ -43,16 +48,31 @@ struct OnboardingView: View {
         .background(Theme.Surface.ground)
     }
 
-    /// Absent on the welcome screen, where there is nothing to be part-way
-    /// through, and on the last one, where it would read as unfinished.
+    /// One dot per question, the current one stretched — where you are and how
+    /// much is left, read at a glance. Absent on the welcome screen, where
+    /// there is nothing to be part-way through, and on the last one, where it
+    /// would read as unfinished.
     @ViewBuilder
     private var progress: some View {
         if model.canGoBack {
-            ProgressView(value: model.progress)
-                .tint(Theme.Accent.brand)
-                .padding(.horizontal, Theme.Spacing.standard)
-                .accessibilityLabel("Setup progress")
+            HStack(spacing: Theme.Spacing.close) {
+                ForEach(OnboardingModel.Step.questions) { question in
+                    Capsule()
+                        .fill(question == model.step ? Theme.Accent.brand : Theme.Surface.line)
+                        .frame(width: question == model.step ? 24 : 8, height: 8)
+                }
+            }
+            .animation(reduceMotion ? nil : .snappy(duration: 0.25), value: model.step)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Setup progress")
+            .accessibilityValue(progressDescription)
         }
+    }
+
+    private var progressDescription: String {
+        let questions = OnboardingModel.Step.questions
+        guard let position = questions.firstIndex(of: model.step) else { return "" }
+        return "Question \(position + 1) of \(questions.count)"
     }
 
     @ViewBuilder
@@ -62,25 +82,57 @@ struct OnboardingView: View {
         case .goals: goals
         case .experience: experience
         case .reminders: reminders
-        case .intent: intent
         case .done: done
         }
     }
 
+    /// The splash: the orb already breathing, and a welcome rather than a
+    /// form. Centred where every question is leading-aligned — this screen is
+    /// a greeting, not a step, and the layout should say so.
     private var welcome: some View {
-        question(
-            "Breathe",
-            "A few questions, then we'll get out of your way. You can change any "
-                + "of it later, and you can skip anything you'd rather not answer."
-        ) {
-            EmptyView()
+        VStack(spacing: Theme.Spacing.loose) {
+            AmbientOrb(accent: Theme.Accent.brand)
+                .padding(.top, Theme.Spacing.loose)
+
+            VStack(spacing: Theme.Spacing.standard) {
+                Text("BREATHE")
+                    .font(.system(size: 17, weight: .medium, design: .serif))
+                    .tracking(7)
+                    .foregroundStyle(Theme.Ink.secondary)
+
+                Text("We're glad you're here.")
+                    .font(.largeTitle.weight(.medium))
+                    .foregroundStyle(Theme.Ink.primary)
+
+                Text(
+                    "A few minutes of guided breathing can steady a hard day, "
+                        + "settle you towards sleep, or sharpen an afternoon — and "
+                        + "you're about to feel it for yourself."
+                )
+                .font(.body)
+                .foregroundStyle(Theme.Ink.secondary)
+
+                Text("Three quick questions first, then we'll get out of your way.")
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.Ink.tertiary)
+            }
+            .multilineTextAlignment(.center)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
+            // The one entrance in the app: the words rise to meet the orb,
+            // which is already breathing when they arrive.
+            .opacity(hasArrived ? 1 : 0)
+            .offset(y: hasArrived || reduceMotion ? 0 : 12)
+            .animation(.easeOut(duration: 0.8).delay(0.2), value: hasArrived)
         }
+        .frame(maxWidth: .infinity)
+        .onAppear { hasArrived = true }
     }
 
     private var goals: some View {
         question(
             "What brings you here?",
-            "Pick as many as you like, or none — it decides what we show you first."
+            "Pick as many as you like — it decides what we show you first."
         ) {
             ForEach(TechniqueGoal.allCases, id: \.self) { goal in
                 OnboardingChoice(
@@ -117,8 +169,9 @@ struct OnboardingView: View {
     /// The dial whose default is silence.
     ///
     /// `Never` is listed first and is already selected, so leaving the screen
-    /// untouched is the private answer. The footnote says so out loud rather
-    /// than leaving someone to work out that they have not opted into anything.
+    /// untouched is the private answer. The footnote owns up to the system
+    /// prompt: anything but Never means iOS will ask about notifications, and
+    /// nobody should meet that dialog unwarned.
     private var reminders: some View {
         question(
             "Want a nudge?",
@@ -136,32 +189,11 @@ struct OnboardingView: View {
             }
 
             Text("Never is the default, and it stays that way unless you move it. "
-                + "We'll only ask for notification permission if you don't pick it.")
+                + "Pick a nudge and the app will ask for iOS notification "
+                + "permission — that's the only permission it ever requests.")
                 .font(.footnote)
                 .foregroundStyle(Theme.Ink.tertiary)
                 .padding(.top, Theme.Spacing.close)
-        }
-    }
-
-    private var intent: some View {
-        question(
-            "Anything you want to say?",
-            "Optional, and in your own words. It helps us suggest something that fits."
-        ) {
-            TextField(
-                "I'd like to stop clenching my jaw",
-                text: $model.intentNote,
-                axis: .vertical
-            )
-            .lineLimit(3 ... 6)
-            .textFieldStyle(.plain)
-            .padding(Theme.Spacing.standard)
-            .background(Theme.Surface.raised, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.Radius.card)
-                    .stroke(Theme.Surface.line)
-            )
-            .accessibilityLabel("What brings you here, in your own words")
         }
     }
 
@@ -170,8 +202,36 @@ struct OnboardingView: View {
             "That's it.",
             "Everything's saved on this device. Pick something and take a few breaths."
         ) {
-            EmptyView()
+            safetyDisclaimer
         }
+    }
+
+    /// The one health note the flow carries, on the way out rather than the
+    /// way in: some techniques breathe fast enough to make a person
+    /// light-headed, and the place to say so is before the first session, not
+    /// buried in a technique's small print.
+    private var safetyDisclaimer: some View {
+        HStack(alignment: .top, spacing: Theme.Spacing.close) {
+            Image(systemName: "heart.circle")
+                .font(.title3)
+                .foregroundStyle(Theme.Accent.brand)
+
+            Text(
+                "One thing before you begin: some techniques use quick, deep "
+                    + "breathing that can leave you light-headed. Practise sitting "
+                    + "or lying down — never while driving or in water — and if "
+                    + "anything feels wrong, just breathe normally."
+            )
+            .font(.footnote)
+            .foregroundStyle(Theme.Ink.secondary)
+        }
+        .padding(Theme.Spacing.standard)
+        .background(Theme.Surface.raised, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.card)
+                .stroke(Theme.Surface.line)
+        )
+        .accessibilityElement(children: .combine)
     }
 
     /// One question's layout: a heading, a line of context, and whatever it asks.
@@ -206,9 +266,9 @@ struct OnboardingView: View {
                     model.advance()
                 }
             }
-            .font(.headline)
+            .font(.title3.weight(.semibold))
             .frame(maxWidth: .infinity)
-            .padding(.vertical, Theme.Spacing.close)
+            .padding(.vertical, Theme.Spacing.standard)
             // The ground, so the label inverts with the fill: an accent is dark
             // on white and light on near-black, and a prominent button that kept
             // white text would be unreadable in one of the two.
@@ -216,16 +276,31 @@ struct OnboardingView: View {
             .background(Theme.Accent.brand.opacity(model.canAdvance ? 1 : 0.4), in: Capsule())
             .disabled(!model.canAdvance)
 
-            Button("Back") {
-                model.back()
+            // Back and Skip share a row under the primary button: Back returns
+            // to the previous question, Skip is the way past one that Next is
+            // still waiting on. Both keep their place in the layout when
+            // absent, so the primary button never moves between steps.
+            HStack {
+                Button("Back") {
+                    model.back()
+                }
+                .opacity(model.canGoBack ? 1 : 0)
+                .disabled(!model.canGoBack)
+                .accessibilityHidden(!model.canGoBack)
+
+                Spacer()
+
+                Button("Skip") {
+                    model.skip()
+                }
+                .opacity(model.canSkip ? 1 : 0)
+                .disabled(!model.canSkip)
+                .accessibilityHidden(!model.canSkip)
             }
-            .font(.subheadline)
+            .font(.body)
             .foregroundStyle(Theme.Ink.secondary)
-            // Kept in the layout rather than removed, so the forward button does
-            // not move up the screen between the first question and the second.
-            .opacity(model.canGoBack ? 1 : 0)
-            .disabled(!model.canGoBack)
-            .accessibilityHidden(!model.canGoBack)
+            .padding(.horizontal, Theme.Spacing.standard)
+            .padding(.vertical, Theme.Spacing.close)
         }
         .padding(.horizontal, Theme.Spacing.standard)
     }
@@ -233,7 +308,7 @@ struct OnboardingView: View {
     private var forwardTitle: String {
         switch model.step {
         case .welcome: "Get started"
-        case .intent: "Save"
+        case .reminders: "Save"
         case .done: "Start breathing"
         default: "Next"
         }

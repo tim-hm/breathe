@@ -42,21 +42,65 @@ struct OnboardingFlowTests {
         #expect(model.step == .welcome)
         model.advance()
         #expect(model.step == .goals)
-        model.advance()
-        #expect(model.step == .experience)
 
-        // The one question with a required answer: without it, Next does
-        // nothing rather than skipping past.
+        // Next waits for an answer on the questions that want one; without it,
+        // advancing does nothing rather than silently skipping past.
         #expect(!model.canAdvance)
         model.advance()
+        #expect(model.step == .goals)
+
+        model.toggle(.calm)
+        model.advance()
         #expect(model.step == .experience)
 
+        #expect(!model.canAdvance)
         model.experienceLevel = .new
         model.advance()
         #expect(model.step == .reminders)
 
         model.back()
         #expect(model.step == .experience)
+    }
+
+    /// Skip is the way past a question Next is still waiting on, and only
+    /// those: everywhere else it would be a second Next, so it refuses.
+    @Test("Skip passes an unanswered question without touching the others")
+    func skipsUnansweredQuestions() {
+        let store = ProfileStore(profiles: RecordingWriter(), defaults: defaults("skip"))
+        let model = OnboardingModel(store: store)
+
+        #expect(!model.canSkip, "the welcome screen has nothing to skip")
+        model.skip()
+        #expect(model.step == .welcome)
+
+        model.advance()
+        #expect(model.canSkip)
+        model.skip()
+        #expect(model.step == .experience)
+
+        model.skip()
+        #expect(model.step == .reminders)
+        #expect(!model.canSkip, "reminders is already answered — Next is the way on")
+
+        model.skip()
+        #expect(model.step == .reminders)
+        #expect(model.profile.goals.isEmpty)
+        #expect(model.profile.experienceLevel == nil)
+    }
+
+    /// Skipping declines to finish a question, not to have started it: an
+    /// answer already given survives the skip.
+    @Test("Skip keeps the answer given so far")
+    func skipKeepsPartialAnswers() {
+        let store = ProfileStore(profiles: RecordingWriter(), defaults: defaults("skip-keep"))
+        let model = OnboardingModel(store: store)
+
+        model.advance()
+        model.toggle(.sleep)
+        model.skip()
+
+        #expect(model.step == .experience)
+        #expect(model.profile.goals == [.sleep])
     }
 
     /// Goals are sent in the order they were picked, so someone sees their own
@@ -89,36 +133,6 @@ struct OnboardingFlowTests {
         #expect(model.profile.reminderIntensity == .never)
     }
 
-    /// The server rejects a longer note outright, so a field that let someone
-    /// keep typing would trade an invisible limit for a save that fails after
-    /// the fact.
-    @Test("A note is held at the length the server accepts")
-    func clampsTheIntentNote() {
-        let store = ProfileStore(profiles: RecordingWriter(), defaults: defaults("note"))
-        let model = OnboardingModel(store: store)
-
-        model.intentNote = String(repeating: "a", count: Profile.maxIntentNoteLength + 50)
-
-        #expect(model.intentNote.count == Profile.maxIntentNoteLength)
-        #expect(model.profile.intentNote.count == Profile.maxIntentNoteLength)
-    }
-
-    /// The limit counts Unicode scalars because the server and the database do.
-    /// A grapheme count would wave through a note of multi-scalar emoji — one
-    /// 👨‍👩‍👧 is five scalars — that the server then rejects, leaving the profile
-    /// retrying its sync forever.
-    @Test("The note limit counts what the server counts")
-    func clampsTheIntentNoteByUnicodeScalars() {
-        let store = ProfileStore(profiles: RecordingWriter(), defaults: defaults("note-scalars"))
-        let model = OnboardingModel(store: store)
-        let family = "👨‍👩‍👧"
-
-        model.intentNote = String(repeating: family, count: 150)
-
-        #expect(model.intentNote.unicodeScalars.count <= Profile.maxIntentNoteLength)
-        #expect(model.intentNote.count < 150, "the clamp fired before 150 graphemes")
-    }
-
     /// The offline promise, and the reason the completion flag is local: the
     /// person is through the flow and into the app, and the answers are waiting
     /// to be sent rather than lost.
@@ -133,16 +147,12 @@ struct OnboardingFlowTests {
         model.toggle(.sleep)
         model.experienceLevel = .occasional
         model.reminderIntensity = .gentle
-        model.intentNote = "  I wake up at three  "
 
         store.complete(with: model.profile)
 
         #expect(store.hasCompletedOnboarding)
         #expect(store.isPendingSync)
         #expect(store.profile.goals == [.sleep])
-        // Trimmed on the way in, so the local copy and the server's cannot
-        // differ by whitespace and leave the sync flag flapping.
-        #expect(store.profile.intentNote == "I wake up at three")
 
         await store.syncIfNeeded()
         #expect(store.isPendingSync, "a failed send stays outstanding")

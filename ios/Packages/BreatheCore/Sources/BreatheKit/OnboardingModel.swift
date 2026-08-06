@@ -21,16 +21,20 @@ public final class OnboardingModel {
         case goals
         case experience
         /// The reminder dial. Ordered after the questions about breathing so it
-        /// reads as a preference rather than as the price of entry.
+        /// reads as a preference rather than as the price of entry, and last so
+        /// that saving happens on the way out of it.
         case reminders
-        /// The free-text note. Optional, and the last thing asked.
-        case intent
         /// Everything is saved; the way out.
         case done
 
         public var id: Self {
             self
         }
+
+        /// The steps that ask something — what a step indicator counts.
+        /// `welcome` is a greeting and `done` a confirmation; neither is a
+        /// question to be part-way through.
+        public static let questions: [Step] = [.goals, .experience, .reminders]
     }
 
     public private(set) var step: Step = .welcome
@@ -39,24 +43,6 @@ public final class OnboardingModel {
     public private(set) var goals: [TechniqueGoal] = []
     public var experienceLevel: ExperienceLevel?
     public var reminderIntensity: ReminderIntensity = .never
-
-    /// Clamped to the length the server accepts, here rather than in the text
-    /// field: the rule belongs to the answer, not to one way of typing it, and
-    /// the app target has no test bundle to pin it in.
-    ///
-    /// Counted in Unicode scalars, not `Character`s, because that is what the
-    /// server's validation and the column `CHECK` both count: a grapheme-cluster
-    /// count would pass a note of multi-scalar emoji that the server then
-    /// rejects, leaving the profile retrying its sync forever.
-    public var intentNote = "" {
-        didSet {
-            let scalars = intentNote.unicodeScalars
-            if scalars.count > Profile.maxIntentNoteLength {
-                let end = scalars.index(scalars.startIndex, offsetBy: Profile.maxIntentNoteLength)
-                intentNote = String(scalars[..<end])
-            }
-        }
-    }
 
     private let store: ProfileStore
 
@@ -77,20 +63,43 @@ public final class OnboardingModel {
         goals.contains(goal)
     }
 
-    /// Whether the current step has an answer it insists on.
+    /// Whether the current step has the answer it asks for.
     ///
-    /// Only the experience question does. Goals, reminders, and the note can all
-    /// be left as they are — an onboarding that refuses to continue is a worse
-    /// first impression than a profile with a blank in it.
+    /// Goals and experience want one before Next lights up — not as a wall,
+    /// but so that Next always means "that's my answer"; Skip is the way past
+    /// without one. Reminders arrives already answered: `never` is selected
+    /// before anyone touches it.
     public var canAdvance: Bool {
-        step != .experience || experienceLevel != nil
+        switch step {
+        case .goals: !goals.isEmpty
+        case .experience: experienceLevel != nil
+        default: true
+        }
+    }
+
+    /// Whether the current step can be passed by unanswered. True exactly
+    /// where `canAdvance` can be false: a question that insists on an answer
+    /// and offers no way around it is a wall, and a Skip on any other step
+    /// would be a second Next.
+    public var canSkip: Bool {
+        step == .goals || step == .experience
     }
 
     /// Moves to the next question, saving on the way out of the last one.
     public func advance() {
         guard canAdvance else { return }
+        moveOn()
+    }
 
-        if step == .intent {
+    /// Passes an optional question by without answering it. The answer given
+    /// so far is kept — skipping is declining to finish, not undoing.
+    public func skip() {
+        guard canSkip else { return }
+        moveOn()
+    }
+
+    private func moveOn() {
+        if step == .reminders {
             store.complete(with: profile)
             // Not awaited: the person is one tap from breathing, and the upload
             // has a whole app lifetime to succeed in. `ProfileStore` has already
@@ -124,16 +133,15 @@ public final class OnboardingModel {
         return Double(step.rawValue) / questions
     }
 
-    /// The answers as they stand.
+    /// The answers as they stand. The intent note stays empty: the flow no
+    /// longer asks for one, and the field survives only because the server
+    /// contract still carries it.
     public var profile: Profile {
         Profile(
             goals: goals,
             experienceLevel: experienceLevel,
             reminderIntensity: reminderIntensity,
-            // Trimmed here as well as on the server, so what is stored locally
-            // and what is stored remotely cannot differ by whitespace and leave
-            // the sync flag flapping.
-            intentNote: intentNote.trimmingCharacters(in: .whitespacesAndNewlines)
+            intentNote: ""
         )
     }
 }
