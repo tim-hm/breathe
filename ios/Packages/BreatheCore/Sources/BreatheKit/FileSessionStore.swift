@@ -4,7 +4,7 @@ import Foundation
 ///
 /// An actor because the write is read-modify-write and a session ending while
 /// the sync queue is draining the file must not interleave.
-public actor FileSessionStore: SessionRecording {
+public actor FileSessionStore: SessionRecording, TombstoneStoring {
     private let file: JSONFileStore<SessionRecord>
     private let tombstones: JSONFileStore<UUID>
 
@@ -49,13 +49,14 @@ public actor FileSessionStore: SessionRecording {
         return true
     }
 
-    /// Deletes a session and tombstones its id, because deletion is local-only:
-    /// the sync never takes anything back off the server, so without the
-    /// tombstone the next restore would quietly hand the session straight back.
-    /// The server's copy therefore outlives this — a reinstall (which loses the
-    /// tombstone file) resurrects deleted sessions, the same class of caveat as
-    /// the restore's 50-session cap. A `DeleteSessions` RPC closes that when
-    /// deletion earns a server round-trip.
+    /// Deletes a session and tombstones its id.
+    ///
+    /// The tombstone is what makes the deletion hold before the server has
+    /// heard about it: `merge` skips a tombstoned id, so a restore between the
+    /// deletion and the next sync cannot hand the session straight back. The
+    /// sync queue drains these through `DeleteSessions` and only then calls
+    /// `forgetTombstones`, so the file is a list of deletions in flight rather
+    /// than a permanent record.
     public func remove(_ id: SessionRecord.ID) async {
         let sessions = file.load()
         let remaining = sessions.filter { $0.id != id }
@@ -67,5 +68,14 @@ public actor FileSessionStore: SessionRecording {
 
     public func recordedSessions() async -> [SessionRecord] {
         file.load()
+    }
+
+    public func tombstonedSessions() async -> [SessionRecord.ID] {
+        tombstones.load()
+    }
+
+    public func forgetTombstones(_ ids: [SessionRecord.ID]) async {
+        let forgotten = Set(ids)
+        tombstones.save(tombstones.load().filter { !forgotten.contains($0) })
     }
 }

@@ -8,8 +8,9 @@ use crate::features::journey::service;
 use crate::identity::{self, UserId};
 use crate::proto::breathe::v1::journey_service_server::JourneyService;
 use crate::proto::breathe::v1::{
-    GetJourneyRequest, GetJourneyResponse, GetLeaderboardRequest, GetLeaderboardResponse,
-    RecordBoltScoreRequest, RecordBoltScoreResponse, RecordSessionsRequest, RecordSessionsResponse,
+    DeleteSessionsRequest, DeleteSessionsResponse, GetJourneyRequest, GetJourneyResponse,
+    GetLeaderboardRequest, GetLeaderboardResponse, RecordBoltScoreRequest, RecordBoltScoreResponse,
+    RecordSessionsRequest, RecordSessionsResponse,
 };
 use crate::state::AppState;
 
@@ -36,6 +37,20 @@ impl JourneyService for JourneyServiceImpl {
         let response =
             service::record_sessions(&self.state.pool, user_id, request.into_inner().sessions)
                 .await?;
+        Ok(Response::new(response))
+    }
+
+    async fn delete_sessions(
+        &self,
+        request: Request<DeleteSessionsRequest>,
+    ) -> Result<Response<DeleteSessionsResponse>, Status> {
+        let UserId(user_id) = identity::require(&request)?;
+        let response = service::delete_sessions(
+            &self.state.pool,
+            user_id,
+            request.into_inner().client_session_ids,
+        )
+        .await?;
         Ok(Response::new(response))
     }
 

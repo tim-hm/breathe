@@ -104,6 +104,34 @@ pub async fn insert_sessions(
     Ok(inserted.len())
 }
 
+/// Removes the caller's sessions with these ids and reports how many went.
+///
+/// Scoped to `user_id` in the `WHERE` rather than trusted from the ids alone:
+/// a `client_session_id` is minted on a device and is not unique across people,
+/// so a delete keyed on the id alone would let one caller erase another's
+/// history by sending a value they had no way of knowing was in use.
+///
+/// `RETURNING` counts the rows that really existed, which is what tells a client
+/// whose tombstone list has run ahead of the server that there was nothing left
+/// to forget.
+pub async fn delete_sessions(
+    pool: &PgPool,
+    user_id: Uuid,
+    client_session_ids: &[Uuid],
+) -> Result<usize, JourneyError> {
+    let deleted = sqlx::query_scalar!(
+        "DELETE FROM sessions
+         WHERE user_id = $1 AND client_session_id = ANY($2::uuid[])
+         RETURNING client_session_id",
+        user_id,
+        client_session_ids
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(deleted.len())
+}
+
 pub async fn totals(pool: &PgPool, user_id: Uuid) -> Result<TotalsRow, JourneyError> {
     let row = sqlx::query_as!(
         TotalsRow,

@@ -106,6 +106,41 @@ pub async fn record_sessions(
     })
 }
 
+/// Forgets the sessions a person deleted on their device.
+///
+/// Ids the server does not hold are counted out rather than refused: the client
+/// keeps a tombstone until this call succeeds, so it is entitled to send the
+/// same id again and a second attempt must not fail the whole batch.
+pub async fn delete_sessions(
+    pool: &PgPool,
+    user_id: Uuid,
+    submitted: Vec<String>,
+) -> Result<pb::DeleteSessionsResponse, JourneyError> {
+    if submitted.is_empty() {
+        return Err(JourneyError::Invalid(
+            "`client_session_ids` is empty".to_owned(),
+        ));
+    }
+
+    if submitted.len() > MAX_SESSIONS_PER_BATCH as usize {
+        return Err(JourneyError::Invalid(format!(
+            "`client_session_ids` carries more than {MAX_SESSIONS_PER_BATCH} ids"
+        )));
+    }
+
+    let mut ids = Vec::with_capacity(submitted.len());
+    for raw in &submitted {
+        ids.push(Uuid::parse_str(raw).map_err(|_| {
+            JourneyError::Invalid(format!("`client_session_ids` entry `{raw}` is not a UUID"))
+        })?);
+    }
+
+    let deleted = u32::try_from(repository::delete_sessions(pool, user_id, &ids).await?)
+        .unwrap_or(MAX_SESSIONS_PER_BATCH);
+
+    Ok(pb::DeleteSessionsResponse { deleted })
+}
+
 pub async fn get_journey(
     pool: &PgPool,
     user_id: Uuid,

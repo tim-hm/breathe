@@ -24,6 +24,11 @@ public protocol JourneySyncing: Sendable {
     /// so a caller unsure of what landed may simply send it again.
     func record(_ sessions: [SessionRecord]) async throws
 
+    /// Tells the server to forget sessions deleted on this device. Idempotent
+    /// on each id, and an id the server never held is not an error — a caller
+    /// holding a tombstone is entitled to ask again until it is sure.
+    func delete(_ ids: [SessionRecord.ID]) async throws
+
     /// Sends one controlled-pause score.
     func record(_ score: BoltScore) async throws
 
@@ -48,6 +53,16 @@ public struct JourneyRepository: JourneySyncing {
         request.sessions = sessions.map(\.proto)
 
         let response = await client.recordSessions(request: request)
+        guard response.message != nil else {
+            throw Self.transportError(response.error)
+        }
+    }
+
+    public func delete(_ ids: [SessionRecord.ID]) async throws {
+        var request = Breathe_V1_DeleteSessionsRequest()
+        request.clientSessionIds = ids.map(\.uuidString)
+
+        let response = await client.deleteSessions(request: request)
         guard response.message != nil else {
             throw Self.transportError(response.error)
         }

@@ -25,6 +25,18 @@ service JourneyService {
   // bookkeeping without reading anything back.
   rpc RecordSessions(RecordSessionsRequest) returns (RecordSessionsResponse);
 
+  // Forgets sessions the person deleted on their device.
+  //
+  // The counterpart to RecordSessions, and the reason deletion is not merely
+  // local: the client keeps a tombstone for every session it has deleted so a
+  // later GetJourney cannot hand it back, and without this call that tombstone
+  // has to survive forever — a reinstall loses it and resurrects the session.
+  //
+  // Idempotent, like RecordSessions: an id the server does not hold is not an
+  // error, because the client is entitled to ask twice and a tombstone is only
+  // dropped once the server has definitely forgotten the session.
+  rpc DeleteSessions(DeleteSessionsRequest) returns (DeleteSessionsResponse);
+
   // Returns the caller's totals, streaks, and recent history.
   //
   // Everything here is derived on read. There are no denormalised counters, so
@@ -95,6 +107,20 @@ message RecordSessionsResponse {
   // Sessions it already held, whether from an earlier sync or from a repeat
   // within this same batch. Not an error: it is the expected answer to a retry.
   uint32 already_known = 2;
+}
+
+message DeleteSessionsRequest {
+  // The `client_session_id`s to forget. Never empty, and bounded by the same
+  // limit RecordSessions carries — a client draining a backlog of deletions
+  // splits it the same way it splits a backlog of sessions.
+  repeated string client_session_ids = 1;
+}
+
+message DeleteSessionsResponse {
+  // Rows this call actually removed. Lower than the number of ids sent whenever
+  // some had already gone, which is the expected answer to a retry rather than
+  // a discrepancy worth reporting.
+  uint32 deleted = 1;
 }
 
 message GetJourneyRequest {
