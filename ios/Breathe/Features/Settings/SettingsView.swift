@@ -13,6 +13,15 @@ struct SettingsView: View {
         NavigationStack {
             List {
                 Section {
+                    Picker("Appearance", selection: $settings.appearance) {
+                        ForEach(Appearance.allCases) { appearance in
+                            Text(appearance.title).tag(appearance)
+                        }
+                    }
+                }
+                .listRowBackground(Theme.Surface.raised)
+
+                Section {
                     Picker("Cues", selection: $settings.cueMode) {
                         ForEach(SessionCueMode.allCases) { mode in
                             Text(mode.title).tag(mode)

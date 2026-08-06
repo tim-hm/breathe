@@ -10,8 +10,12 @@ struct BreatheApp: App {
     private let identity: any UserIdentityStore = KeychainUserIdentityStore()
 
     /// One store for the whole app: every session ends up in the same file, and
-    /// M5's sync has one place to drain.
+    /// the journey's sync has one place to drain.
     private let sessions: any SessionRecording = FileSessionStore()
+
+    /// Controlled-pause scores, kept beside the sessions and for the same
+    /// reason — the journey tab reads them with no network at all.
+    private let scores: any BoltScoreRecording = FileBoltScoreStore()
 
     /// In the environment rather than passed down, because the cue picker on the
     /// detail screen and the session that reads the setting are not adjacent.
@@ -34,6 +38,11 @@ struct BreatheApp: App {
     /// The basics, shared the same way — reference data loaded once.
     @State private var foundations: FoundationsModel
 
+    /// Totals, streaks, and the boards. Local-first: everything it shows about
+    /// this person is folded from the two stores above, so the tab is complete
+    /// before the sync it starts has finished.
+    @State private var journey: JourneyModel
+
     init() {
         let identity = identity
         let baseURL = AppConfiguration.apiBaseURL
@@ -47,12 +56,24 @@ struct BreatheApp: App {
         )
         _profiles = State(wrappedValue: profiles)
         _isOnboarding = State(wrappedValue: !profiles.hasCompletedOnboarding)
+
+        let journeys = JourneyRepository(baseURL: baseURL, identity: identity)
+        let sessions = sessions
+        let scores = scores
+        _journey = State(
+            wrappedValue: JourneyModel(
+                sessions: sessions,
+                scores: scores,
+                journeys: journeys,
+                queue: SessionSyncQueue(sessions: sessions, scores: scores, journeys: journeys)
+            )
+        )
     }
 
     var body: some Scene {
         WindowGroup {
-            // The chrome future features land in: journey joins as a tab (M5),
-            // reminders and the subscription live under Settings (M7, M8).
+            // The chrome future features land in: reminders and the
+            // subscription live under Settings (M7, M8).
             TabView {
                 Tab("Breathe", systemImage: "smallcircle.filled.circle") {
                     HomeView(model: catalogue, sessions: sessions)
@@ -60,8 +81,8 @@ struct BreatheApp: App {
                 Tab("Techniques", systemImage: "square.grid.2x2") {
                     TechniqueListView(model: catalogue, sessions: sessions)
                 }
-                Tab("Journal", systemImage: "clock.arrow.circlepath") {
-                    JournalView(model: catalogue, sessions: sessions)
+                Tab("Journey", systemImage: "clock.arrow.circlepath") {
+                    JourneyView(model: journey, profiles: profiles, catalogue: catalogue)
                 }
                 Tab("The basics", systemImage: "book") {
                     NavigationStack {
@@ -73,6 +94,10 @@ struct BreatheApp: App {
                 }
             }
             .tint(Theme.Accent.brand)
+            // The palette resolves per appearance through the asset catalogue,
+            // so one override here re-themes every screen; nil follows the
+            // system, which keeps the default behaviour exactly today's.
+            .preferredColorScheme(settings.appearance.colorScheme)
             .environment(settings)
             .fullScreenCover(isPresented: $isOnboarding) {
                 OnboardingView(model: OnboardingModel(store: profiles)) {
@@ -81,8 +106,25 @@ struct BreatheApp: App {
             }
             // Answers given with no signal reach the server on a later launch.
             // Cheap when there is nothing outstanding, which is every launch
-            // after the first.
-            .task { await profiles.syncIfNeeded() }
+            // after the first — and the same is true of the sessions recorded
+            // while it was unreachable.
+            .task {
+                await profiles.syncIfNeeded()
+                await journey.sync()
+            }
+        }
+    }
+}
+
+private extension Appearance {
+    /// What `preferredColorScheme` takes: an override, or nil to follow the
+    /// system. Mapped here rather than in BreatheKit so the domain package
+    /// stays free of SwiftUI — the same seam `GoalAccent` sits on.
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: nil
+        case .light: .light
+        case .dark: .dark
         }
     }
 }

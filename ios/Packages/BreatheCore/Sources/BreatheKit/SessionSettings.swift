@@ -55,6 +55,30 @@ public enum SessionGuidance: String, Sendable, CaseIterable, Identifiable {
     }
 }
 
+/// Which colour scheme the app draws in.
+///
+/// `system` is the default and the absence of an opinion. Every token in the
+/// palette carries a light and a dark value (M3), so this is one override at
+/// the root of the view tree — never a per-view branch, which is exactly the
+/// thing the token system exists to prevent.
+public enum Appearance: String, Sendable, CaseIterable, Identifiable {
+    case system
+    case light
+    case dark
+
+    public var id: Self {
+        self
+    }
+
+    public var title: String {
+        switch self {
+        case .system: "Match the system"
+        case .light: "Light"
+        case .dark: "Dark"
+        }
+    }
+}
+
 /// The session preferences that survive a launch.
 ///
 /// `UserDefaults` rather than the session store: these are preferences, not
@@ -63,10 +87,15 @@ public enum SessionGuidance: String, Sendable, CaseIterable, Identifiable {
 @MainActor
 @Observable
 public final class SessionSettings {
+    private static let appearanceKey = "app.appearance"
     private static let cueModeKey = "session.cueMode"
     private static let guidanceKey = "session.guidance"
     private static let lastGoalKey = "home.lastGoal"
     private static let overridesKey = "session.techniqueOverrides"
+
+    public var appearance: Appearance {
+        didSet { defaults.set(appearance.rawValue, forKey: Self.appearanceKey) }
+    }
 
     public var cueMode: SessionCueMode {
         didSet { defaults.set(cueMode.rawValue, forKey: Self.cueModeKey) }
@@ -100,6 +129,8 @@ public final class SessionSettings {
         self.defaults = defaults
         // Assigning in an initialiser does not run `didSet`, which is what keeps
         // this from writing back the value it just read.
+        appearance = defaults.string(forKey: Self.appearanceKey)
+            .flatMap(Appearance.init(rawValue:)) ?? .system
         cueMode = defaults.string(forKey: Self.cueModeKey)
             .flatMap(SessionCueMode.init(rawValue:)) ?? .hapticsAndAudio
         guidance = defaults.string(forKey: Self.guidanceKey)
