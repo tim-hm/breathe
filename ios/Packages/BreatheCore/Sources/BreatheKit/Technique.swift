@@ -19,14 +19,18 @@ public enum TechniqueGoal: String, Sendable, CaseIterable, Codable {
 }
 
 /// One segment of a breathing cycle.
-public enum PhaseKind: Sendable, Hashable {
+///
+/// The raw value is a stored key — the catalogue is cached on disk so the app
+/// can breathe offline — and a synthesised case name is not a key that should
+/// survive a refactor.
+public enum PhaseKind: String, Sendable, Hashable, Codable {
     case inhale
     case holdIn
     case exhale
     case holdOut
 }
 
-public struct Phase: Sendable, Hashable {
+public struct Phase: Sendable, Hashable, Codable {
     public let kind: PhaseKind
     /// The curated default, and what a session plays unless a dial moved it.
     public let duration: Duration
@@ -63,7 +67,7 @@ public struct Phase: Sendable, Hashable {
 /// The general case a plain cyclic technique degenerates to: box breathing is
 /// one stage of eight cycles, while a Wim Hof-style round is three — fast
 /// breaths, a retention the person ends, then a recovery hold.
-public struct Stage: Sendable, Hashable {
+public struct Stage: Sendable, Hashable, Codable {
     /// The pattern, in play order. Never empty — `TechniqueRepository` rejects
     /// an empty stage rather than handing a view a loop with nothing in it.
     public let phases: [Phase]
@@ -94,8 +98,9 @@ public struct Stage: Sendable, Hashable {
 }
 
 /// `Hashable` so a list row can push one as a `NavigationStack` value rather
-/// than pushing a pre-built destination view.
-public struct Technique: Sendable, Identifiable, Hashable {
+/// than pushing a pre-built destination view. `Codable` because the last
+/// fetched catalogue is kept on disk — the app breathes offline from it.
+public struct Technique: Sendable, Identifiable, Hashable, Codable {
     public let id: String
     /// The stable key this app pins artwork and haptic patterns to.
     public let slug: String
