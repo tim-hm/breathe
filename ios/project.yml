@@ -73,6 +73,13 @@ schemes:
     build:
       targets:
         Breathe: all
+    # Without this, the scheme's Testables list is empty and ⌘U runs zero
+    # tests. Wiring the package test target makes Xcode's Test action run the
+    # same suites as `mise run test:swift`.
+    test:
+      config: Debug
+      targets:
+        - package: BreatheCore/BreatheKitTests
     run:
       config: Debug
       # `BREATHE_API_BASE_URL` is deliberately not set here. The same default

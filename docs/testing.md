@@ -69,7 +69,7 @@ mise run test:e2e    # integration tests; starts Postgres if it isn't running
 mise run test:swift  # Swift Testing, on the host
 ```
 
-`test:rs` and `test:e2e` are both part of `mise run check`, which is why the gate needs Docker. `test:swift` is not, because it needs the Xcode toolchain — run it when you touch `ios/`.
+`test:rs` and `test:e2e` are both part of `mise run check`, which is why the gate needs Docker. `test:swift` is not, because it needs the Xcode toolchain — run it when you touch `ios/`. In Xcode, ⌘U runs the same suites — the scheme's Test action is wired to the package's test target.
 
 ## What is not covered yet
 
