@@ -67,6 +67,13 @@ targets:
         # on HTTPS is unaffected either way.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+        # Talking to the dev Mac over the LAN is "local network" use under iOS
+        # 14+ privacy rules: the first request triggers a system prompt, and this
+        # string is the explanation shown in it. Without the key the connection
+        # can be denied with no prompt at all — a silent transport error that
+        # looks exactly like the server being down.
+        NSLocalNetworkUsageDescription: >-
+          During development, Breathe connects to the development server on your local network to load the technique catalogue.
 
 schemes:
   Breathe:
@@ -82,8 +89,10 @@ schemes:
         - package: BreatheCore/BreatheKitTests
     run:
       config: Debug
-      # `BREATHE_API_BASE_URL` is deliberately not set here. The same default
-      # lives in AppConfiguration.swift, and a scheme value would always win —
-      # leaving the Swift constant reachable only from previews and tests, free
-      # to drift from the value the app actually uses. Add the variable to this
-      # scheme in Xcode when you need to point a physical device at your Mac.
+      # `BREATHE_API_BASE_URL` is deliberately not set here, and a physical
+      # device must not rely on it either: scheme environment variables exist
+      # only under Xcode's debugger, so an app opened from the home screen
+      # never sees them. Device builds instead read the URL `ios:gen` bakes
+      # into the gitignored Info.plist — the generating Mac's Bonjour address.
+      # The variable remains an override for pointing one debug run somewhere
+      # unusual.
