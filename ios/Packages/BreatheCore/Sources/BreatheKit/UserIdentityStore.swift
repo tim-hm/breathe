@@ -26,11 +26,13 @@ public protocol UserIdentityStore: Sendable {
 /// the same person to their own profile instead of stranding their history
 /// behind an id nothing can reach.
 ///
-/// A struct with no stored state, so it is `Sendable` without a lock: the
-/// Keychain is the single source of truth and every call reads it. Minting is
-/// made safe against a race by treating a duplicate insert as a signal to
-/// re-read rather than as an error.
-public struct KeychainUserIdentityStore: UserIdentityStore {
+/// The resolved id is remembered for the life of the process, because every
+/// outbound RPC asks for it and a Keychain read is an XPC round-trip to
+/// `securityd` — one on the wire path of every request is a cost with nothing to
+/// show for it. Only a *successful* read fills the cache, so an identity minted
+/// after this store was built is still picked up. Minting is made safe against a
+/// race by treating a duplicate insert as a signal to re-read.
+public final class KeychainUserIdentityStore: UserIdentityStore {
     private static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "BreatheKit",
         category: "identity"
@@ -38,6 +40,10 @@ public struct KeychainUserIdentityStore: UserIdentityStore {
 
     private let service: String
     private let account: String
+    /// `OSAllocatedUnfairLock` rather than an actor: the caller is a synchronous
+    /// interceptor on the request path, and an actor would make every RPC await
+    /// a hop to read a value it already has.
+    private let cached = OSAllocatedUnfairLock<UUID?>(initialState: nil)
 
     /// - Parameters:
     ///   - service: the Keychain service the item is filed under. Defaults to
@@ -53,6 +59,17 @@ public struct KeychainUserIdentityStore: UserIdentityStore {
     }
 
     public func userId() -> UUID? {
+        if let remembered = cached.withLock({ $0 }) {
+            return remembered
+        }
+
+        guard let resolved = resolve() else { return nil }
+        cached.withLock { $0 = resolved }
+        return resolved
+    }
+
+    /// The stored id, minting and writing one if there is none.
+    private func resolve() -> UUID? {
         if let existing = read() {
             return existing
         }

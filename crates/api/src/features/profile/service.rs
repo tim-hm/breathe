@@ -10,6 +10,7 @@ use uuid::Uuid;
 use super::errors::ProfileError;
 use super::repository::{self, ProfileRow};
 use super::types::{ExperienceLevel, ReminderIntensity};
+use crate::features::technique::service::goal_to_proto;
 use crate::features::technique::types::TechniqueGoal;
 use crate::proto::breathe::v1 as pb;
 
@@ -95,18 +96,8 @@ fn from_proto(profile: pb::Profile) -> Result<ProfileRow, ProfileError> {
     })
 }
 
-/// Written out rather than derived, so that adding a goal to the database enum
-/// without adding it to the proto fails to compile here.
-const fn goal_to_proto(goal: TechniqueGoal) -> pb::TechniqueGoal {
-    match goal {
-        TechniqueGoal::Calm => pb::TechniqueGoal::Calm,
-        TechniqueGoal::Sleep => pb::TechniqueGoal::Sleep,
-        TechniqueGoal::Energy => pb::TechniqueGoal::Energy,
-        TechniqueGoal::Reset => pb::TechniqueGoal::Reset,
-        TechniqueGoal::Focus => pb::TechniqueGoal::Focus,
-    }
-}
-
+/// The inbound direction has no counterpart in `technique`, which only ever
+/// serves goals: this is the one place a client sends one back.
 fn goal_from_proto(raw: i32) -> Result<TechniqueGoal, ProfileError> {
     match pb::TechniqueGoal::try_from(raw) {
         Ok(pb::TechniqueGoal::Calm) => Ok(TechniqueGoal::Calm),

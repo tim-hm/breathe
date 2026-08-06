@@ -174,6 +174,21 @@ extension TechniqueGoal {
         case .unspecified, .UNRECOGNIZED: return nil
         }
     }
+
+    /// The outbound direction, used by the profile a person picks their goals
+    /// in. Here rather than there so that adding a goal is one file to find:
+    /// both halves of this mapping have to change together, and the asymmetry
+    /// over `unspecified` — rejected coming in, unrepresentable going out — is
+    /// only reviewable if they sit next to each other.
+    var proto: Breathe_V1_TechniqueGoal {
+        switch self {
+        case .calm: .calm
+        case .sleep: .sleep
+        case .energy: .energy
+        case .reset: .reset
+        case .focus: .focus
+        }
+    }
 }
 
 extension PhaseKind {

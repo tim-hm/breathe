@@ -47,7 +47,7 @@ struct OnboardingView: View {
     /// through, and on the last one, where it would read as unfinished.
     @ViewBuilder
     private var progress: some View {
-        if model.step != .welcome, model.step != .done {
+        if model.canGoBack {
             ProgressView(value: model.progress)
                 .tint(Theme.Accent.brand)
                 .padding(.horizontal, Theme.Spacing.standard)
@@ -162,13 +162,6 @@ struct OnboardingView: View {
                     .stroke(Theme.Surface.line)
             )
             .accessibilityLabel("What brings you here, in your own words")
-            .onChange(of: model.intentNote) { _, note in
-                // Stopped at the length the server accepts rather than letting
-                // someone write past it and meet a rejection at save time.
-                if note.count > Profile.maxIntentNoteLength {
-                    model.intentNote = String(note.prefix(Profile.maxIntentNoteLength))
-                }
-            }
         }
     }
 
@@ -230,9 +223,9 @@ struct OnboardingView: View {
             .foregroundStyle(Theme.Ink.secondary)
             // Kept in the layout rather than removed, so the forward button does
             // not move up the screen between the first question and the second.
-            .opacity(model.step == .welcome || model.step == .done ? 0 : 1)
-            .disabled(model.step == .welcome || model.step == .done)
-            .accessibilityHidden(model.step == .welcome || model.step == .done)
+            .opacity(model.canGoBack ? 1 : 0)
+            .disabled(!model.canGoBack)
+            .accessibilityHidden(!model.canGoBack)
         }
         .padding(.horizontal, Theme.Spacing.standard)
     }

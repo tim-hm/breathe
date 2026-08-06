@@ -112,7 +112,11 @@ fn assemble_stages(
 /// Written out rather than derived, so that adding a goal to the database enum
 /// without adding it to the proto fails to compile here instead of reaching a
 /// client as an unmapped zero.
-const fn goal_to_proto(goal: TechniqueGoal) -> pb::TechniqueGoal {
+///
+/// Shared with `features::profile`, which stores the goals someone picked at
+/// onboarding: the goal vocabulary belongs to this feature, and a second copy
+/// would compile happily while disagreeing.
+pub(crate) const fn goal_to_proto(goal: TechniqueGoal) -> pb::TechniqueGoal {
     match goal {
         TechniqueGoal::Calm => pb::TechniqueGoal::Calm,
         TechniqueGoal::Sleep => pb::TechniqueGoal::Sleep,

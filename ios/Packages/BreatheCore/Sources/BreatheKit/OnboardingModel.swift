@@ -39,7 +39,17 @@ public final class OnboardingModel {
     public private(set) var goals: [TechniqueGoal] = []
     public var experienceLevel: ExperienceLevel?
     public var reminderIntensity: ReminderIntensity = .never
-    public var intentNote = ""
+
+    /// Clamped to the length the server accepts, here rather than in the text
+    /// field: the rule belongs to the answer, not to one way of typing it, and
+    /// the app target has no test bundle to pin it in.
+    public var intentNote = "" {
+        didSet {
+            if intentNote.count > Profile.maxIntentNoteLength {
+                intentNote = String(intentNote.prefix(Profile.maxIntentNoteLength))
+            }
+        }
+    }
 
     private let store: ProfileStore
 
@@ -85,10 +95,18 @@ public final class OnboardingModel {
         step = next
     }
 
-    /// Steps back. Refuses from `.done`, where the answers are already saved and
-    /// going back would offer to change something that has been sent.
+    /// Whether there is a question behind this one to return to.
+    ///
+    /// False on the welcome screen, which has nothing before it, and on `.done`,
+    /// where the answers are already saved and going back would offer to change
+    /// something that has been sent. Exposed rather than left to `back()` alone
+    /// because the view needs the same answer for the button it draws.
+    public var canGoBack: Bool {
+        step != .welcome && step != .done
+    }
+
     public func back() {
-        guard step != .done, let previous = Step(rawValue: step.rawValue - 1) else { return }
+        guard canGoBack, let previous = Step(rawValue: step.rawValue - 1) else { return }
         step = previous
     }
 

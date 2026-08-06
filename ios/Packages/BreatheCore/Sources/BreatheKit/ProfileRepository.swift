@@ -12,16 +12,12 @@ public enum ProfileRepositoryError: Error, Equatable {
     case malformedResponse(String)
 }
 
-/// Reads and writes the answers someone gave at onboarding.
+/// Sends the answers someone gave at onboarding.
 ///
-/// This is the only type that touches the generated profile types, mirroring
-/// `TechniqueReading`. Split into two protocols because the consumers differ:
-/// onboarding only ever writes, and splitting keeps its test double to one
-/// function.
-public protocol ProfileReading: Sendable {
-    func profile() async throws -> Profile
-}
-
+/// Write-only, because nothing reads yet: this device is the source of truth for
+/// the profile until M5 has a second one to reconcile with, and a `GetProfile`
+/// call no screen consumes would be a decode path nothing exercises. The RPC
+/// exists on the contract and is covered by the server's own tests.
 public protocol ProfileWriting: Sendable {
     /// Stores `profile` and returns it as the server holds it, which is not
     /// always what was sent — the server drops a duplicated goal and trims the
@@ -30,23 +26,13 @@ public protocol ProfileWriting: Sendable {
     func update(_ profile: Profile) async throws -> Profile
 }
 
-public struct ProfileRepository: ProfileReading, ProfileWriting {
+/// The only type that touches the generated profile types, mirroring
+/// `TechniqueRepository`.
+public struct ProfileRepository: ProfileWriting {
     private let client: Breathe_V1_ProfileServiceClient
 
     public init(baseURL: URL, identity: any UserIdentityStore) {
         client = BreatheClients.profileService(baseURL: baseURL, userId: identity.userId)
-    }
-
-    public func profile() async throws -> Profile {
-        let response = await client.getProfile(request: Breathe_V1_GetProfileRequest())
-
-        guard let message = response.message else {
-            throw ProfileRepositoryError.transport(
-                response.error?.localizedDescription ?? "the request failed with no message"
-            )
-        }
-
-        return try Profile(proto: message.profile)
     }
 
     @discardableResult
@@ -88,7 +74,7 @@ extension Profile {
 
         try self.init(
             goals: goals,
-            experienceLevel: ExperienceLevel(proto: proto.experienceLevel),
+            experienceLevel: ExperienceLevel.decoded(from: proto.experienceLevel),
             reminderIntensity: reminderIntensity,
             intentNote: proto.intentNote
         )
@@ -105,15 +91,16 @@ extension Profile {
 }
 
 extension ExperienceLevel {
-    /// Throws on a level added to the proto after this app shipped, and returns
-    /// nil for `unspecified` — which is not a failure but the honest answer to a
-    /// question nobody has been asked yet.
-    init?(proto: Breathe_V1_ExperienceLevel) throws {
+    /// Not an `init?(proto:)` like its neighbours, because this field has two
+    /// distinct non-answers and one initialiser cannot report both: `nil` means
+    /// nobody has been asked, and throwing means a level added to the proto
+    /// after this app shipped.
+    static func decoded(from proto: Breathe_V1_ExperienceLevel) throws -> Self? {
         switch proto {
-        case .new: self = .new
-        case .occasional: self = .occasional
-        case .regular: self = .regular
-        case .unspecified: return nil
+        case .new: .new
+        case .occasional: .occasional
+        case .regular: .regular
+        case .unspecified: nil
         case .UNRECOGNIZED:
             throw ProfileRepositoryError.malformedResponse(
                 "unrecognised experience level `\(proto)`"
@@ -149,18 +136,6 @@ extension ReminderIntensity {
         case .never: .never
         case .gentle: .gentle
         case .daily: .daily
-        }
-    }
-}
-
-extension TechniqueGoal {
-    var proto: Breathe_V1_TechniqueGoal {
-        switch self {
-        case .calm: .calm
-        case .sleep: .sleep
-        case .energy: .energy
-        case .reset: .reset
-        case .focus: .focus
         }
     }
 }

@@ -82,11 +82,31 @@ pub async fn resolve(
     next.run(request).await
 }
 
+/// The caller, for a service that has nothing to answer without one.
+///
+/// [`resolve`] has already rejected a header it could not parse, so a missing
+/// extension means no header was sent at all. Living beside the newtype rather
+/// than in the one feature that currently calls it: M5's `journey` is the next
+/// service scoped to a person, and two features deciding this separately is two
+/// chances to disagree on the status or the wording.
+pub fn require<T>(request: &tonic::Request<T>) -> Result<UserId, Status> {
+    request
+        .extensions()
+        .get::<UserId>()
+        .copied()
+        .ok_or_else(|| Status::unauthenticated(format!("`{USER_ID_HEADER}` is required")))
+}
+
 /// Creates the caller's row if this is the first time we have seen them.
 ///
 /// `DO NOTHING` rather than `DO UPDATE`: every profile column has a default that
 /// says "they have not answered", and an upsert that touched them would let a
 /// stray RPC reset a profile back to empty.
+///
+/// This is a write on the path of every identified request, including the public
+/// catalogue's. Deliberate at V1 scale — a client makes a handful of calls per
+/// launch — and the fix when it stops being free is a bounded set of seen ids in
+/// `AppState`, not moving the insert into the one handler that needs the row.
 async fn ensure_user(pool: &PgPool, user_id: Uuid) -> Result<(), sqlx::Error> {
     sqlx::query!(
         "INSERT INTO users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING",

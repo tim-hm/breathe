@@ -89,6 +89,20 @@ struct OnboardingFlowTests {
         #expect(model.profile.reminderIntensity == .never)
     }
 
+    /// The server rejects a longer note outright, so a field that let someone
+    /// keep typing would trade an invisible limit for a save that fails after
+    /// the fact.
+    @Test("A note is held at the length the server accepts")
+    func clampsTheIntentNote() {
+        let store = ProfileStore(profiles: RecordingWriter(), defaults: defaults("note"))
+        let model = OnboardingModel(store: store)
+
+        model.intentNote = String(repeating: "a", count: Profile.maxIntentNoteLength + 50)
+
+        #expect(model.intentNote.count == Profile.maxIntentNoteLength)
+        #expect(model.profile.intentNote.count == Profile.maxIntentNoteLength)
+    }
+
     /// The offline promise, and the reason the completion flag is local: the
     /// person is through the flow and into the app, and the answers are waiting
     /// to be sent rather than lost.

@@ -26,15 +26,25 @@ public final class ProfileStore {
     private static let pendingKey = "profile.pendingSync"
 
     /// What this person answered, or `.unanswered` before they have.
-    public private(set) var profile: Profile
+    ///
+    /// Each of these three writes through on assignment, the same way
+    /// `SessionSettings` does: the property is the only thing a mutation has to
+    /// remember, so the value in memory and the value on disk cannot drift.
+    public private(set) var profile: Profile {
+        didSet { persist(profile) }
+    }
 
     /// Whether the stepper has been through to the end. The only gate on
     /// showing it, and set locally, so a person is never asked twice because a
     /// request failed.
-    public private(set) var hasCompletedOnboarding: Bool
+    public private(set) var hasCompletedOnboarding: Bool {
+        didSet { defaults.set(hasCompletedOnboarding, forKey: Self.completedKey) }
+    }
 
     /// Whether the stored answers are still waiting to reach the server.
-    public private(set) var isPendingSync: Bool
+    public private(set) var isPendingSync: Bool {
+        didSet { defaults.set(isPendingSync, forKey: Self.pendingKey) }
+    }
 
     private let profiles: any ProfileWriting
     private let defaults: UserDefaults
@@ -43,6 +53,8 @@ public final class ProfileStore {
         self.profiles = profiles
         self.defaults = defaults
 
+        // Assigning in an initialiser does not run `didSet`, which is what keeps
+        // this from writing back the values it just read.
         profile = defaults.data(forKey: Self.profileKey)
             .flatMap { try? JSONDecoder().decode(Profile.self, from: $0) }
             // Unreadable answers are dropped rather than repaired, the same rule
@@ -60,9 +72,9 @@ public final class ProfileStore {
     /// timeout between the last question and the first breath, which is the
     /// exact moment the app has the least credit to spend.
     public func complete(with profile: Profile) {
-        store(profile)
+        self.profile = profile
+        isPendingSync = true
         hasCompletedOnboarding = true
-        defaults.set(true, forKey: Self.completedKey)
     }
 
     /// Pushes anything the server has not seen.
@@ -78,21 +90,11 @@ public final class ProfileStore {
             // The stored profile is replaced by what came back, so a value the
             // server normalised does not leave this device disagreeing with it
             // and re-syncing forever.
-            let stored = try await profiles.update(profile)
-            profile = stored
-            persist(stored)
+            profile = try await profiles.update(profile)
             isPendingSync = false
-            defaults.set(false, forKey: Self.pendingKey)
         } catch {
             Self.logger.notice("profile sync deferred: \(error.localizedDescription)")
         }
-    }
-
-    private func store(_ profile: Profile) {
-        self.profile = profile
-        persist(profile)
-        isPendingSync = true
-        defaults.set(true, forKey: Self.pendingKey)
     }
 
     private func persist(_ profile: Profile) {

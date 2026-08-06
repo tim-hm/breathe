@@ -7,6 +7,15 @@ import Foundation
 /// agree on protocol, codec, and the identity header, and the one place that is
 /// guaranteed is the place they are all constructed.
 public enum BreatheClients {
+    /// One `URLSession` for the whole app, not one per service.
+    ///
+    /// `ProtocolClient` builds its own `URLSessionHTTPClient` — and therefore
+    /// its own session — by default, so a second service would otherwise mean a
+    /// second connection pool to the same host: another TCP and TLS handshake,
+    /// and no multiplexing between the catalogue call and the profile sync that
+    /// launch fires alongside it.
+    private static let httpClient = URLSessionHTTPClient()
+
     public static func techniqueService(
         baseURL: URL,
         userId: @escaping @Sendable () -> UUID?
@@ -26,6 +35,7 @@ public enum BreatheClients {
         userId: @escaping @Sendable () -> UUID?
     ) -> ProtocolClient {
         ProtocolClient(
+            httpClient: httpClient,
             config: ProtocolClientConfig(
                 host: baseURL.absoluteString,
                 // gRPC-Web, not Connect: the server is tonic behind
