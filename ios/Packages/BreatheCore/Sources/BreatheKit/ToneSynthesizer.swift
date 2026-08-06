@@ -6,15 +6,20 @@ import Foundation
 /// Synthesised rather than shipped as assets: four sine tones and a closing
 /// triad are a few lines of arithmetic, and generating them keeps the app free
 /// of sample files whose licence, loudness, and tuning would all need managing.
-enum ToneSynthesizer {
+///
+/// In `BreatheKit` rather than beside the audio player it feeds, for one
+/// reason: it is the only code here where a wrong constant produces silence or
+/// noise instead of a compile error, and the app target has no test bundle.
+/// Playback stays in the app, where `AVFoundation` belongs.
+public enum ToneSynthesizer {
     /// One sine tone, placed in the buffer.
-    struct Note {
+    public struct Note: Sendable {
         let frequency: Double
         /// Offset from the start of the buffer, in seconds.
         let start: Double
         let duration: Double
 
-        init(_ frequency: Double, start: Double = 0, duration: Double = 0.5) {
+        public init(_ frequency: Double, start: Double = 0, duration: Double) {
             self.frequency = frequency
             self.start = start
             self.duration = duration
@@ -31,7 +36,7 @@ enum ToneSynthesizer {
 
     /// Mono 16-bit PCM at 44.1 kHz — the format every Apple audio path decodes
     /// without resampling.
-    static func wav(_ notes: [Note]) -> Data {
+    public static func wav(_ notes: [Note]) -> Data {
         let span = notes.map { $0.start + $0.duration }.max() ?? 0
         var samples = [Int16](repeating: 0, count: Int(span * sampleRate))
 
@@ -84,9 +89,9 @@ enum ToneSynthesizer {
 
         data.append(ascii: "data")
         data.append(littleEndian: dataBytes)
-        for sample in samples {
-            data.append(littleEndian: sample)
-        }
+        // One copy rather than 130,000 two-byte appends: every Apple platform is
+        // little-endian, so the array's memory is already the file's byte order.
+        samples.withUnsafeBufferPointer { data.append(Data(buffer: $0)) }
 
         return data
     }

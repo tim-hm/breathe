@@ -53,9 +53,8 @@ struct SessionSummaryView: View {
     }
 
     private var closing: String {
-        record.completed
-            ? "That's \(technique.name) done. Come back whenever you need it."
-            : "Come back whenever you need it."
+        (record.completed ? "That's \(technique.name) done. " : "")
+            + "Come back whenever you need it."
     }
 
     private func stat(_ label: String, _ value: String) -> some View {

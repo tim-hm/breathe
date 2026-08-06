@@ -10,10 +10,11 @@ struct BreathVisual: View {
     let beat: SessionTimeline.Beat?
     let elapsed: Duration
     let accent: Color
-    let reduceMotion: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        ZStack {
+        Group {
             if reduceMotion {
                 ring
             } else {
@@ -34,7 +35,7 @@ struct BreathVisual: View {
                 )
             )
             .overlay(Circle().stroke(accent.opacity(0.5), lineWidth: 1))
-            .scaleEffect(Self.fullness(of: beat, at: elapsed))
+            .scaleEffect(fullness)
     }
 
     private var ring: some View {
@@ -42,7 +43,7 @@ struct BreathVisual: View {
             Circle()
                 .stroke(accent.opacity(0.2), lineWidth: 12)
             Circle()
-                .trim(from: 0, to: max(beat?.fraction(at: elapsed) ?? 0, 0.001))
+                .trim(from: 0, to: beat?.fraction(at: elapsed) ?? 0)
                 .stroke(accent, style: StrokeStyle(lineWidth: 12, lineCap: .round))
                 .rotationEffect(.degrees(-90))
         }
@@ -53,7 +54,7 @@ struct BreathVisual: View {
     ///
     /// Smoothstepped rather than linear: a breath does not change pace at its
     /// boundaries, and a linear ramp visibly stops dead at the top of an inhale.
-    static func fullness(of beat: SessionTimeline.Beat?, at elapsed: Duration) -> Double {
+    private var fullness: Double {
         let smallest = 0.45
         let largest = 1.0
 

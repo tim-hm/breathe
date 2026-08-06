@@ -67,7 +67,17 @@ public struct Technique: Sendable, Identifiable, Hashable {
 
     /// How long one full cycle takes.
     public var cycleDuration: Duration {
-        phases.reduce(.zero) { $0 + $1.duration }
+        phases.totalDuration
+    }
+}
+
+extension [Phase] {
+    /// How long the sequence takes end to end.
+    ///
+    /// One definition, so a technique's advertised cycle length and the length
+    /// `SessionTimeline` actually lays out cannot drift apart.
+    var totalDuration: Duration {
+        reduce(.zero) { $0 + $1.duration }
     }
 }
 

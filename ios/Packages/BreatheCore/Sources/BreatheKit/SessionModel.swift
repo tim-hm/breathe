@@ -68,12 +68,12 @@ public final class SessionModel {
 
     public init(
         technique: Technique,
-        cycles: Int? = nil,
+        cycles: Int,
         cues: any SessionCueing,
         recorder: any SessionRecording
     ) {
         self.technique = technique
-        timeline = SessionTimeline(technique: technique, cycles: cycles)
+        timeline = SessionTimeline(phases: technique.phases, cycles: cycles)
         self.cues = cues
         self.recorder = recorder
     }
@@ -84,11 +84,28 @@ public final class SessionModel {
         return min(banked + anchor.duration(to: clock.now), timeline.totalDuration)
     }
 
-    /// How far through the whole session, as 0...1 — the progress ring's value.
-    public var progress: Double {
+    /// How far through the whole session, as 0...1 — the progress bar's value.
+    ///
+    /// Takes the elapsed time rather than reading it, so a view already holding
+    /// the value it drew this frame with does not take a second, slightly later
+    /// reading off the clock to draw the bar.
+    public func progress(at elapsed: Duration) -> Double {
         let total = timeline.totalDuration.milliseconds
         guard total > 0 else { return 1 }
-        return min(max(Double(elapsed.milliseconds) / Double(total), 0), 1)
+        return Double(elapsed.milliseconds) / Double(total)
+    }
+
+    /// Which cycle the person is in, counting from one.
+    ///
+    /// Belongs here rather than in the view: "no current beat means the last
+    /// cycle" is what a run-out timeline means, and the summary and the watch
+    /// app will need the same answer.
+    public var currentCycle: Int {
+        if let currentBeat {
+            return currentBeat.cycle + 1
+        }
+        // Before the cue loop's first turn, and after the timeline runs out.
+        return timeline.beat(at: elapsed).map { $0.cycle + 1 } ?? timeline.cycles
     }
 
     public func start() {

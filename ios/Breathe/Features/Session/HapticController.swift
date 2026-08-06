@@ -25,13 +25,7 @@ final class HapticController {
 
     func prepare() {
         guard supportsHaptics else {
-            // Prepared up front: the first `impactOccurred` on a cold generator
-            // is the one that arrives late, and that is a phase boundary.
-            for style in [UIImpactFeedbackGenerator.FeedbackStyle.medium, .soft, .rigid, .light] {
-                let generator = UIImpactFeedbackGenerator(style: style)
-                generator.prepare()
-                impacts[style] = generator
-            }
+            prepareFallback()
             return
         }
 
@@ -103,6 +97,16 @@ final class HapticController {
         engine?.stop()
         engine = nil
         impacts.removeAll()
+    }
+
+    /// Warms one generator per style. The first `impactOccurred` on a cold
+    /// generator is the one that arrives late, and that is a phase boundary.
+    private func prepareFallback() {
+        for style in [UIImpactFeedbackGenerator.FeedbackStyle.medium, .soft, .rigid, .light] {
+            let generator = UIImpactFeedbackGenerator(style: style)
+            generator.prepare()
+            impacts[style] = generator
+        }
     }
 
     private func restart() {
@@ -188,7 +192,10 @@ final class HapticController {
         case .holdOut: .light
         }
 
-        impacts[style]?.impactOccurred()
-        impacts[style]?.prepare()
+        guard let generator = impacts[style] else { return }
+        generator.impactOccurred()
+        // Re-armed straight away: the next boundary is seconds away, and a cold
+        // generator is the one that arrives late.
+        generator.prepare()
     }
 }

@@ -82,7 +82,7 @@ public struct SessionTimeline: Sendable, Equatable {
 
         self.beats = beats
         self.cycles = cycles
-        cycleDuration = phases.reduce(.zero) { $0 + $1.duration }
+        cycleDuration = phases.totalDuration
         totalDuration = start
     }
 
@@ -96,9 +96,8 @@ public struct SessionTimeline: Sendable, Equatable {
     /// Binary search rather than a scan: the bellows breath's twenty cycles are
     /// already forty beats, and this runs on every animation frame.
     public func beat(at elapsed: Duration) -> Beat? {
-        guard elapsed >= .zero, elapsed < totalDuration else {
-            return elapsed < .zero ? beats.first : nil
-        }
+        guard elapsed >= .zero else { return beats.first }
+        guard elapsed < totalDuration else { return nil }
 
         var low = beats.startIndex
         var high = beats.endIndex
@@ -110,7 +109,9 @@ public struct SessionTimeline: Sendable, Equatable {
                 high = middle
             }
         }
-        return low < beats.endIndex ? beats[low] : nil
+        // `elapsed < totalDuration` is `elapsed < beats.last.end`, so the search
+        // always lands on a beat rather than past the end.
+        return beats[low]
     }
 
     /// How many cycles are wholly behind `elapsed` — what the summary counts.
@@ -129,30 +130,5 @@ public struct SessionTimeline: Sendable, Equatable {
     /// takes two of them in one cycle, and both are breaths the person took.
     public func breathsCompleted(at elapsed: Duration) -> Int {
         beats.count { $0.kind == .inhale && $0.end <= elapsed }
-    }
-}
-
-public extension Duration {
-    /// Seconds as a `Double`, for the frameworks that measure time that way —
-    /// CoreHaptics pattern events, SwiftUI geometry.
-    ///
-    /// Never for deciding which phase is current: that stays on the integer
-    /// milliseconds below, where a boundary cannot land on the wrong side of
-    /// itself by a float's breadth.
-    var seconds: Double {
-        let (seconds, attoseconds) = components
-        return Double(seconds) + Double(attoseconds) * 1e-18
-    }
-}
-
-extension Duration {
-    /// Whole milliseconds, truncating.
-    ///
-    /// Every duration in the catalogue is authored in milliseconds, so integer
-    /// arithmetic here is exact where seconds-as-`Double` would land a cycle
-    /// boundary a float's breadth on the wrong side of itself.
-    var milliseconds: Int64 {
-        let (seconds, attoseconds) = components
-        return seconds * 1000 + attoseconds / 1_000_000_000_000_000
     }
 }

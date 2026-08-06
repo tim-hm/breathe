@@ -11,6 +11,22 @@ import os
 final class SessionAudioPlayer {
     private static let logger = Logger(subsystem: "xyz.holmie.breathe", category: "audio")
 
+    /// Synthesised once for the process rather than per session: the tones never
+    /// vary, and building them is a few hundred thousand `sin` calls that would
+    /// otherwise land on the main thread as the player animates in.
+    private static let cueTones: [PhaseKind: Data] = [
+        .inhale: ToneSynthesizer.wav([ToneSynthesizer.Note(440, duration: 0.55)]),
+        .exhale: ToneSynthesizer.wav([ToneSynthesizer.Note(330, duration: 0.7)]),
+        .holdIn: ToneSynthesizer.wav([ToneSynthesizer.Note(587, duration: 0.22)]),
+        .holdOut: ToneSynthesizer.wav([ToneSynthesizer.Note(262, duration: 0.28)]),
+    ]
+
+    private static let completionTone = ToneSynthesizer.wav([
+        ToneSynthesizer.Note(440, start: 0, duration: 0.5),
+        ToneSynthesizer.Note(554, start: 0.18, duration: 0.5),
+        ToneSynthesizer.Note(659, start: 0.36, duration: 0.9),
+    ])
+
     private var players: [PhaseKind: AVAudioPlayer] = [:]
     private var completionPlayer: AVAudioPlayer?
 
@@ -31,18 +47,8 @@ final class SessionAudioPlayer {
             return
         }
 
-        players = [
-            .inhale: player(for: [ToneSynthesizer.Note(440, duration: 0.55)]),
-            .exhale: player(for: [ToneSynthesizer.Note(330, duration: 0.7)]),
-            .holdIn: player(for: [ToneSynthesizer.Note(587, duration: 0.22)]),
-            .holdOut: player(for: [ToneSynthesizer.Note(262, duration: 0.28)]),
-        ].compactMapValues { $0 }
-
-        completionPlayer = player(for: [
-            ToneSynthesizer.Note(440, start: 0, duration: 0.5),
-            ToneSynthesizer.Note(554, start: 0.18, duration: 0.5),
-            ToneSynthesizer.Note(659, start: 0.36, duration: 0.9),
-        ])
+        players = Self.cueTones.compactMapValues(player(for:))
+        completionPlayer = player(for: Self.completionTone)
     }
 
     func play(_ beat: SessionTimeline.Beat) {
@@ -78,9 +84,9 @@ final class SessionAudioPlayer {
         }
     }
 
-    private func player(for notes: [ToneSynthesizer.Note]) -> AVAudioPlayer? {
+    private func player(for tone: Data) -> AVAudioPlayer? {
         do {
-            let player = try AVAudioPlayer(data: ToneSynthesizer.wav(notes))
+            let player = try AVAudioPlayer(data: tone)
             // Decoding and buffer allocation happen here rather than on the
             // first phase boundary, where the delay would land inside the cue.
             player.prepareToPlay()

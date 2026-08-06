@@ -8,7 +8,6 @@ struct SessionView: View {
     @State private var model: SessionModel
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
 
     init(model: SessionModel) {
@@ -19,7 +18,7 @@ struct SessionView: View {
         ZStack {
             backdrop.ignoresSafeArea()
 
-            if let record = model.record {
+            if model.status == .finished, let record = model.record {
                 SessionSummaryView(record: record, technique: model.technique) { dismiss() }
             } else {
                 player
@@ -58,27 +57,44 @@ struct SessionView: View {
         )
     }
 
+    private var player: some View {
+        VStack(spacing: Theme.Spacing.loose) {
+            header
+
+            Spacer()
+            breathGuide
+            Spacer()
+
+            controls
+        }
+        .padding(Theme.Spacing.loose)
+    }
+
+    /// Everything that changes at a phase boundary rather than at display
+    /// refresh, so it sits outside the animation timeline below and is rebuilt
+    /// when `currentBeat` or `status` changes instead of sixty times a second.
+    private var header: some View {
+        VStack(spacing: Theme.Spacing.tight) {
+            Text(model.technique.name)
+                .font(.headline)
+            Text("Cycle \(model.currentCycle) of \(model.timeline.cycles)")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+    }
+
     /// `TimelineView(.animation)` redraws every frame and reads the elapsed time
     /// back off the session's clock, so the visual follows the same timeline the
     /// cues do rather than an animation running alongside it. Paused when the
     /// session is, which stops the redraws as well as the breath.
-    private var player: some View {
+    private var breathGuide: some View {
         TimelineView(.animation(paused: model.status != .running)) { _ in
             let elapsed = model.elapsed
             let beat = model.timeline.beat(at: elapsed)
 
             VStack(spacing: Theme.Spacing.loose) {
-                cycleCounter(for: beat)
-
-                Spacer()
-
-                BreathVisual(
-                    beat: beat,
-                    elapsed: elapsed,
-                    accent: model.technique.goal.accent,
-                    reduceMotion: reduceMotion
-                )
-                .accessibilityHidden(true)
+                BreathVisual(beat: beat, elapsed: elapsed, accent: model.technique.goal.accent)
+                    .accessibilityHidden(true)
 
                 VStack(spacing: Theme.Spacing.close) {
                     Text(beat?.kind.instruction ?? "")
@@ -92,26 +108,10 @@ struct SessionView: View {
                 // long is left in it, which is everything the visual conveys.
                 .accessibilityElement(children: .combine)
 
-                Spacer()
-
-                ProgressView(value: model.progress)
+                ProgressView(value: model.progress(at: elapsed))
                     .tint(model.technique.goal.accent)
                     .accessibilityLabel("Session progress")
-
-                controls
             }
-            .padding(Theme.Spacing.loose)
-        }
-    }
-
-    private func cycleCounter(for beat: SessionTimeline.Beat?) -> some View {
-        VStack(spacing: Theme.Spacing.tight) {
-            Text(model.technique.name)
-                .font(.headline)
-            Text("Cycle \((beat?.cycle ?? model.timeline.cycles - 1) + 1) of "
-                + "\(model.timeline.cycles)")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
         }
     }
 

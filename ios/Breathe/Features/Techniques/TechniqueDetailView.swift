@@ -32,8 +32,8 @@ struct TechniqueDetailView: View {
                         Text(cycles == 1 ? "1 cycle" : "\(cycles) cycles")
                             .font(.headline)
                     }
-                    Text("About \(inWords(timeline.totalDuration)). However many you do is the "
-                        + "practice.")
+                    Text("About \(inWords(technique.cycleDuration * cycles)). However many you "
+                        + "do is the practice.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -54,10 +54,6 @@ struct TechniqueDetailView: View {
         .fullScreenCover(item: $started) { session in
             SessionView(model: session.model)
         }
-    }
-
-    private var timeline: SessionTimeline {
-        SessionTimeline(technique: technique, cycles: cycles)
     }
 
     private var header: some View {
@@ -82,7 +78,7 @@ struct TechniqueDetailView: View {
                         .font(.caption)
                         .padding(.horizontal, Theme.Spacing.close)
                         .padding(.vertical, Theme.Spacing.tight)
-                        .background(technique.goal.accent.opacity(0.12), in: Capsule())
+                        .background(technique.goal.accent.opacity(0.15), in: Capsule())
                 }
             }
         }

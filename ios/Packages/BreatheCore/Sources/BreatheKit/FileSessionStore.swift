@@ -11,7 +11,12 @@ import os
 /// an append-only format would need its own reader before M5's sync could batch
 /// what it finds. Revisit when there is enough history for that to be false.
 public actor FileSessionStore: SessionRecording {
-    private static let logger = Logger(subsystem: "xyz.holmie.breathe", category: "session-store")
+    /// The running app's subsystem, not a hard-coded bundle id: this module is
+    /// shared, and M9's watch app is a second bundle that should log as itself.
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "BreatheKit",
+        category: "session-store"
+    )
 
     private let fileURL: URL
 
@@ -44,6 +49,9 @@ public actor FileSessionStore: SessionRecording {
     }
 
     public func recordedSessions() async -> [SessionRecord] {
+        // No file is the normal state until the first session ends, so it is
+        // checked rather than caught — an expected condition should not spend
+        // every launch before the first session logging an error.
         guard FileManager.default.fileExists(atPath: fileURL.path(percentEncoded: false)) else {
             return []
         }
