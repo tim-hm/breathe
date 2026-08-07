@@ -12,7 +12,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # check:proto's breaking-change check diffs against `main`'s history,
           # which a shallow clone doesn't carry.
@@ -20,7 +20,7 @@ jobs:
       # A pull_request checkout is a detached HEAD with no local `main`, and
       # check:proto deliberately fails closed when `main` doesn't resolve.
       - run: git rev-parse --verify --quiet main || git fetch origin main:main
-      - uses: jdx/mise-action@v2
+      - uses: jdx/mise-action@v4
       - run: mise run check:rs
       - run: mise run check:proto
       - run: mise run check:text
@@ -30,8 +30,8 @@ jobs:
   lint-swift:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v4
         with:
           # Only the two tools check:swift runs — skips the Rust toolchain and
           # cargo tools, which cost real minutes on the 10x-billed macOS runner.
