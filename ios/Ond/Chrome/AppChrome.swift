@@ -53,7 +53,9 @@ struct AppChrome: View {
                 root(roots.exercisesRoot)
             }
 
-            Tab("Coach", systemImage: "text.bubble") {
+            // Two bubbles rather than one: a single bubble reads as a message
+            // waiting to be opened, and this row is about a conversation.
+            Tab("Coach", systemImage: "bubble.left.and.text.bubble.right") {
                 root(roots.coachRoot)
             }
 

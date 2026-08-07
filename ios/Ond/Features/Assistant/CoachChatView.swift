@@ -29,24 +29,26 @@ struct CoachChatView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            conversation
-            composer
-        }
-        .paletteGround()
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                speakBackToggle
+        // The composer is a safe-area inset rather than the second half of a
+        // `VStack`, so the transcript keeps the whole screen and scrolls under
+        // both it and the tab bar. Stacked, the two chrome bars ate the bottom
+        // of every conversation and the newest turn was the one they hid.
+        conversation
+            .safeAreaInset(edge: .bottom) { composer }
+            .paletteGround()
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    speakBackToggle
+                }
             }
-        }
-        // The stream and the voice both die with the screen — a request
-        // nobody is watching and a monologue nobody is hearing.
-        .onDisappear { model.cancel() }
+            // The stream and the voice both die with the screen — a request
+            // nobody is watching and a monologue nobody is hearing.
+            .onDisappear { model.cancel() }
     }
 
     private var conversation: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: Theme.Spacing.standard) {
+            LazyVStack(alignment: .leading, spacing: Theme.Spacing.loose) {
                 if model.transcript.isEmpty {
                     opening
                 }
@@ -56,14 +58,19 @@ struct CoachChatView: View {
                 }
             }
             .padding(.horizontal, Theme.Spacing.standard)
-            .padding(.vertical, Theme.Spacing.standard)
+            .padding(.vertical, Theme.Spacing.loose)
         }
         .scrollDismissesKeyboard(.interactively)
         // Pinned to the bottom by the anchor rather than driven by a
         // `scrollTo` per chunk: the transcript republishes on every streamed
         // chunk, and a per-chunk scroll request is main-thread work the
         // anchor does for free.
-        .defaultScrollAnchor(.bottom)
+        //
+        // Only once there is something to pin. An empty conversation anchored
+        // to the bottom presses its one paragraph against the composer with the
+        // whole screen empty above it, which reads as a transcript that scrolled
+        // away rather than one that has not started.
+        .defaultScrollAnchor(model.transcript.isEmpty ? .center : .bottom)
     }
 
     /// What an empty conversation says instead of blank space: what the coach
@@ -95,6 +102,17 @@ struct CoachChatView: View {
     }
 
     private var composer: some View {
+        // The bar and the send button are both glass, so they are grouped: two
+        // ungrouped layers sample their own backdrop, and this backdrop is the
+        // transcript scrolling underneath, redrawn on every streamed chunk.
+        GlassEffectContainer {
+            bar
+        }
+        .padding(.horizontal, Theme.Spacing.standard)
+        .padding(.bottom, Theme.Spacing.close)
+    }
+
+    private var bar: some View {
         HStack(spacing: Theme.Spacing.close) {
             TextField("Ask the coach", text: $draft, axis: .vertical)
                 .lineLimit(1 ... 4)
@@ -111,18 +129,32 @@ struct CoachChatView: View {
 
             // Disabled while a reply streams — the composer itself stays
             // live, so the next question can be typed over the answer.
+            //
+            // A button rather than a tinted glyph: `glassProminent` carries its
+            // own disabled state, so nothing here has to decide what "off"
+            // looks like, and it sits in the same material as the bar around it.
             Button(action: send) {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(canSend ? Theme.Accent.brand : Theme.Ink.tertiary)
+                Image(systemName: "arrow.up")
+                    .fontWeight(.semibold)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.glassProminent)
+            .buttonBorderShape(.circle)
+            .tint(Theme.Accent.brand)
             .disabled(!canSend)
             .accessibilityLabel("Send")
         }
-        .padding(.horizontal, Theme.Spacing.standard)
-        .padding(.vertical, Theme.Spacing.close)
-        .background(Theme.Surface.raised)
+        // Asymmetric: the field wants a full inset to read as text, the button
+        // only wants clearance from the capsule's edge.
+        .padding(EdgeInsets(
+            top: Theme.Spacing.tight,
+            leading: Theme.Spacing.standard,
+            bottom: Theme.Spacing.tight,
+            trailing: Theme.Spacing.tight
+        ))
+        // A capsule of the tab bar's own material, floating clear of it, rather
+        // than a flat full-width strip stacked on top: two opaque slabs read as
+        // two pieces of chrome, where this reads as one system with the bar.
+        .glassEffect(in: .capsule)
     }
 
     private var canSend: Bool {
@@ -137,7 +169,8 @@ struct CoachChatView: View {
         Button {
             model.isSpeakingAloud.toggle()
         } label: {
-            Image(systemName: model.isSpeakingAloud ? "speaker.wave.2.fill" : "speaker.slash")
+            // Both filled, so the toggle changes meaning rather than weight.
+            Image(systemName: model.isSpeakingAloud ? "speaker.wave.2.fill" : "speaker.slash.fill")
         }
         .accessibilityLabel(model
             .isSpeakingAloud ? "Stop reading replies aloud" : "Read replies aloud")

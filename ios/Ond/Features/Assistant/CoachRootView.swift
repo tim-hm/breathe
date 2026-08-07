@@ -36,7 +36,9 @@ struct CoachRootView: View {
 
     private var offer: some View {
         ContentUnavailableView {
-            Label("Your breathing coach", systemImage: "text.bubble")
+            // The tab's own symbol — the offer is what is behind that door, and
+            // a different glyph here would read as a different feature.
+            Label("Your breathing coach", systemImage: "bubble.left.and.text.bubble.right")
         } description: {
             Text(
                 "Ask where to start, why an exercise works, or what your "
