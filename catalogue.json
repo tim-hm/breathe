@@ -1,0 +1,349 @@
+{
+  "techniques": [
+    {
+      "slug": "box-breathing",
+      "name": "Box Breathing",
+      "summary": "Four equal counts — in, hold, out, hold. The most forgiving place to start, and the one to reach for before something stressful rather than during it.",
+      "safetyNote": "",
+      "goal": "CALM",
+      "stages": [
+        {
+          "phases": [
+            {
+              "kind": "INHALE",
+              "durationMs": 4000,
+              "minDurationMs": 3000,
+              "maxDurationMs": 8000
+            },
+            {
+              "kind": "HOLD_IN",
+              "durationMs": 4000,
+              "minDurationMs": 2000,
+              "maxDurationMs": 8000
+            },
+            {
+              "kind": "EXHALE",
+              "durationMs": 4000,
+              "minDurationMs": 3000,
+              "maxDurationMs": 8000
+            },
+            {
+              "kind": "HOLD_OUT",
+              "durationMs": 4000,
+              "minDurationMs": 2000,
+              "maxDurationMs": 8000
+            }
+          ],
+          "cycles": 8,
+          "openEnded": false
+        }
+      ],
+      "recommendedRounds": 1,
+      "requiresSubscription": false
+    },
+    {
+      "slug": "coherent-breathing",
+      "name": "Coherent Breathing",
+      "summary": "One long breath in, one just as long out — about five and a half breaths a minute. No holds and nothing to count: at this pace heart rate and breath fall into step on their own, which is the whole of the exercise.",
+      "safetyNote": "",
+      "goal": "CALM",
+      "stages": [
+        {
+          "phases": [
+            {
+              "kind": "INHALE",
+              "durationMs": 5500,
+              "minDurationMs": 4000,
+              "maxDurationMs": 7000
+            },
+            {
+              "kind": "EXHALE",
+              "durationMs": 5500,
+              "minDurationMs": 4000,
+              "maxDurationMs": 7000
+            }
+          ],
+          "cycles": 27,
+          "openEnded": false
+        }
+      ],
+      "recommendedRounds": 1,
+      "requiresSubscription": true
+    },
+    {
+      "slug": "four-seven-eight",
+      "name": "4-7-8 Breathing",
+      "summary": "Inhale for four, hold for seven, exhale for eight. The long exhale is doing the work; if the hold feels strained, shorten all three and keep the ratio.",
+      "safetyNote": "Meant to make you drowsy. Somewhere you can stay put, not behind a wheel.",
+      "goal": "SLEEP",
+      "stages": [
+        {
+          "phases": [
+            {
+              "kind": "INHALE",
+              "durationMs": 4000,
+              "minDurationMs": 3000,
+              "maxDurationMs": 6000
+            },
+            {
+              "kind": "HOLD_IN",
+              "durationMs": 7000,
+              "minDurationMs": 4000,
+              "maxDurationMs": 10000
+            },
+            {
+              "kind": "EXHALE",
+              "durationMs": 8000,
+              "minDurationMs": 6000,
+              "maxDurationMs": 12000
+            }
+          ],
+          "cycles": 4,
+          "openEnded": false
+        }
+      ],
+      "recommendedRounds": 1,
+      "requiresSubscription": true
+    },
+    {
+      "slug": "extended-exhale",
+      "name": "Extended Exhale",
+      "summary": "In for four, out for six. The same lever 4-7-8 pulls — an out-breath longer than the in-breath — with no hold to strain against. Stretch the exhale towards eight when six stops feeling like enough.",
+      "safetyNote": "Meant to make you drowsy. Somewhere you can stay put, not behind a wheel.",
+      "goal": "SLEEP",
+      "stages": [
+        {
+          "phases": [
+            {
+              "kind": "INHALE",
+              "durationMs": 4000,
+              "minDurationMs": 3000,
+              "maxDurationMs": 5000
+            },
+            {
+              "kind": "EXHALE",
+              "durationMs": 6000,
+              "minDurationMs": 6000,
+              "maxDurationMs": 8000
+            }
+          ],
+          "cycles": 12,
+          "openEnded": false
+        }
+      ],
+      "recommendedRounds": 1,
+      "requiresSubscription": true
+    },
+    {
+      "slug": "physiological-sigh",
+      "name": "Physiological Sigh",
+      "summary": "A full inhale, a second short sip of air on top, then a long slow exhale. One or two rounds is the whole exercise — it works in seconds, not minutes.",
+      "safetyNote": "",
+      "goal": "RESET",
+      "stages": [
+        {
+          "phases": [
+            {
+              "kind": "INHALE",
+              "durationMs": 1500,
+              "minDurationMs": 1000,
+              "maxDurationMs": 2500
+            },
+            {
+              "kind": "INHALE",
+              "durationMs": 700,
+              "minDurationMs": 500,
+              "maxDurationMs": 1200
+            },
+            {
+              "kind": "EXHALE",
+              "durationMs": 5000,
+              "minDurationMs": 4000,
+              "maxDurationMs": 8000
+            }
+          ],
+          "cycles": 3,
+          "openEnded": false
+        }
+      ],
+      "recommendedRounds": 1,
+      "requiresSubscription": false
+    },
+    {
+      "slug": "bellows-breath",
+      "name": "Bellows Breath",
+      "summary": "Rapid, forceful, equal inhales and exhales through the nose. A short bout is the whole dose — this one raises alertness in under a minute and has nothing more to give after that.",
+      "safetyNote": "Sitting down only. Stop at the first sign of lightheadedness. Never in water, never while driving.",
+      "goal": "ENERGY",
+      "stages": [
+        {
+          "phases": [
+            {
+              "kind": "INHALE",
+              "durationMs": 1000,
+              "minDurationMs": 700,
+              "maxDurationMs": 1500
+            },
+            {
+              "kind": "EXHALE",
+              "durationMs": 1000,
+              "minDurationMs": 700,
+              "maxDurationMs": 1500
+            }
+          ],
+          "cycles": 20,
+          "openEnded": false
+        }
+      ],
+      "recommendedRounds": 1,
+      "requiresSubscription": true
+    },
+    {
+      "slug": "wim-hof-rounds",
+      "name": "Wim Hof-style Rounds",
+      "summary": "Thirty full, unforced breaths, then let the air go and wait — the hold after them is the point, and it lasts as long as it lasts. One deep breath in, held for fifteen seconds, closes each round. Popular, well described by people who practise it, and thinner on trial evidence than its reputation suggests.",
+      "safetyNote": "Sitting or lying down, always. Never in water, never in the bath, never driving or standing — fast breathing can make you faint with no warning. Tingling in the hands and face is ordinary; dizziness means stop. Never push a hold to the limit: this app does not measure one.",
+      "goal": "ENERGY",
+      "stages": [
+        {
+          "phases": [
+            {
+              "kind": "INHALE",
+              "durationMs": 1500,
+              "minDurationMs": 1000,
+              "maxDurationMs": 2500
+            },
+            {
+              "kind": "EXHALE",
+              "durationMs": 1500,
+              "minDurationMs": 1000,
+              "maxDurationMs": 2500
+            }
+          ],
+          "cycles": 30,
+          "openEnded": false
+        },
+        {
+          "phases": [
+            {
+              "kind": "HOLD_OUT",
+              "durationMs": 60000,
+              "minDurationMs": 60000,
+              "maxDurationMs": 60000
+            }
+          ],
+          "cycles": 1,
+          "openEnded": true
+        },
+        {
+          "phases": [
+            {
+              "kind": "INHALE",
+              "durationMs": 3000,
+              "minDurationMs": 2000,
+              "maxDurationMs": 5000
+            },
+            {
+              "kind": "HOLD_IN",
+              "durationMs": 15000,
+              "minDurationMs": 10000,
+              "maxDurationMs": 20000
+            },
+            {
+              "kind": "EXHALE",
+              "durationMs": 4000,
+              "minDurationMs": 2000,
+              "maxDurationMs": 6000
+            }
+          ],
+          "cycles": 1,
+          "openEnded": false
+        }
+      ],
+      "recommendedRounds": 3,
+      "requiresSubscription": true
+    },
+    {
+      "slug": "long-box-breathing",
+      "name": "Long Box Breathing",
+      "summary": "Box breathing with longer sides — six counts each, or eight once six feels easy. The hold is what makes it a focus exercise rather than a calming one: there is enough to keep track of that there is no room left to drift.",
+      "safetyNote": "",
+      "goal": "FOCUS",
+      "stages": [
+        {
+          "phases": [
+            {
+              "kind": "INHALE",
+              "durationMs": 6000,
+              "minDurationMs": 4000,
+              "maxDurationMs": 10000
+            },
+            {
+              "kind": "HOLD_IN",
+              "durationMs": 6000,
+              "minDurationMs": 4000,
+              "maxDurationMs": 10000
+            },
+            {
+              "kind": "EXHALE",
+              "durationMs": 6000,
+              "minDurationMs": 4000,
+              "maxDurationMs": 10000
+            },
+            {
+              "kind": "HOLD_OUT",
+              "durationMs": 6000,
+              "minDurationMs": 4000,
+              "maxDurationMs": 10000
+            }
+          ],
+          "cycles": 6,
+          "openEnded": false
+        }
+      ],
+      "recommendedRounds": 1,
+      "requiresSubscription": true
+    },
+    {
+      "slug": "alternate-nostril",
+      "name": "Alternate-Nostril Breathing",
+      "summary": "Thumb closes the right nostril, ring finger the left. In through the left, out through the right, in through the right, out through the left — that sequence is one cycle, and the four beats on screen are its four breaths in order. A traditional practice with modest trial support and an unmistakable knack for holding attention.",
+      "safetyNote": "",
+      "goal": "FOCUS",
+      "stages": [
+        {
+          "phases": [
+            {
+              "kind": "INHALE",
+              "durationMs": 4000,
+              "minDurationMs": 3000,
+              "maxDurationMs": 6000
+            },
+            {
+              "kind": "EXHALE",
+              "durationMs": 6000,
+              "minDurationMs": 4000,
+              "maxDurationMs": 8000
+            },
+            {
+              "kind": "INHALE",
+              "durationMs": 4000,
+              "minDurationMs": 3000,
+              "maxDurationMs": 6000
+            },
+            {
+              "kind": "EXHALE",
+              "durationMs": 6000,
+              "minDurationMs": 4000,
+              "maxDurationMs": 8000
+            }
+          ],
+          "cycles": 9,
+          "openEnded": false
+        }
+      ],
+      "recommendedRounds": 1,
+      "requiresSubscription": true
+    }
+  ]
+}
