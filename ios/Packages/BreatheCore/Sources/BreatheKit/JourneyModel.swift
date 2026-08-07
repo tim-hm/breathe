@@ -11,7 +11,8 @@ import Observation
 @MainActor
 @Observable
 public final class JourneyModel {
-    /// A board is either not asked for yet, on its way, here, or out of reach.
+    /// A board is either not asked for yet, on its way, here, out of reach, or
+    /// waiting on an answer only this person can give.
     ///
     /// `unreachable` rather than an error case: being offline is a normal state
     /// for a phone, not a fault to report.
@@ -20,6 +21,12 @@ public final class JourneyModel {
         case loading
         case loaded(Leaderboard)
         case unreachable
+        /// The decade board, asked for by somebody who has not said which
+        /// decade. Its own case because it is the one leaderboard failure with
+        /// an action attached, and the scope picker can offer it before the
+        /// server has the band: `LeaderboardView` guards on the *local* profile
+        /// value, which is set the moment it is picked and outruns the sync.
+        case needsBirthYearBand
     }
 
     public private(set) var stats: JourneyStats = .none
@@ -106,11 +113,18 @@ public final class JourneyModel {
     }
 
     /// Fetches the current board, if the network allows.
+    ///
+    /// The one failure that is separated out is the one somebody can do
+    /// something about. Everything else — no signal, a server that is down, a
+    /// board this build cannot read — is the same quiet notice, because there is
+    /// no action behind any of them.
     public func loadLeaderboard() async {
         leaderboard = .loading
 
         do {
             leaderboard = try await .loaded(journeys.leaderboard(board, scope: scope))
+        } catch JourneyRepositoryError.failedPrecondition {
+            leaderboard = .needsBirthYearBand
         } catch {
             leaderboard = .unreachable
         }

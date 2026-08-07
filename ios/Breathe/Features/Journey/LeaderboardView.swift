@@ -78,6 +78,19 @@ struct LeaderboardView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, Theme.Spacing.loose)
 
+        case .needsBirthYearBand:
+            // Reachable because the picker offers this scope from the local
+            // profile, which carries the decade the moment it is picked — before
+            // the server has it. Saying "no connection" here would be a lie to
+            // somebody with full signal, and the answer is one screen away.
+            JourneyCard(
+                title: "Pick your decade",
+                caption: "This board compares you with people born around the same time. "
+                    + "Choose a decade and it fills in."
+            ) {
+                LeaderboardNameView(profiles: profiles)
+            }
+
         case let .loaded(leaderboard):
             standing(leaderboard)
             entries(leaderboard)
