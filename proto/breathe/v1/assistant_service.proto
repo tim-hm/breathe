@@ -81,18 +81,17 @@ message HealthContext {
   // Signed on the same terms as the resting-heart-rate trend.
   optional sint32 hrv_sdnn_trend_ms = 4;
 
-  // Held for the in-session heart-rate response summary, which ships with the
-  // hardware slice that can actually measure it.
+  // Held for `session_hr_response_bpm`, the in-session heart-rate response
+  // summary, which ships with the hardware slice that can actually measure it.
   reserved 5;
-  reserved "session_hr_response_bpm";
 }
 
 message GetRecommendationRequest {
   // See `HealthContext` for why this request is no longer empty. Absent when
   // the person has not opted in, when Health has nothing to summarise, or when
   // the client predates the field — the server behaves identically in all
-  // three cases.
-  optional HealthContext health_context = 1;
+  // three cases. Message fields track presence on their own, so no `optional`.
+  HealthContext health_context = 1;
 }
 
 // One technique worth trying, and why.
@@ -124,7 +123,7 @@ message ExplainTechniqueRequest {
 
   // The same coarse heart trends `GetRecommendationRequest` may carry, on the
   // same terms: optional, device-computed, used transiently, never stored.
-  optional HealthContext health_context = 2;
+  HealthContext health_context = 2;
 }
 
 message ExplainTechniqueResponse {

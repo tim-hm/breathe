@@ -110,10 +110,10 @@ pub fn bolt_phrase(bolt: &BoltSnapshot) -> String {
 /// coach should be reasoning from. The trend windows are the widest week-over-
 /// baseline shift a genuine wearer could show; anything larger reads as a
 /// different person wearing the watch.
-pub const RESTING_HR_BPM_RANGE: std::ops::RangeInclusive<i32> = 25..=150;
-pub const RESTING_HR_TREND_BPM_RANGE: std::ops::RangeInclusive<i32> = -40..=40;
-pub const HRV_SDNN_MS_RANGE: std::ops::RangeInclusive<i32> = 1..=300;
-pub const HRV_SDNN_TREND_MS_RANGE: std::ops::RangeInclusive<i32> = -150..=150;
+const RESTING_HR_BPM_RANGE: std::ops::RangeInclusive<i32> = 25..=150;
+const RESTING_HR_TREND_BPM_RANGE: std::ops::RangeInclusive<i32> = -40..=40;
+const HRV_SDNN_MS_RANGE: std::ops::RangeInclusive<i32> = 1..=300;
+const HRV_SDNN_TREND_MS_RANGE: std::ops::RangeInclusive<i32> = -150..=150;
 
 /// The coarse heart trends a request carried, after clamping — what
 /// `prompt::health_lines` renders and nothing else reads.
@@ -130,7 +130,6 @@ pub const HRV_SDNN_TREND_MS_RANGE: std::ops::RangeInclusive<i32> = -150..=150;
 /// weeks before it, mirroring the phone's `HealthSnapshot`. A trend never
 /// appears without its mean — a delta against a mean that was dropped would be
 /// a number with no referent.
-#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct HealthContext {
     pub resting_hr_bpm: Option<i32>,
     pub resting_hr_trend_bpm: Option<i32>,
@@ -152,20 +151,43 @@ impl HealthContext {
         hrv_sdnn_ms: Option<i32>,
         hrv_sdnn_trend_ms: Option<i32>,
     ) -> Option<Self> {
-        let resting_hr_bpm = resting_hr_bpm.filter(|bpm| RESTING_HR_BPM_RANGE.contains(bpm));
-        let hrv_sdnn_ms = hrv_sdnn_ms.filter(|ms| HRV_SDNN_MS_RANGE.contains(ms));
-
-        let context = Self {
+        let (resting_hr_bpm, resting_hr_trend_bpm) = clamped_metric(
             resting_hr_bpm,
-            resting_hr_trend_bpm: resting_hr_bpm
-                .and(resting_hr_trend_bpm.filter(|bpm| RESTING_HR_TREND_BPM_RANGE.contains(bpm))),
+            resting_hr_trend_bpm,
+            RESTING_HR_BPM_RANGE,
+            RESTING_HR_TREND_BPM_RANGE,
+        );
+        let (hrv_sdnn_ms, hrv_sdnn_trend_ms) = clamped_metric(
             hrv_sdnn_ms,
-            hrv_sdnn_trend_ms: hrv_sdnn_ms
-                .and(hrv_sdnn_trend_ms.filter(|ms| HRV_SDNN_TREND_MS_RANGE.contains(ms))),
-        };
+            hrv_sdnn_trend_ms,
+            HRV_SDNN_MS_RANGE,
+            HRV_SDNN_TREND_MS_RANGE,
+        );
 
-        (context.resting_hr_bpm.is_some() || context.hrv_sdnn_ms.is_some()).then_some(context)
+        (resting_hr_bpm.is_some() || hrv_sdnn_ms.is_some()).then_some(Self {
+            resting_hr_bpm,
+            resting_hr_trend_bpm,
+            hrv_sdnn_ms,
+            hrv_sdnn_trend_ms,
+        })
     }
+}
+
+/// One metric through the clamp: the mean survives only inside its range, and
+/// the trend survives only inside its own range *and* alongside a surviving
+/// mean — the drop-with-its-mean coupling lives here so a metric added later
+/// cannot forget it.
+fn clamped_metric(
+    mean: Option<i32>,
+    trend: Option<i32>,
+    mean_range: std::ops::RangeInclusive<i32>,
+    trend_range: std::ops::RangeInclusive<i32>,
+) -> (Option<i32>, Option<i32>) {
+    let mean = mean.filter(|value| mean_range.contains(value));
+    (
+        mean,
+        mean.and(trend.filter(|value| trend_range.contains(value))),
+    )
 }
 
 /// The separator between a slug and its reason in a model's reply.

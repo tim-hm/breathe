@@ -186,11 +186,12 @@ pub async fn explain_technique(
         AssistantError::UnknownTechnique(format!("no technique has the slug `{slug}`"))
     })?;
 
+    let health = clamp_health(health);
+
     // Availability first, so a process with no key configured — a fresh clone,
     // CI, the whole e2e suite — neither writes a quota row nor builds a prompt
     // for a call that provably will not be made.
     if model.is_available() && claim_call(pool, user_id, tier).await {
-        let health = clamp_health(health);
         let request = ModelRequest {
             cacheable_prefix: prompt::catalogue_prefix(&catalogue),
             instruction: prompt::explanation_instruction(

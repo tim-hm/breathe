@@ -79,7 +79,7 @@ struct HealthContextModelTests {
         let store = ScriptedHealthStore(
             restingHeartRate: Self.trendingSeries(recent: 62, baseline: 58)
         )
-        let model = model(store: store, defaults: try defaults())
+        let model = try model(store: store, defaults: defaults())
 
         #expect(await model.context() == nil)
         #expect(await store.queries == 0)
@@ -89,7 +89,7 @@ struct HealthContextModelTests {
     @Test("Switching the opt-in on asks Health for read access")
     func optInOnRequestsAuthorization() async throws {
         let store = ScriptedHealthStore()
-        let model = model(store: store, defaults: try defaults())
+        let model = try model(store: store, defaults: defaults())
 
         model.coachReadsHeartTrends = true
         await model.authorizationRequest?.value
@@ -103,7 +103,7 @@ struct HealthContextModelTests {
             restingHeartRate: Self.trendingSeries(recent: 62, baseline: 58),
             heartRateVariability: Self.trendingSeries(recent: 45, baseline: 51)
         )
-        let model = model(store: store, defaults: try defaults())
+        let model = try model(store: store, defaults: defaults())
         model.coachReadsHeartTrends = true
 
         let context = try #require(await model.context())
@@ -119,7 +119,7 @@ struct HealthContextModelTests {
         let store = ScriptedHealthStore(
             heartRateVariability: Self.trendingSeries(recent: 45, baseline: 51)
         )
-        let model = model(store: store, defaults: try defaults())
+        let model = try model(store: store, defaults: defaults())
         model.coachReadsHeartTrends = true
 
         let context = try #require(await model.context())
@@ -131,7 +131,7 @@ struct HealthContextModelTests {
     /// the denied case as much as the no-data one — deliberately the same.
     @Test("Nothing in Health is no context, not an empty one")
     func emptyHealthIsNoContext() async throws {
-        let model = model(store: ScriptedHealthStore(), defaults: try defaults())
+        let model = try model(store: ScriptedHealthStore(), defaults: defaults())
         model.coachReadsHeartTrends = true
 
         #expect(await model.context() == nil)

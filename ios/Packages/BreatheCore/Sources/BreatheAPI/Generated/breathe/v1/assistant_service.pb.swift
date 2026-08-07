@@ -150,7 +150,7 @@ public nonisolated struct Breathe_V1_GetRecommendationRequest: Sendable {
   /// See `HealthContext` for why this request is no longer empty. Absent when
   /// the person has not opted in, when Health has nothing to summarise, or when
   /// the client predates the field — the server behaves identically in all
-  /// three cases.
+  /// three cases. Message fields track presence on their own, so no `optional`.
   public var healthContext: Breathe_V1_HealthContext {
     get {_healthContext ?? Breathe_V1_HealthContext()}
     set {_healthContext = newValue}
@@ -262,7 +262,7 @@ nonisolated extension Breathe_V1_AssistantSource: SwiftProtobuf._ProtoNameProvid
 
 nonisolated extension Breathe_V1_HealthContext: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".HealthContext"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}resting_hr_bpm\0\u{3}resting_hr_trend_bpm\0\u{3}hrv_sdnn_ms\0\u{3}hrv_sdnn_trend_ms\0\u{b}session_hr_response_bpm\0\u{c}\u{5}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}resting_hr_bpm\0\u{3}resting_hr_trend_bpm\0\u{3}hrv_sdnn_ms\0\u{3}hrv_sdnn_trend_ms\0\u{c}\u{5}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {

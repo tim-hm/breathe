@@ -41,7 +41,7 @@ public final class HealthContextModel {
     /// How far back the daily series reach: eight weeks, enough history for
     /// `HealthSummaryBuilder` to clear its trend thresholds with room while
     /// staying a bounded, cheap pair of queries.
-    public static let historyDays = 56
+    private static let historyDays = 56
 
     private static let optInKey = "health.coachReadsHeartTrends"
 
@@ -58,7 +58,8 @@ public final class HealthContextModel {
 
     /// The in-flight authorization ask, held so a test can await its
     /// completion — `didSet` cannot suspend, so the request runs as a task.
-    public private(set) var authorizationRequest: Task<Void, Never>?
+    /// Internal and unobserved: it is a test seam, not view state.
+    @ObservationIgnored private(set) var authorizationRequest: Task<Void, Never>?
 
     private let store: any HealthStore
     private let defaults: UserDefaults
@@ -89,12 +90,15 @@ public final class HealthContextModel {
         let end = now()
         let start = end.addingTimeInterval(-TimeInterval(Self.historyDays) * 86400)
 
-        let restingHeartRate = await HealthSummaryBuilder.snapshot(
-            of: store.restingHeartRate(from: start, to: end),
-            asOf: end
-        )
+        // Concurrently: two independent Health queries, both sitting in front
+        // of the coach request they contextualise — serialised, the second
+        // round trip to the health daemon would be added straight to the time
+        // before the question is even sent.
+        async let restingSeries = store.restingHeartRate(from: start, to: end)
+        async let variabilitySeries = store.heartRateVariability(from: start, to: end)
+        let restingHeartRate = await HealthSummaryBuilder.snapshot(of: restingSeries, asOf: end)
         let heartRateVariability = await HealthSummaryBuilder.snapshot(
-            of: store.heartRateVariability(from: start, to: end),
+            of: variabilitySeries,
             asOf: end
         )
 

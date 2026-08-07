@@ -276,24 +276,31 @@ fn practice_lines(practice: &PracticeSnapshot, catalogue: &[Technique]) -> Strin
 /// outside this function (see [`HealthContext`]), and this function's output
 /// goes only into the prompt.
 fn health_lines(health: &HealthContext) -> String {
+    let metrics = [
+        (
+            "resting heart rate",
+            health.resting_hr_bpm,
+            health.resting_hr_trend_bpm,
+            "bpm",
+        ),
+        (
+            "heart-rate variability (SDNN)",
+            health.hrv_sdnn_ms,
+            health.hrv_sdnn_trend_ms,
+            "ms",
+        ),
+    ];
+
     let mut lines = String::new();
-
-    if let Some(bpm) = health.resting_hr_bpm {
-        let _ = writeln!(
-            lines,
-            "resting heart rate: about {bpm} bpm{}",
-            trend_clause(health.resting_hr_trend_bpm, "bpm")
-        );
+    for (label, mean, trend, unit) in metrics {
+        if let Some(value) = mean {
+            let _ = writeln!(
+                lines,
+                "{label}: about {value} {unit}{}",
+                trend_clause(trend, unit)
+            );
+        }
     }
-
-    if let Some(ms) = health.hrv_sdnn_ms {
-        let _ = writeln!(
-            lines,
-            "heart-rate variability (SDNN): about {ms} ms{}",
-            trend_clause(health.hrv_sdnn_trend_ms, "ms")
-        );
-    }
-
     lines
 }
 
@@ -532,10 +539,10 @@ mod tests {
     /// stops; a delta of zero is "in line", not "0 above".
     #[test]
     fn a_health_line_degrades_with_its_evidence() {
-        let meanless =
+        let trendless =
             HealthContext::clamped(Some(58), None, None, None).expect("one mean keeps the context");
         assert_eq!(
-            health_lines(&meanless),
+            health_lines(&trendless),
             "resting heart rate: about 58 bpm\n"
         );
 
