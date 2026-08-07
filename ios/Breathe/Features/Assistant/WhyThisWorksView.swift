@@ -5,12 +5,18 @@ import SwiftUI
 /// The science behind one exercise, written for how much breathwork this person
 /// has done, and streamed so it can be read as it is written.
 ///
-/// Behind a disclosure and closed by default, for two reasons: the detail
-/// screen's job is to get somebody breathing, and an explanation nobody opened
-/// should not spend a model call.
+/// It continues the exercise's own summary rather than sitting behind a heading
+/// of its own: the same type, the same ink, directly underneath, so the screen
+/// reads as one opening passage instead of two competing ones. Nothing is drawn
+/// until there is something to read — no placeholder, no spinner, and no notice
+/// when the explanation cannot be fetched, because everything needed to
+/// practise is already on the screen above it.
+///
+/// It costs a model call per visit, which the disclosure this replaced was
+/// there to avoid. The quota that guards it is the server's, and running out of
+/// it lands on the rule-based answer rather than on an error.
 struct WhyThisWorksView: View {
     @State private var model: ExplanationModel
-    @State private var isOpen = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -23,18 +29,37 @@ struct WhyThisWorksView: View {
     }
 
     var body: some View {
-        DisclosureGroup("Why this works", isExpanded: $isOpen) {
-            content
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, Theme.Spacing.close)
-        }
-        // The call is made on opening, not on appearing — which is the whole
-        // reason this is a disclosure rather than a section.
-        .onChange(of: isOpen) { _, opened in
-            if opened {
-                model.startIfNeeded()
+        // A container that is always in the hierarchy even while it has nothing
+        // to show, because `.task` on a view that resolves to nothing never
+        // runs — and that task is what asks for the explanation.
+        VStack(alignment: .leading, spacing: Theme.Spacing.close) {
+            if case let .reading(text, source, isComplete) = model.state {
+                Text(text)
+                    .font(.body)
+                    .foregroundStyle(Theme.Ink.secondary)
+                    // Growing text should settle rather than snap. Dropped
+                    // entirely under Reduce Motion rather than shortened: the
+                    // reflow repeats once per chunk, dozens of times over one
+                    // paragraph.
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: text)
+
+                if isComplete {
+                    Text(caption(for: source))
+                        .font(.caption)
+                        .foregroundStyle(Theme.Ink.tertiary)
+
+                    // The same rule as the suggestion strip's: only where the
+                    // person has just read the plainer answer, so the offer is
+                    // about something they can see rather than something they
+                    // are told.
+                    if case .fallback = source {
+                        UpgradePrompt(reason: "Want it explained for you?", offering: .coach)
+                    }
+                }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .task { model.startIfNeeded() }
         // Once the explanation is whole, not once per chunk: a paragraph
         // announced a few words at a time would interrupt itself all the way
         // down. Observed on the model rather than on the growing `Text`, because
@@ -46,53 +71,6 @@ struct WhyThisWorksView: View {
             }
         }
         .onDisappear { model.cancel() }
-    }
-
-    @ViewBuilder
-    private var content: some View {
-        switch model.state {
-        case .idle, .waiting:
-            // A single line of placeholder rather than a spinner: the text is
-            // about to start arriving, and a spinner that lives for one second
-            // reads as a stall.
-            Text("Reading…")
-                .font(.subheadline)
-                .foregroundStyle(Theme.Ink.secondary)
-
-        case let .reading(text, source, isComplete):
-            VStack(alignment: .leading, spacing: Theme.Spacing.close) {
-                Text(text)
-                    .font(.body)
-                    .foregroundStyle(Theme.Ink.primary)
-                    // Growing text should settle rather than snap. Dropped
-                    // entirely under Reduce Motion rather than shortened: the
-                    // reflow repeats once per chunk, dozens of times over one
-                    // paragraph.
-                    .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: text)
-
-                if isComplete {
-                    Text(caption(for: source))
-                        .font(.caption)
-                        .foregroundStyle(Theme.Ink.secondary)
-
-                    // The same rule as the suggestion strip's: only where the
-                    // person has just read the plainer answer, so the offer is
-                    // about something they can see rather than something they
-                    // are told.
-                    if case .fallback = source {
-                        UpgradePrompt(reason: "Want it explained for you?", offering: .coach)
-                    }
-                }
-            }
-
-        case .unavailable:
-            // Calm, and honest about the fact that nothing was lost: the
-            // exercise's own summary and safety note are already on this
-            // screen, above.
-            Text("Not available just now. Everything you need to practise is above.")
-                .font(.subheadline)
-                .foregroundStyle(Theme.Ink.secondary)
-        }
     }
 
     private func caption(for source: GuidanceSource) -> String {

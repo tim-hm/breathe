@@ -28,7 +28,6 @@ struct TechniqueDetailView: View {
                 header
                 BreathRhythmChart(technique: dialled)
                 SafetyNoteCard(technique: technique)
-                WhyThisWorksView(techniqueSlug: technique.slug)
                 sessionShape(of: dialled)
                 lengthControl(of: dialled)
                 advanced(of: dialled)
@@ -45,12 +44,17 @@ struct TechniqueDetailView: View {
         }
     }
 
+    /// What this exercise is, and — once it arrives — why it works, as one
+    /// passage. The explanation is set in the summary's own type and ink so the
+    /// two read as one voice rather than as a screen with a second section on
+    /// it.
     private var header: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.close) {
             GoalBadge(goal: technique.goal)
             Text(technique.summary)
                 .font(.body)
                 .foregroundStyle(Theme.Ink.secondary)
+            WhyThisWorksView(techniqueSlug: technique.slug)
         }
     }
 
@@ -78,7 +82,7 @@ struct TechniqueDetailView: View {
     }
 
     /// One control, chosen by shape: a cyclic technique is dialled in cycles, a
-    /// staged one in rounds. The other lives under Advanced, where someone who
+    /// staged one in rounds. The other lives under Customise, where someone who
     /// wants both can find it.
     private func lengthControl(of dialled: Technique) -> some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.close) {
@@ -101,7 +105,7 @@ struct TechniqueDetailView: View {
     /// Simple by default, deep on demand: the dials are real, they are bounded
     /// by the ranges the catalogue seeds, and they are one tap out of the way.
     private func advanced(of dialled: Technique) -> some View {
-        DisclosureGroup("Advanced") {
+        DisclosureGroup("Customise") {
             VStack(alignment: .leading, spacing: Theme.Spacing.loose) {
                 ForEach(Array(dialled.stages.enumerated()), id: \.offset) { index, stage in
                     VStack(alignment: .leading, spacing: Theme.Spacing.close) {
@@ -123,7 +127,7 @@ struct TechniqueDetailView: View {
                     }
                 }
 
-                Button("Back to the suggested settings") {
+                Button("Reset") {
                     settings.setOverrides(nil, for: technique)
                 }
                 .font(.footnote)
