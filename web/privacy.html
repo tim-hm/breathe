@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Privacy — önd</title>
+    <meta name="description" content="What önd stores, what it never collects, and how to have your data erased." />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="doc">
+      <header class="doc-head">
+        <a class="wordmark" href="/">önd</a>
+        <h1>Privacy</h1>
+        <p class="doc-meta">Last updated 7 August 2026</p>
+      </header>
+
+      <section>
+        <h2>The short version</h2>
+        <p>
+          önd has no accounts, no ads, and no analytics. Your phone is identified to our server by a random ID it generates for itself, and nothing in that ID is derived from you or your device. We
+          store what you tell us during onboarding and what you breathe, so your history and streaks survive a new phone. We sell nothing to anybody.
+        </p>
+        <p>
+          The one thing worth reading past the summary for: if you subscribe to the coach tier, some of what you told us is sent to a language-model provider so it can answer. What that includes, and
+          what it never includes, is in
+          <a href="#coach">The coach and the language model</a>
+          below.
+        </p>
+      </section>
+
+      <section>
+        <h2>Who we are</h2>
+        <p>
+          önd is made and operated independently by
+          <span class="placeholder">[full legal name]</span>, of <span class="placeholder">[postal address]</span>, who is the data controller for the purposes of the UK GDPR. Reach us at
+          <a href="mailto:support@ondbreathe.app">support@ondbreathe.app</a>.
+        </p>
+      </section>
+
+      <section>
+        <h2>There is no account</h2>
+        <p>
+          When you first open önd, the app generates a random identifier and keeps it in your device's Keychain. That identifier is how our server recognises your data on the next request. It is not
+          derived from your hardware, your Apple ID, your phone number, or anything else about you — it is a random number, and it is the entire basis of the claim your device makes.
+        </p>
+        <p>
+          We never ask for an email address or a password, and there is nothing to sign in to. The practical consequence is worth stating plainly: because we hold no way to identify you as a person,
+          we cannot recover your history if you lose the device and the identifier with it, and we cannot confirm over email that a record is yours without that identifier.
+        </p>
+      </section>
+
+      <section>
+        <h2>What we store</h2>
+        <p>Everything below is held against that random identifier and nothing else.</p>
+        <dl class="points">
+          <div>
+            <dt>What you tell us during onboarding</dt>
+            <dd>
+              Your goals, how much experience you have with breathwork, and how often you want reminders. Optionally — each one can be left blank, and blank is the default — a decade-wide birth-year
+              band, your gender, a display name, and a short free-text note about what brought you here.
+            </dd>
+          </div>
+          <div>
+            <dt>What you breathe</dt>
+            <dd>
+              For each completed session: which technique, when it started, how long it ran, how many cycles and breaths, and whether it finished or you ended it early. Nothing treats an early end as
+              a failure. If you use the breath-hold measurement, we store the number of seconds and when you measured it.
+            </dd>
+          </div>
+          <div>
+            <dt>Your subscription, if you have one</dt>
+            <dd>
+              The App Store transaction identifier for your subscription and the date it runs until, so the server knows what you have paid for. Payment itself happens entirely through Apple — we
+              never see your card, your billing address, or your Apple ID.
+            </dd>
+          </div>
+          <div>
+            <dt>A daily counter, if you use the coach</dt>
+            <dd>One number per day: how many language-model calls you have made. It exists to cap what the model costs us, and it is the only record we keep of coach usage.</dd>
+          </div>
+        </dl>
+        <p>Reminders are off until you turn them on. The setting's default value is "never", and the app asks iOS for notification permission only once you have moved it off that.</p>
+      </section>
+
+      <section id="coach">
+        <h2>The coach and the language model</h2>
+        <p>
+          The coach tier answers using a large language model. We do not run that model ourselves — calls go from our server to
+          <a href="https://openrouter.ai/">OpenRouter</a>, which routes them to a model provider. Our API key stays on our server and never ships inside the app.
+        </p>
+        <p>To answer usefully, the request sent to OpenRouter includes some of what you have told us:</p>
+        <ul>
+          <li>Your goals and your stated experience level</li>
+          <li>Your birth-year band and gender, if you gave them, because published breath-hold reference ranges differ by both</li>
+          <li>Your free-text note, in your own words, if you wrote one</li>
+          <li>Recent practice context and your breath-hold scores, if you have recorded any</li>
+          <li>The question or technique you asked about</li>
+        </ul>
+        <p>
+          Your display name is never sent. Neither is your identifier, so the provider has nothing to attach one conversation to another with. Treat the free-text note as the field to be thoughtful
+          about — it is the one place you can type anything at all, and it is included verbatim.
+        </p>
+        <p>
+          We store none of it. Prompts, replies, and explanations are never written to our database — the daily counter described above is the whole of what survives a coach conversation on our side.
+          What happens at the other end is not ours to promise: OpenRouter and the model provider it routes to handle your request under their own terms, which you can read in
+          <a href="https://openrouter.ai/privacy">OpenRouter's privacy policy</a>.
+        </p>
+        <p>The coach gives general wellness guidance about breathing. It is not a doctor, it does not diagnose, and nothing it says is medical advice.</p>
+      </section>
+
+      <section>
+        <h2>Leaderboards are opt-in</h2>
+        <p>
+          You appear on a leaderboard only if you choose a display name. Until you set one there is no name to show, and the query that builds every board skips your row entirely — that is a
+          structural rule in the code, not a preference we honour.
+        </p>
+        <p>
+          If you do set one, other people see that name and the figure the board ranks — minutes breathed, streak length, or best breath-hold. They never see your other answers, your note, or your
+          session history. Clearing your display name takes you back off the boards.
+        </p>
+      </section>
+
+      <section>
+        <h2>What we never do</h2>
+        <ul>
+          <li>No advertising, and no ad identifiers</li>
+          <li>No third-party analytics, attribution, or crash-reporting SDK — the app ships with two dependencies, both of which are networking libraries for talking to our own server</li>
+          <li>No selling, renting, or sharing your data with anyone for their own purposes</li>
+          <li>No tracking you across other apps or websites</li>
+          <li>No location, contacts, photos, microphone, or health-app data — the app never asks for any of it</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Where your data lives</h2>
+        <p>
+          On one server in Amazon Web Services' London region (eu-west-2), in the United Kingdom. The exception is the coach: those requests go to OpenRouter and on to a model provider, which may
+          process them outside the UK.
+        </p>
+      </section>
+
+      <section>
+        <h2>How long we keep it</h2>
+        <p>
+          Your profile and practice history are kept until you ask us to erase them — a history you can still see is the point of storing it at all. Sessions you delete in the app are deleted from the
+          server on the next sync. Coach conversations are never stored, so there is nothing to retain.
+        </p>
+      </section>
+
+      <section>
+        <h2>Your rights, and how to erase everything</h2>
+        <p>
+          Under the UK GDPR you can ask us for a copy of what we hold about you, ask us to correct it, ask us to erase it, or object to our processing it. Most of the data we hold you can also edit
+          directly in the app.
+        </p>
+        <p>
+          To have everything erased, email
+          <a href="mailto:support@ondbreathe.app">support@ondbreathe.app</a>. Because there is no account, we need the random identifier your device holds in order to find your record, and we will
+          tell you how to retrieve it when you write. Erasure removes your profile, your sessions, your breath-hold scores, and the row itself. It is a deletion, not a flag.
+        </p>
+        <p>
+          Deleting the app alone does not erase what is on the server, and because the identifier lives in the Keychain it can survive a reinstall — so if erasure is what you want, please write to us.
+        </p>
+        <p>
+          If you think we have handled your data badly, please tell us first so we can put it right. You also have the right to complain to the Information Commissioner's Office at
+          <a href="https://ico.org.uk/">ico.org.uk</a>.
+        </p>
+      </section>
+
+      <section>
+        <h2>Our lawful bases</h2>
+        <p>
+          We process your onboarding answers and practice history to provide the app you asked us to provide, which is performance of a contract. We process your subscription details for the same
+          reason. Your optional answers — birth-year band, gender, your note, your display name — are consent, given by choosing to fill them in and withdrawn by clearing them. The daily coach counter
+          rests on our legitimate interest in not being bankrupted by a runaway bill.
+        </p>
+      </section>
+
+      <section>
+        <h2>Children</h2>
+        <p>
+          önd is not directed at children under 13, and we do not knowingly collect data from them. If you believe a child has given us data, email
+          <a href="mailto:support@ondbreathe.app">support@ondbreathe.app</a>
+          and we will erase it.
+        </p>
+      </section>
+
+      <section>
+        <h2>Changes to this policy</h2>
+        <p>If we change how we handle your data, we will update this page and move the date at the top. Material changes will be flagged in the app rather than left here to be discovered.</p>
+      </section>
+    </main>
+
+    <footer>
+      <p>Made independently. No investors to please, no data to sell.</p>
+      <p class="footer-links">
+        <a href="/">Home</a>
+        <a href="/support">Support</a>
+      </p>
+      <p class="copyright">© 2026 önd. All rights reserved.</p>
+    </footer>
+  </body>
+</html>
