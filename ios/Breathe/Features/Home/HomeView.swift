@@ -26,6 +26,10 @@ struct HomeView: View {
     @State private var goal: TechniqueGoal?
     /// Whether the aim word is fanned out into the full set.
     @State private var isChoosingAim = false
+    /// The horizontal travel of a swipe in flight, zero at rest. Handed to the
+    /// selector so the aim word tracks the finger — the feedback that teaches
+    /// the gesture.
+    @State private var aimDrag: CGFloat = 0
     /// Recorded history, oldest first. Re-read after every session, because one
     /// just finished has changed what to offer next.
     @State private var history: [SessionRecord] = []
@@ -99,57 +103,86 @@ struct HomeView: View {
     /// One band, centred: the aim word above the orb, held between equal
     /// spacers so the pair sits in the middle of any screen height.
     private func loaded(_ techniques: [Technique]) -> some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: Theme.Spacing.loose)
+        GeometryReader { proxy in
+            // Dynamic Type follows the person's text setting, not the
+            // hardware, so type sized for the smallest phones sits a touch
+            // small on a Pro. Grown gently with the width and capped before
+            // it stops reading as the same quiet screen.
+            let typeScale = min(max(proxy.size.width / 375, 1), 1.25)
 
-            if let goal {
-                VStack(spacing: Theme.Spacing.loose) {
-                    AimSelector(
-                        goals: TechniqueGoal.present(in: techniques),
-                        goal: goal,
-                        isExpanded: $isChoosingAim,
-                        onSelect: select
-                    )
+            VStack(spacing: 0) {
+                Spacer(minLength: Theme.Spacing.loose)
 
-                    if let chosen = chosen(from: techniques) {
-                        OrbBeginButton(technique: chosen) { begin(chosen) }
+                if let goal {
+                    VStack(spacing: Theme.Spacing.loose) {
+                        AimSelector(
+                            goals: TechniqueGoal.present(in: techniques),
+                            goal: goal,
+                            typeScale: typeScale,
+                            drag: aimDrag,
+                            isExpanded: $isChoosingAim,
+                            onSelect: select
+                        )
+
+                        if let chosen = chosen(from: techniques) {
+                            OrbBeginButton(technique: chosen, typeScale: typeScale) {
+                                begin(chosen)
+                            }
+                        }
                     }
                 }
-            }
 
-            Spacer(minLength: Theme.Spacing.loose)
+                Spacer(minLength: Theme.Spacing.loose)
+            }
+            .padding(.horizontal, Theme.Spacing.standard)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+            .gesture(aimSwipe(among: TechniqueGoal.present(in: techniques)))
+            // Simultaneous, so the fan-out's own buttons and the orb still get
+            // their taps — a tap anywhere while the row is out collapses it,
+            // and whatever was tapped happens too.
+            .simultaneousGesture(
+                TapGesture().onEnded { isChoosingAim = false }
+            )
+            // One firm tap as the aim changes. An impact rather than
+            // `.selection`, which is the lightest haptic there is. Skipped for
+            // the settle on launch — that is the app restoring state, not the
+            // person choosing.
+            .sensoryFeedback(.impact(weight: .medium), trigger: goal) { old, _ in old != nil }
         }
-        .padding(.horizontal, Theme.Spacing.standard)
-        .frame(maxWidth: .infinity)
-        .contentShape(Rectangle())
-        // The swipe that cycles the aim. A plain gesture, so the orb's tap
-        // wins until 24pt of travel; the dominance check leaves anything
-        // vertical alone. Off while the row is fanned out — with every aim on
-        // screen, a swipe has nothing to reveal.
-        .gesture(
-            DragGesture(minimumDistance: 24).onEnded { value in
-                let w = value.translation.width
+    }
+
+    /// The swipe that cycles the aim, and the travel the aim word follows while
+    /// it is in flight.
+    ///
+    /// A plain gesture, so the orb's tap wins until 24pt of travel; the
+    /// dominance check leaves anything vertical alone. Off while the row is
+    /// fanned out — with every aim on screen, a swipe has nothing to reveal.
+    private func aimSwipe(among goals: [TechniqueGoal]) -> some Gesture {
+        DragGesture(minimumDistance: 24)
+            .onChanged { value in
                 guard !isChoosingAim,
-                      abs(w) > abs(value.translation.height),
-                      abs(w) > 40,
+                      abs(value.translation.width) > abs(value.translation.height)
+                else { return }
+
+                aimDrag = value.translation.width
+            }
+            .onEnded { value in
+                // Sprung back whether or not the swipe commits: on a commit the
+                // selector's push carries the change, and below the threshold
+                // the word settling home is the feedback that nothing did.
+                withAnimation(.easeOut(duration: 0.25)) { aimDrag = 0 }
+
+                let width = value.translation.width
+                guard !isChoosingAim,
+                      abs(width) > abs(value.translation.height),
+                      abs(width) > 40,
                       let goal,
-                      case let goals = TechniqueGoal.present(in: techniques),
-                      let stepped = w < 0 ? goal.next(in: goals) : goal.previous(in: goals)
+                      let stepped = width < 0 ? goal.next(in: goals) : goal.previous(in: goals)
                 else { return }
 
                 select(stepped)
             }
-        )
-        // Simultaneous, so the fan-out's own buttons and the orb still get
-        // their taps — a tap anywhere while the row is out collapses it, and
-        // whatever was tapped happens too.
-        .simultaneousGesture(
-            TapGesture().onEnded { isChoosingAim = false }
-        )
-        // One firm tap as the aim changes. An impact rather than `.selection`,
-        // which is the lightest haptic there is. Skipped for the settle on
-        // launch — that is the app restoring state, not the person choosing.
-        .sensoryFeedback(.impact(weight: .medium), trigger: goal) { old, _ in old != nil }
     }
 
     /// The one place a person's choice lands: the swipe, the fan-out, and

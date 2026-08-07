@@ -16,11 +16,23 @@ import SwiftUI
 /// answers the wheel above it.
 struct OrbBeginButton: View {
     let technique: Technique
+
+    /// How far the screen's width grows the type. See `AimSelector.typeScale`;
+    /// both words on this screen take the same one.
+    let typeScale: CGFloat
+
     let action: () -> Void
+
+    /// `title3`'s size as a metric, so `typeScale` multiplies it without
+    /// detaching the word from Dynamic Type. A step up from the `headline` it
+    /// read at, and one step ahead of the aim word above the orb — the same
+    /// gap in emphasis those two had before, at a size that carries an
+    /// otherwise empty screen.
+    @ScaledMetric(relativeTo: .title3) private var wordSize: CGFloat = 20
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: Theme.Spacing.standard) {
+            VStack(spacing: Theme.Spacing.loose) {
                 AmbientOrb(accent: technique.goal.accent)
 
                 // Lowercase to match the word row at the foot of the screen —
@@ -28,8 +40,13 @@ struct OrbBeginButton: View {
                 // spells it as a proper sentence instead. VoiceOver reading
                 // "begin box breathing" would sound like a fragment.
                 Text("begin")
-                    .font(.headline)
+                    .font(.system(size: wordSize * typeScale, weight: .semibold))
                     .foregroundStyle(technique.goal.accent)
+                    // The same 44pt band the aim word above the orb sits in,
+                    // under the same gap: the two words are then equidistant
+                    // from the orb whatever either one's line height is, which
+                    // matching the gaps alone would not achieve.
+                    .frame(minHeight: 44)
             }
             .contentShape(Rectangle())
         }
@@ -64,6 +81,13 @@ private struct OrbPress: ButtonStyle {
                 .scaleEffect(isPressed && !reduceMotion ? 0.95 : 1)
                 .brightness(isPressed ? 0.08 : 0)
                 .animation(.easeOut(duration: 0.16), value: isPressed)
+                // On the press rather than the release, which is what makes a
+                // control feel like a button: the finger is answered while it
+                // is still down. Heavier than the aim's step above it, because
+                // this is the screen's one committing action.
+                .sensoryFeedback(.impact(weight: .heavy), trigger: isPressed) { _, pressed in
+                    pressed
+                }
         }
     }
 }
