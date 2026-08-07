@@ -3,7 +3,7 @@ import BreatheUI
 import SwiftUI
 
 /// The app's chrome, and the only thing `BreatheApp` puts on screen: three roots
-/// under a row of three words.
+/// over a shelf that pulls open.
 ///
 /// Hand-built rather than a `TabView`: a `Tab` always reserves the image well
 /// above its label, so a label-only tab item comes out as a word floating under
@@ -11,28 +11,31 @@ import SwiftUI
 /// one thing the `TabView` was providing — every root stays in the hierarchy
 /// across a switch, so coming back to a screen lands where it was left.
 ///
-/// The row takes its space from the roots by standing beside them in a `VStack`
-/// rather than by insetting their safe area. `safeAreaInset` is the obvious tool
-/// and it does not work here: a `NavigationStack` ignores an inset applied from
-/// outside it, so every root lays out as though the row were not there and the
-/// words land on top of whatever is at the foot of the screen.
+/// The shelf stands over the roots rather than inside their safe area.
+/// `safeAreaInset` is the obvious tool and it does not work here: a
+/// `NavigationStack` ignores an inset applied from outside it, so every root
+/// lays out as though the shelf were not there and the words land on top of
+/// whatever is at the foot of the screen. Instead the roots reserve
+/// `barHeight` beneath themselves — measured from the collapsed bar rather than
+/// written down, so the handle, the words, and their padding stay free to
+/// change without a constant to keep in step. Only the collapsed height is
+/// reserved: pulling the shelf open grows it over the content, which is what
+/// makes it read as the bar growing rather than as a screen appearing.
 ///
-/// The row sits on `Surface.raised`, carried past the bottom safe area to the
-/// physical edge. It ran on the plain ground first, on the theory that one
-/// unbroken page reads calmer than a page plus a bar — but the `VStack` stops a
-/// root's content dead at the row's top edge, and with nothing marking that edge
-/// a list scrolled to its end looks like it merely ran out of screen. One step
-/// off the ground separates the chrome from the content without drawing
-/// anything; a hairline is the harder edge of the two and would reintroduce the
-/// bar this row exists to avoid.
+/// The shelf sits on `Surface.raised`, carried past the bottom safe area to the
+/// physical edge. The plain ground would read calmer, but the roots stop dead at
+/// the shelf's top edge and with nothing marking that edge a list truncated
+/// there looks like it merely ran out of screen. One step off the ground
+/// separates the chrome from the content without drawing anything; a hairline is
+/// the harder edge of the two and would reintroduce the bar this row exists to
+/// avoid.
 ///
-/// Everything that is not a root arrives through the drawer: swiping up on the
-/// word row lifts a short sheet of secondary destinations (`ChromeDrawer`),
-/// and choosing one dismisses it before the chosen sheet is presented — a
-/// sheet cannot present the next sheet itself, so its `onDismiss` is where the
-/// routing lives. The Settings sheet stays owned here for the same reason it
-/// always was: no root has a Settings tab, and a sheet per screen would be
-/// three presentations of one screen that could each be open at once.
+/// Everything that is not a root arrives through the shelf: pulling it open
+/// reveals `ChromeDrawer`'s secondary destinations under the words, and choosing
+/// one closes the shelf and presents that destination. The Settings sheet stays
+/// owned here for the reason it always was: no root has a Settings tab, and a
+/// sheet per screen would be three presentations of one screen that could each
+/// be open at once.
 struct AppChrome: View {
     let catalogue: TechniqueListModel
     let sessions: any SessionRecording
@@ -41,50 +44,41 @@ struct AppChrome: View {
     let foundations: FoundationsModel
     let schedules: ScheduleStore
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var selection: WordTab = .breathe
     @State private var isShowingSettings = false
-    @State private var isShowingDrawer = false
-    /// What was chosen in the drawer, held across its dismissal: the drawer's
-    /// `onDismiss` reads it to present the chosen sheet, then clears it.
-    @State private var drawerChoice: DrawerDestination?
+    @State private var isExpanded = false
+    /// The collapsed bar's height, measured rather than assumed, and reserved
+    /// under the roots so the words never cover content.
+    @State private var barHeight: CGFloat = 0
 
     var body: some View {
-        VStack(spacing: 0) {
-            ZStack {
-                root(.breathe) { roots.homeRoot }
-                root(.exercises) { roots.exercisesRoot }
-                root(.journey) { roots.journeyRoot }
+        ZStack(alignment: .bottom) {
+            VStack(spacing: 0) {
+                ZStack {
+                    root(.breathe) { roots.homeRoot }
+                    root(.exercises) { roots.exercisesRoot }
+                    root(.journey) { roots.journeyRoot }
+                }
+                // An open shelf covers content that stays live underneath it,
+                // and a tap landing there would navigate away and leave the
+                // shelf hanging over an unrelated screen.
+                .accessibilityHidden(isExpanded)
+
+                Color.clear.frame(height: barHeight)
             }
-            row
+
+            if isExpanded {
+                scrim
+            }
+
+            shelf
         }
         .background(Theme.Surface.ground.ignoresSafeArea())
         .sheet(isPresented: $isShowingSettings) {
             roots.settingsRoot { isShowingSettings = false }
         }
-        .sheet(isPresented: $isShowingDrawer, onDismiss: routeDrawerChoice) {
-            ChromeDrawer { choice in
-                drawerChoice = choice
-                isShowingDrawer = false
-            }
-            .presentationDetents([.height(ChromeDrawer.detentHeight)])
-            // The visual echo of the swipe that opened it, and the one hint
-            // the drawer can be dragged back down.
-            .presentationDragIndicator(.visible)
-        }
-    }
-
-    /// Where a drawer choice lands, after the drawer has gone: presenting from
-    /// `onDismiss` is the reliable ordering, because one sheet cannot hand
-    /// over to the next while it is still up.
-    private func routeDrawerChoice() {
-        switch drawerChoice {
-        case .settings:
-            isShowingSettings = true
-        case nil:
-            break
-        }
-
-        drawerChoice = nil
     }
 
     private var roots: AppRoots {
@@ -108,30 +102,74 @@ struct AppChrome: View {
             .accessibilityHidden(selection != tab)
     }
 
-    private var row: some View {
-        HStack(spacing: 0) {
-            ForEach(WordTab.allCases) { tab in
-                word(tab)
+    /// Dims what the open shelf covers, and takes the tap that closes it — the
+    /// forgiving way out that a sheet gives for free.
+    private var scrim: some View {
+        Color.black
+            .opacity(0.12)
+            .ignoresSafeArea()
+            .onTapGesture { setExpanded(false) }
+            .transition(.opacity)
+    }
+
+    /// The handle, the words, and — once pulled open — the drawer beneath them.
+    private var shelf: some View {
+        VStack(spacing: 0) {
+            bar
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { barHeight = $0 }
+
+            if isExpanded {
+                ChromeDrawer(onChoose: open)
             }
         }
-        .padding(.top, Theme.Spacing.close)
-        // The row stops at the safe area, above the home indicator; the shelf
-        // carries on past it so no strip of ground shows under the words.
         .background(Theme.Surface.raised.ignoresSafeArea(edges: .bottom))
-        .sensoryFeedback(.selection, trigger: selection)
-        // Simultaneous so the word buttons keep their taps — a tap has no
-        // translation, so it never trips the threshold. The row sits above the
-        // bottom safe area, clear of the home indicator's own gesture.
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 20).onEnded { value in
-                let h = value.translation.height
-                if h < -30, abs(h) > abs(value.translation.width) {
-                    isShowingDrawer = true
+    }
+
+    private var bar: some View {
+        VStack(spacing: 0) {
+            handle
+
+            HStack(spacing: 0) {
+                ForEach(WordTab.allCases) { tab in
+                    word(tab)
                 }
             }
-        )
-        // The swipe is invisible to VoiceOver; this is its spoken route in.
-        .accessibilityAction(named: Text("More")) { isShowingDrawer = true }
+        }
+        .sensoryFeedback(.selection, trigger: selection)
+    }
+
+    /// The one hint that the shelf moves, and the only place it can be dragged
+    /// from. A drag anywhere else on the bar would have to share the space with
+    /// the word buttons and the drawer rows, and a 20pt pull that stays inside a
+    /// 44pt button fires the button as well — so pulling down on `settings` to
+    /// close the shelf would open Settings on the way.
+    ///
+    /// Tap and drag are one gesture rather than a `Button` carrying a
+    /// `simultaneousGesture`: both of those fire on a pull, and the tap's toggle
+    /// would undo what the drag just did. That costs the button's accessibility,
+    /// so it is declared here by hand — this is the route in for anyone who does
+    /// not discover the drag.
+    private var handle: some View {
+        Capsule()
+            .fill(Theme.Ink.tertiary)
+            .frame(width: 32, height: 4)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0).onEnded { value in
+                    let height = value.translation.height
+
+                    if abs(height) < 10 {
+                        setExpanded(!isExpanded)
+                    } else if abs(height) > abs(value.translation.width) {
+                        setExpanded(height < 0)
+                    }
+                }
+            )
+            .accessibilityElement()
+            .accessibilityLabel(isExpanded ? "Hide more" : "More")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { setExpanded(!isExpanded) }
     }
 
     /// One word, letter-spaced and lowercase, with the whole column beneath it as
@@ -142,6 +180,7 @@ struct AppChrome: View {
 
         return Button {
             selection = tab
+            setExpanded(false)
         } label: {
             VStack(spacing: Theme.Spacing.tight) {
                 Text(tab.word)
@@ -149,9 +188,9 @@ struct AppChrome: View {
                     .kerning(1.6)
                     .foregroundStyle(isSelected ? Theme.Accent.brand : Theme.Ink.tertiary)
 
-                // With no bar behind the words, colour is otherwise the only
-                // thing separating the selected one — and colour alone is a
-                // signal some people never see.
+                // Weight and colour are otherwise the only things separating the
+                // selected word — and colour alone is a signal some people
+                // never see.
                 Capsule()
                     .fill(isSelected ? Theme.Accent.brand : .clear)
                     .frame(width: 16, height: 2)
@@ -162,6 +201,23 @@ struct AppChrome: View {
         .buttonStyle(.plain)
         .animation(.easeOut(duration: 0.2), value: isSelected)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    /// Closes the shelf before presenting, so the drawer is not still open
+    /// behind the sheet when it is dismissed.
+    private func open(_ destination: DrawerDestination) {
+        setExpanded(false)
+
+        switch destination {
+        case .settings:
+            isShowingSettings = true
+        }
+    }
+
+    private func setExpanded(_ expanded: Bool) {
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.28)) {
+            isExpanded = expanded
+        }
     }
 }
 

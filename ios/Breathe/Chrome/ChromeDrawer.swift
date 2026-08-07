@@ -1,11 +1,11 @@
 import BreatheUI
 import SwiftUI
 
-/// The destinations the word row lifts up, one case per addition.
+/// The destinations the shelf reveals, one case per addition.
 ///
 /// Everything that is not one of the three roots lives here — settings today,
-/// a coach or whatever else tomorrow — so growing the drawer is a case and a
-/// word, never a change to the sheet, the swipe, or the routing.
+/// a coach or whatever else tomorrow — so growing the drawer is a case, a word,
+/// and a symbol, never a change to the shelf, the drag, or the routing.
 enum DrawerDestination: String, CaseIterable, Identifiable {
     case settings
 
@@ -19,9 +19,7 @@ enum DrawerDestination: String, CaseIterable, Identifiable {
         rawValue
     }
 
-    /// The symbol beside the word. A bare word centred on a sheet reads as a
-    /// caption, not a control — which is how the drawer came to look empty to
-    /// people who had just swiped it open.
+    /// The SF Symbol beside the word.
     var symbol: String {
         switch self {
         case .settings: "gearshape"
@@ -29,46 +27,31 @@ enum DrawerDestination: String, CaseIterable, Identifiable {
     }
 }
 
-/// The drawer behind the word row: a short sheet of secondary destinations.
+/// The drawer under the word row, revealed when the shelf is pulled open.
 ///
-/// It only reports the choice — presentation, dismissal, and what a choice
-/// opens are `AppChrome`'s, because a sheet cannot present the next sheet
-/// itself; the chrome dismisses this one first.
+/// It only reports the choice — opening the shelf, closing it, and what a
+/// choice leads to are `AppChrome`'s, which is the one place that knows both
+/// the gesture and the sheets.
 ///
-/// Each destination is drawn as a raised row with a symbol and a chevron rather
-/// than in the bare lowercase word the tab row uses. The word alone is right on
-/// the tab row, where three of them side by side are plainly a control; alone on
-/// a sheet it read as a heading over an empty panel, and people swiped the
-/// drawer open and reported finding nothing in it.
+/// A destination is a full-width row with a symbol and a chevron rather than
+/// the bare lowercase word the tabs use. Three words side by side are plainly a
+/// control; one word alone under them reads as a caption, and the rows have to
+/// say they are pressable without a second surface to sit on — the shelf is
+/// already `Surface.raised`, so a raised card here would have nothing to
+/// contrast against. The hairline above each row does that work instead.
 struct ChromeDrawer: View {
     let onChoose: (DrawerDestination) -> Void
 
-    /// The sheet's detent, measured from the rows it will hold rather than
-    /// fixed: a guessed height either crops the last destination or leaves a
-    /// panel of empty ground under the first, and the drawer grows by a case.
-    static var detentHeight: CGFloat {
-        let rows = CGFloat(DrawerDestination.allCases.count)
-        return headroom
-            + rows * rowHeight
-            + (rows - 1) * Theme.Spacing.close
-            + Theme.Spacing.loose
-    }
-
-    private static let rowHeight: CGFloat = 56
-    /// Room above the first row for the drag indicator, which draws inside the
-    /// sheet rather than above it and would otherwise land on the row.
-    private static let headroom: CGFloat = 32
-
     var body: some View {
-        VStack(spacing: Theme.Spacing.close) {
+        VStack(spacing: 0) {
             ForEach(DrawerDestination.allCases) { destination in
+                // Above every row rather than between them, so the first one is
+                // also parted from the words above it.
+                Divider().overlay(Theme.Surface.line)
+
                 row(destination)
             }
         }
-        .padding(.top, Self.headroom)
-        .padding(.horizontal, Theme.Spacing.standard)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Theme.Surface.ground)
     }
 
     private func row(_ destination: DrawerDestination) -> some View {
@@ -78,10 +61,10 @@ struct ChromeDrawer: View {
             HStack(spacing: Theme.Spacing.standard) {
                 Image(systemName: destination.symbol)
                     .font(.body)
-                    .foregroundStyle(Theme.Accent.brand)
+                    .foregroundStyle(Theme.Ink.secondary)
 
                 Text(destination.word)
-                    .font(.body.weight(.medium))
+                    .font(.footnote.weight(.regular))
                     .kerning(1.6)
                     .foregroundStyle(Theme.Ink.primary)
 
@@ -92,8 +75,7 @@ struct ChromeDrawer: View {
                     .foregroundStyle(Theme.Ink.tertiary)
             }
             .padding(.horizontal, Theme.Spacing.standard)
-            .frame(maxWidth: .infinity, minHeight: Self.rowHeight)
-            .background(Theme.Surface.raised, in: .rect(cornerRadius: Theme.Radius.card))
+            .frame(maxWidth: .infinity, minHeight: 44)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
