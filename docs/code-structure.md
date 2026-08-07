@@ -84,19 +84,22 @@ All Swift library code lives in **one** SwiftPM package, `ios/Packages/BreatheCo
 | `BreatheAPI`             | **no**   | Generated protobuf + the Connect client factory            | Connect, SwiftProtobuf    |
 | `BreatheKit`             | yes      | Domain models, observable feature models, and repositories | `BreatheAPI`              |
 | `BreatheUI`              | yes      | Design tokens and shared components                        | nothing                   |
-| `Breathe` (iOS)          | —        | Features, composition root                                 | `BreatheKit`, `BreatheUI` |
-| `BreatheWatch` (watchOS) | —        | Features, composition root, the phone link                 | `BreatheKit`, `BreatheUI` |
+| `BreatheStyle`           | yes      | Mappings from a domain type onto a design token            | `BreatheKit`, `BreatheUI` |
+| `Breathe` (iOS)          | —        | Features, composition root                                 | the three products above  |
+| `BreatheWatch` (watchOS) | —        | Features, composition root, the phone link                 | the three products above  |
 
 Two invariants hold here, and the target graph enforces both:
 
 - **Neither app can import `BreatheAPI`.** It is a target, not a product, so the module is not merely undeclared in `project.yml` — it is unnameable from an app. "App code never imports a generated protobuf type" is checked by the compiler rather than remembered.
-- **`BreatheUI` knows nothing about the domain.** It has no dependencies at all. It exposes accents named for feeling (`settle`, `night`, `spark`, `restore`), and the _feature_ maps `TechniqueGoal` onto them — a design module that imported domain types would invert the dependency and make the palette un-reusable.
+- **`BreatheUI` knows nothing about the domain.** It has no dependencies at all. It exposes accents named for feeling (`settle`, `night`, `spark`, `restore`), and something above it maps `TechniqueGoal` onto them — a design module that imported domain types would invert the dependency and make the palette un-reusable. `BreatheStyle` is where that mapping lives, which is the point of it existing: it can name both sides precisely because nothing depends on _it_.
 
 ### What the two apps share
 
 `BreatheWatch` is a second app over the same package. Everything platform-neutral is already in `BreatheKit` and the watch composes the same instances — the session timeline, the catalogue cache, the local session store, the sync queue. Views are never shared: a wrist is not a small phone, and `BreathRing` exists precisely because there is only room for one shape where the phone has two.
 
-What falls between the two is a mapping from a domain type onto a design token, and it is **duplicated per target on purpose** — `BreatheUI` takes no dependencies by the invariant above, so it cannot be the shared home, and each copy documents that. Three pairs duplicate today: `GoalAccent`, `SafetyNote`, `TechniqueGlyph`. A fourth is the signal to add a `BreatheAppUI` target depending on both products, never to weaken `BreatheUI`.
+What falls between the two is a mapping from a domain type onto a design token. `BreatheUI` cannot hold one by the invariant above, so `BreatheStyle` does: it depends on both products, which is exactly what lets it name a `TechniqueGoal` and an accent in the same function. `GoalAccent` lives there and both apps read it, so the wrist and the hand cannot drift to different colours for the same technique.
+
+The line is between a **mapping** and a **view**. A mapping goes in `BreatheStyle`; a view stays duplicated per target, because a wrist is not a small phone and the two really do want different layouts. `SafetyNote` and `TechniqueGlyph` are the two that duplicate today — both views, and both should stay that way until their bodies stop diverging rather than because they are small. `TechniqueGlyph` is the weaker of the two: its copies differ only in a default line width, so if it diverges no further it is the next thing that belongs in `BreatheStyle`.
 
 The same rule catches one pair the compiler cannot see at all. `BreatheKit/TechniqueDrawing.swift` is a coordinate-for-coordinate port of the hand-authored SVGs in `web/index.html`, and the site is the reference — so a glyph changed there is a glyph the apps keep drawing the old way, with nothing to catch it.
 

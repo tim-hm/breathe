@@ -52,7 +52,7 @@ All breathe ports live in **18100–18199** (API 18100, Postgres 18101, `web/` p
 - **gRPC registration** — `crates/api/src/grpc.rs`. **HTTP routes** — `crates/api/src/http/mod.rs`. Both are single aggregation points.
 - **Generated protobuf** — Rust into `OUT_DIR` via `crates/api/build.rs`, re-exported through `crates/api/src/proto.rs`; Swift committed under `ios/Packages/BreatheCore/Sources/BreatheAPI/Generated/`.
 - **Domain models (Swift)** — the `BreatheKit` target in `ios/Packages/BreatheCore/`. Only it touches generated protobuf types; `BreatheAPI` is not a package product, so neither app target can import one.
-- **App targets (Swift)** — `ios/Breathe/` (iOS) and `ios/BreatheWatch/` (watchOS), each with its own composition root over the same two products. What they share and what they deliberately duplicate is in [docs/code-structure.md](docs/code-structure.md).
+- **App targets (Swift)** — `ios/Breathe/` (iOS) and `ios/BreatheWatch/` (watchOS), each with its own composition root over the same three products. What they share and what they deliberately duplicate is in [docs/code-structure.md](docs/code-structure.md).
 
 ## 3. Development
 
