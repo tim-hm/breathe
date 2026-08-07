@@ -96,11 +96,14 @@ p + p {
   padding-top: 2rem;
 }
 
+/* Lowercase, and no uppercasing transform: the name is önd, and ÖND is a
+   different word wearing its hat. Tracking is a third of what the old
+   seven-letter wordmark carried — the same airiness across three glyphs
+   instead of seven, and the size makes up the width that lowercase loses. */
 .wordmark {
   font-family: var(--serif);
-  font-size: 1.1rem;
-  letter-spacing: 0.28em;
-  text-transform: uppercase;
+  font-size: 1.35rem;
+  letter-spacing: 0.1em;
   color: var(--ink-soft);
 }
 
