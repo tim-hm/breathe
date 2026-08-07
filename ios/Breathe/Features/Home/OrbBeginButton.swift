@@ -17,8 +17,16 @@ import SwiftUI
 struct OrbBeginButton: View {
     let technique: Technique
 
-    /// How far the screen's width grows the type. See `AimSelector.typeScale`;
-    /// both words on this screen take the same one.
+    /// Whether a subscription owns this exercise, in which case pressing opens
+    /// the paywall rather than a session. It changes nothing that is drawn —
+    /// the aim above the orb already carries the lock, and a second mark on the
+    /// one control this screen has would be the screen arguing with itself —
+    /// but VoiceOver is told, because "starts the session" would be a lie.
+    let isLocked: Bool
+
+    /// How much the screen's width grows the type, 1 on the smallest phones.
+    /// A multiplier on a Dynamic Type–scaled base, so the person's text setting
+    /// still applies over the top.
     let typeScale: CGFloat
 
     let action: () -> Void
@@ -29,6 +37,11 @@ struct OrbBeginButton: View {
     /// gap in emphasis those two had before, at a size that carries an
     /// otherwise empty screen.
     @ScaledMetric(relativeTo: .title3) private var wordSize: CGFloat = 20
+
+    /// The band the word sits in, matching the aim row's so the two words are
+    /// equidistant from the orb whatever either one's line height is — which
+    /// matching the gaps above and below alone would not achieve.
+    @ScaledMetric(relativeTo: .body) private var band: CGFloat = 44
 
     var body: some View {
         Button(action: action) {
@@ -42,17 +55,15 @@ struct OrbBeginButton: View {
                 Text("begin")
                     .font(.system(size: wordSize * typeScale, weight: .semibold))
                     .foregroundStyle(technique.goal.accent)
-                    // The same 44pt band the aim word above the orb sits in,
-                    // under the same gap: the two words are then equidistant
-                    // from the orb whatever either one's line height is, which
-                    // matching the gaps alone would not achieve.
-                    .frame(minHeight: 44)
+                    .frame(minHeight: band)
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(OrbPress())
         .accessibilityLabel("Begin \(technique.name)")
-        .accessibilityHint("Starts the session")
+        .accessibilityHint(
+            isLocked ? "Shows what Breathe Plus includes" : "Starts the session"
+        )
     }
 }
 

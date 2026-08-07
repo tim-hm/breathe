@@ -16,9 +16,11 @@ import SwiftUI
 ///
 /// Tapping the centred word fans every aim the catalogue serves into a row;
 /// tapping a neighbour spins to it instead, because reaching straight for the
-/// one you can already see is how half of people use a wheel. Letter-spaced and
-/// lowercase like the tab words below, so the two quiet word treatments read as
-/// one system.
+/// one you can already see is how half of people use a wheel. Lowercase and
+/// letter-spaced, which is the treatment the tab words take too, so the screen's
+/// two quiet word rows read as one system — the tracking here grows with the
+/// type rather than being pinned to theirs, because letter-spacing that stays
+/// put while the letters grow closes up.
 ///
 /// Selection is reported, not stored: the caller owns the goal and its
 /// persistence, and two writers to one choice is one too many.
@@ -70,7 +72,25 @@ struct AimSelector: View {
                 drum
             }
         }
+        // The band "begin" also sits in under the orb, which is what keeps the
+        // two words equidistant from it whatever either line height is. Scaled
+        // rather than a flat 44 so an accessibility text size grows the band
+        // instead of clipping inside it.
+        .frame(height: band)
         .animation(.easeOut(duration: 0.2), value: isExpanded)
+        // Restores what the wheel this replaced offered: step through the aims
+        // without having to land on each neighbour and double-tap it. The drum
+        // scrolls to whatever the caller sets, so the two agree by themselves.
+        .accessibilityAdjustableAction { direction in
+            let stepped: TechniqueGoal? = switch direction {
+            case .increment: goal.next(in: goals)
+            case .decrement: goal.previous(in: goals)
+            @unknown default: nil
+            }
+            if let stepped {
+                onSelect(stepped)
+            }
+        }
     }
 
     /// The resting state: the chosen aim centred, its neighbours turned away at
@@ -106,7 +126,6 @@ struct AimSelector: View {
                                 // ink's measured contrast untouched.
                                 .opacity(1 - abs(phase.value) * 0.45)
                         }
-                        .id(aim)
                 }
             }
             .scrollTargetLayout()
@@ -115,9 +134,6 @@ struct AimSelector: View {
         .scrollPosition(id: spun)
         .scrollIndicators(.hidden)
         .contentMargins(.horizontal, slot, for: .scrollContent)
-        // The same band "begin" sits in under the orb, so the two words stay
-        // equidistant from it however the drum is spun.
-        .frame(height: 44)
         .transition(.opacity)
     }
 
@@ -141,19 +157,18 @@ struct AimSelector: View {
     private func aimWord(_ aim: TechniqueGoal) -> some View {
         let isChosen = aim == goal
 
-        return Button {
+        return button(
+            aim,
+            weight: .regular,
+            tint: Theme.Ink.tertiary,
+            hint: isChosen ? "Shows all the aims" : "Chooses this aim"
+        ) {
             if isChosen {
                 isExpanded = true
             } else {
                 onSelect(aim)
             }
-        } label: {
-            word(aim, weight: .regular, tint: Theme.Ink.tertiary)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label(for: aim))
-        .accessibilityAddTraits(isChosen ? [.isButton, .isSelected] : .isButton)
-        .accessibilityHint(isChosen ? "Shows all the aims" : "Chooses this aim")
     }
 
     private var fannedOut: some View {
@@ -162,52 +177,69 @@ struct AimSelector: View {
                 fannedWord(aim)
             }
         }
-        .frame(height: 44)
         .transition(.opacity)
     }
 
     private func fannedWord(_ aim: TechniqueGoal) -> some View {
         let isChosen = aim == goal
 
-        return Button {
+        return button(
+            aim,
+            weight: isChosen ? .semibold : .regular,
+            tint: isChosen ? aim.accent : Theme.Ink.tertiary,
+            hint: nil
+        ) {
             onSelect(aim)
             isExpanded = false
-        } label: {
-            word(
-                aim,
-                weight: isChosen ? .semibold : .regular,
-                tint: isChosen ? aim.accent : Theme.Ink.tertiary
-            )
+        }
+    }
+
+    /// One aim as a control, set the way every aim on this screen is set.
+    ///
+    /// Both rows come through here so their accessibility cannot drift apart:
+    /// the label, the selected trait, and the lock's spoken name are written
+    /// once, and only the action and the emphasis differ between them.
+    private func button(
+        _ aim: TechniqueGoal,
+        weight: Font.Weight,
+        tint: Color,
+        hint: String?,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: Theme.Spacing.tight) {
+                Text(aim.intentObject)
+                    .font(.system(size: wordSize * typeScale, weight: weight))
+                    .kerning(1.6 * typeScale)
+                    .foregroundStyle(tint)
+
+                if locked.contains(aim) {
+                    // The brand accent and the wording the catalogue's lock
+                    // already uses, so one glyph does not mean two things in
+                    // two places. Sized off the word so a larger Dynamic Type
+                    // setting does not leave a fixed glyph behind.
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: wordSize * typeScale * 0.72))
+                        .foregroundStyle(Theme.Accent.brand)
+                        .accessibilityHidden(true)
+                }
+            }
+            .lineLimit(1)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label(for: aim))
-        .accessibilityAddTraits(isChosen ? [.isButton, .isSelected] : .isButton)
-    }
-
-    /// One aim, set the way every aim on this screen is set. The lock rides
-    /// beside the word rather than replacing anything, and scales with it so a
-    /// larger Dynamic Type setting does not leave a fixed glyph behind.
-    private func word(_ aim: TechniqueGoal, weight: Font.Weight, tint: Color) -> some View {
-        HStack(spacing: Theme.Spacing.tight) {
-            Text(aim.intentObject)
-                .font(.system(size: wordSize * typeScale, weight: weight))
-                .kerning(1.6 * typeScale)
-
-            if locked.contains(aim) {
-                Image(systemName: "lock.fill")
-                    .font(.system(size: wordSize * typeScale * 0.72))
-            }
-        }
-        .foregroundStyle(tint)
-        .lineLimit(1)
-        .contentShape(Rectangle())
+        .accessibilityAddTraits(aim == goal ? [.isButton, .isSelected] : .isButton)
+        .accessibilityHint(hint ?? "")
     }
 
     /// What VoiceOver reads for an aim. The lock is drawn, so it has to be
-    /// spoken too — an image this small carries the whole of why the aim
-    /// behaves differently when it is chosen.
+    /// spoken too, in the catalogue's words rather than new ones: "locked"
+    /// names a punishment, and this glyph is the app offering something.
     private func label(for aim: TechniqueGoal) -> String {
-        locked.contains(aim) ? "\(aim.intentObject), locked" : aim.intentObject
+        locked.contains(aim)
+            ? "\(aim.intentObject), included with Breathe Plus"
+            : aim.intentObject
     }
 
     /// `body`'s size, made a metric so `typeScale` can multiply it without
@@ -215,4 +247,8 @@ struct AimSelector: View {
     /// it read at: this word and "begin" are the whole screen, and type sized
     /// to sit quietly beside other content is undersized when there is none.
     @ScaledMetric(relativeTo: .body) private var wordSize: CGFloat = 17
+
+    /// The row's height: a comfortable touch target at the default text size,
+    /// and taller than one as the text grows.
+    @ScaledMetric(relativeTo: .body) private var band: CGFloat = 44
 }

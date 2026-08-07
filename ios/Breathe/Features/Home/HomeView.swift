@@ -98,12 +98,24 @@ struct HomeView: View {
     /// One band, centred: the aim word above the orb, held between equal
     /// spacers so the pair sits in the middle of any screen height.
     private func loaded(_ techniques: [Technique]) -> some View {
-        GeometryReader { proxy in
+        // Resolved out here, not inside the `GeometryReader`: none of it
+        // depends on geometry, and that closure re-runs on every rotation,
+        // resize, and keyboard. `locked` walks the whole history once per aim
+        // it has never been used for, so leaving it in there put an unbounded
+        // scan on the path of every layout pass.
+        let goals = TechniqueGoal.present(in: techniques)
+        let locked = lockedGoals(among: goals, in: techniques)
+        let chosen = chosen(from: techniques)
+
+        return GeometryReader { proxy in
             // Dynamic Type follows the person's text setting, not the
             // hardware, so type sized for the smallest phones sits a touch
             // small on a Pro. Grown gently with the width and capped before
             // it stops reading as the same quiet screen.
             let typeScale = min(max(proxy.size.width / 375, 1), 1.25)
+            // The width inside the padding applied below, which is the drum's
+            // container. Named once so the two cannot drift apart.
+            let content = proxy.size.width - Theme.Spacing.standard * 2
 
             VStack(spacing: 0) {
                 Spacer(minLength: Theme.Spacing.loose)
@@ -111,17 +123,21 @@ struct HomeView: View {
                 if let goal {
                     VStack(spacing: Theme.Spacing.loose) {
                         AimSelector(
-                            goals: TechniqueGoal.present(in: techniques),
+                            goals: goals,
                             goal: goal,
-                            locked: lockedGoals(in: techniques),
+                            locked: locked,
                             typeScale: typeScale,
-                            width: proxy.size.width - Theme.Spacing.standard * 2,
+                            width: content,
                             isExpanded: $isChoosingAim,
                             onSelect: select
                         )
 
-                        if let chosen = chosen(from: techniques) {
-                            OrbBeginButton(technique: chosen, typeScale: typeScale) {
+                        if let chosen {
+                            OrbBeginButton(
+                                technique: chosen,
+                                isLocked: !chosen.isUnlocked(for: plus.tier),
+                                typeScale: typeScale
+                            ) {
                                 begin(chosen)
                             }
                         }
@@ -135,9 +151,17 @@ struct HomeView: View {
             .contentShape(Rectangle())
             // Simultaneous, so the fan-out's own buttons and the orb still get
             // their taps — a tap anywhere while the row is out collapses it,
-            // and whatever was tapped happens too.
+            // and whatever was tapped happens too. Guarded rather than
+            // unconditional: the aim word's own tap opens the row, and two
+            // writers to one flag in a single event leave which one lands to
+            // SwiftUI's ordering. Only collapsing when there is something to
+            // collapse means the two can never both fire.
             .simultaneousGesture(
-                TapGesture().onEnded { isChoosingAim = false }
+                TapGesture().onEnded {
+                    if isChoosingAim {
+                        isChoosingAim = false
+                    }
+                }
             )
             // One firm tap as the aim changes. An impact rather than
             // `.selection`, which is the lightest haptic there is. Skipped for
@@ -151,21 +175,18 @@ struct HomeView: View {
     ///
     /// Asked of `HomeSuggestion` and not of the catalogue at large, because the
     /// lock has to predict exactly one thing: whether landing here and pressing
-    /// the orb opens a session or the paywall. `HomeStart` resolves the
-    /// technique the same way, so the mark and the outcome cannot disagree —
-    /// an aim with a locked exercise beside a free one is not locked, and
-    /// counting the catalogue's tiers instead would say it was.
-    private func lockedGoals(in techniques: [Technique]) -> Set<TechniqueGoal> {
-        let locked = TechniqueGoal.present(in: techniques).filter { goal in
-            let technique = HomeSuggestion.technique(
-                for: goal,
-                techniques: techniques,
-                history: history
-            )
-            return technique.map { !$0.isUnlocked(for: plus.tier) } ?? false
-        }
-
-        return Set(locked)
+    /// the orb opens a session or the paywall. `chosen(from:)` resolves the
+    /// technique the same way, so the mark and the orb beneath it cannot
+    /// disagree — an aim with a locked exercise beside a free one is not
+    /// locked, and counting the catalogue's tiers instead would say it was.
+    private func lockedGoals(
+        among goals: [TechniqueGoal],
+        in techniques: [Technique]
+    ) -> Set<TechniqueGoal> {
+        Set(goals.filter { goal in
+            HomeSuggestion.technique(for: goal, techniques: techniques, history: history)?
+                .isUnlocked(for: plus.tier) == false
+        })
     }
 
     /// The one place a person's choice lands: the drum, the fan-out, and
