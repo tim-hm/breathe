@@ -6,11 +6,11 @@ import SwiftUI
 /// The orb, as the control that starts the session.
 ///
 /// A circle with no chrome is the least discoverable thing an interface can
-/// offer, so this is deliberately more than the circle: the word Begin sits
-/// under it, the pair is one accessibility element naming the technique it will
-/// start, and `Button` supplies the trait that tells VoiceOver it can be
-/// pressed. The target is the stack's bounds, which are wider and taller than
-/// the orb's 176pt frame.
+/// offer, so this is deliberately more than the circle: the word sits under it,
+/// the pair is one accessibility element naming the exercise it will start, and
+/// `Button` supplies the trait that tells VoiceOver it can be pressed. The
+/// target is the stack's bounds, which are wider and taller than the orb's 176pt
+/// frame.
 ///
 /// The orb breathes in the goal's accent rather than the brand's, so the colour
 /// answers the wheel above it.
@@ -23,7 +23,11 @@ struct OrbBeginButton: View {
             VStack(spacing: Theme.Spacing.standard) {
                 AmbientOrb(accent: technique.goal.accent)
 
-                Text("Begin")
+                // Lowercase to match the word row at the foot of the screen —
+                // a visual choice, and the reason the accessibility label below
+                // spells it as a proper sentence instead. VoiceOver reading
+                // "begin box breathing" would sound like a fragment.
+                Text("begin")
                     .font(.headline)
                     .foregroundStyle(technique.goal.accent)
             }

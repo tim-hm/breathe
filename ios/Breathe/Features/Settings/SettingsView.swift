@@ -6,7 +6,7 @@ import SwiftUI
 /// Review expects to find outside a paywall.
 ///
 /// The subscription is deliberately not among them. It is offered where the
-/// reason to buy is already on screen — a locked technique, or the assistant
+/// reason to buy is already on screen — a locked exercise, or the assistant
 /// strip that named one — and a Settings row would be a fifth entry point with
 /// no such reason beside it.
 struct SettingsView: View {
@@ -27,10 +27,6 @@ struct SettingsView: View {
 
         NavigationStack {
             List {
-                #if DEBUG
-                    DesignLabSection()
-                #endif
-
                 Section {
                     Picker("Appearance", selection: $settings.appearance) {
                         ForEach(Appearance.allCases) { appearance in
@@ -49,7 +45,7 @@ struct SettingsView: View {
                         }
                     }
                 } footer: {
-                    Text("A standing time for a technique — box breathing every "
+                    Text("A standing time for an exercise — box breathing every "
                         + "weekday at 8, say. iOS asks for notification "
                         + "permission when you set your first one.")
                 }

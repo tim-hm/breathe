@@ -39,7 +39,8 @@ struct IntentWheel: View {
                 }
             }
             .pickerStyle(.wheel)
-            .frame(width: 205, height: 132)
+            .frame(width: 205, height: 150)
+            .overlay { edgeFade }
         }
         // One firm tap as the wheel lands on a choice. An impact rather than
         // `.selection`, which is the lightest haptic there is — under a finger
@@ -47,6 +48,32 @@ struct IntentWheel: View {
         // for the settle on launch — that is the app restoring state, not the
         // person choosing.
         .sensoryFeedback(.impact(weight: .medium), trigger: goal) { old, _ in old != nil }
+    }
+
+    /// The top and bottom of the wheel, dissolved into the ground.
+    ///
+    /// A wheel's row height comes from the type size, so no fixed frame is an
+    /// exact multiple of it and the row at the edge is always cut somewhere —
+    /// which at this size lands mid-glyph and reads as a rendering fault.
+    /// Fading those bands makes the cut impossible to see at any Dynamic Type
+    /// setting, and it costs nothing to draw over: the home screen's ground is
+    /// flat, so the gradient's opaque end is exactly what is already behind it.
+    ///
+    /// An overlay rather than a `mask`, which would take the faded rows out of
+    /// the hit-testing region as well as out of sight — tapping a neighbour to
+    /// choose it is how half of people use a wheel.
+    private var edgeFade: some View {
+        LinearGradient(
+            stops: [
+                .init(color: Theme.Surface.ground, location: 0),
+                .init(color: Theme.Surface.ground.opacity(0), location: 0.24),
+                .init(color: Theme.Surface.ground.opacity(0), location: 0.76),
+                .init(color: Theme.Surface.ground, location: 1),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .allowsHitTesting(false)
     }
 
     /// Reads the wheel's state, and never writes a goal the catalogue cannot

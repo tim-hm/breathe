@@ -2,28 +2,22 @@ import BreatheKit
 import BreatheUI
 import SwiftUI
 
-/// The whole catalogue, grouped by what each technique is for.
+/// The whole catalogue, grouped by what each exercise is for.
 ///
-/// Its own tab rather than part of home: someone who wants to breathe says so
-/// on the wheel, and someone who wants to read about nine techniques has come
+/// Its own root rather than part of home: someone who wants to breathe says so
+/// on the wheel, and someone who wants to read about nine exercises has come
 /// here deliberately. The model arrives shared with home — two views onto one
 /// load.
 struct TechniqueListView: View {
     let model: TechniqueListModel
     let sessions: any SessionRecording
 
-    /// Opens Settings. Non-nil only under a chrome with no Settings tab, which
-    /// is what puts a gear in this screen's toolbar.
-    var showSettings: (() -> Void)?
-
-    /// The basics, as a row at the foot of the catalogue. Non-nil only under a
-    /// chrome with no tab for them — the same screen, pushed from here rather
-    /// than rooted in a tab of its own.
-    var foundations: FoundationsModel?
+    /// Opens Settings, which lives behind the gear in this screen's toolbar.
+    let showSettings: () -> Void
 
     @Environment(SubscriptionStore.self) private var plus
 
-    /// The locked technique somebody tapped, which is both the paywall's trigger
+    /// The locked exercise somebody tapped, which is both the paywall's trigger
     /// and the reason it is being shown. `Technique` is `Identifiable`, so this
     /// is the whole of the presentation state.
     @State private var locked: Technique?
@@ -32,7 +26,7 @@ struct TechniqueListView: View {
         NavigationStack {
             content
                 .paletteGround()
-                .navigationTitle("Techniques")
+                .navigationTitle("Exercises")
                 .navigationDestination(for: Technique.self) { technique in
                     TechniqueDetailView(technique: technique, sessions: sessions)
                 }
@@ -40,10 +34,8 @@ struct TechniqueListView: View {
                     PaywallView(highlighting: technique.requires)
                 }
                 .toolbar {
-                    if let showSettings {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            SettingsGearButton(action: showSettings)
-                        }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        SettingsGearButton(action: showSettings)
                     }
                 }
         }
@@ -64,7 +56,7 @@ struct TechniqueListView: View {
             ContentUnavailableView {
                 Label("The catalogue is empty", systemImage: "wind")
             } description: {
-                Text("The server answered, but with no techniques in it.")
+                Text("The server answered, but with no exercises in it.")
             } actions: {
                 Button("Try again") {
                     Task { await model.load() }
@@ -90,8 +82,6 @@ struct TechniqueListView: View {
                             .textCase(nil)
                     }
                 }
-
-                basicsRow
             }
             .listStyle(.plain)
 
@@ -108,35 +98,7 @@ struct TechniqueListView: View {
         }
     }
 
-    /// The basics at the foot of the catalogue, where a chrome with no tab for
-    /// them puts them.
-    ///
-    /// Last rather than first: somebody scrolling nine techniques and finding
-    /// none of them obvious is exactly who the questions underneath are for, and
-    /// they read as a footnote to the catalogue rather than a gate in front of
-    /// it.
-    @ViewBuilder
-    private var basicsRow: some View {
-        if let foundations {
-            Section {
-                NavigationLink {
-                    FoundationsView(model: foundations)
-                } label: {
-                    Label("The basics", systemImage: "book")
-                        .font(.headline)
-                        .padding(.vertical, Theme.Spacing.close)
-                }
-                .listRowBackground(Color.clear)
-            } footer: {
-                Text("Belly or chest, nose or mouth, eyes open or closed — the "
-                    + "questions under every technique here.")
-                    .font(.footnote)
-                    .foregroundStyle(Theme.Ink.tertiary)
-            }
-        }
-    }
-
-    /// A locked technique is a row like any other that opens the paywall
+    /// A locked exercise is a row like any other that opens the paywall
     /// instead of the detail screen.
     ///
     /// Listed rather than hidden, and drawn at full strength rather than dimmed:
@@ -144,6 +106,9 @@ struct TechniqueListView: View {
     /// they would be getting. Dimming reads as a punishment for not having paid;
     /// a lock beside a name and a summary reads as an invitation, which is what
     /// this is.
+    ///
+    /// A locked exercise never reaches `SessionModel.starting`, but that gate is
+    /// the one that actually holds — this only decides which sheet opens.
     @ViewBuilder
     private func row(for technique: Technique) -> some View {
         if technique.isUnlocked(for: plus.tier) {
