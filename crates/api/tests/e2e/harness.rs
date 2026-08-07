@@ -122,13 +122,15 @@ impl TestDatabase {
 }
 
 /// One person's daily model allowance, in the `usize` a call count is compared
-/// against.
+/// against. Zero for a tier that does not buy the model at all.
 ///
 /// Derived rather than written out, so a test says which tier it is asserting
 /// about and the numbers stay in `features::assistant::types` where the product
 /// decision lives.
 pub fn allowance(tier: Tier) -> usize {
-    usize::try_from(daily_model_calls(tier)).expect("an allowance is never negative")
+    daily_model_calls(tier).map_or(0, |calls| {
+        usize::try_from(calls).expect("an allowance is never negative")
+    })
 }
 
 /// A model that answers from a script and counts how often it was asked.

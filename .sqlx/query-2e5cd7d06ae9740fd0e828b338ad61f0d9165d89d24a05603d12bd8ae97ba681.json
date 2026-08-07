@@ -1,0 +1,62 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n            subscription_tier AS \"subscription_tier?: SubscriptionTier\",\n            subscription_until,\n            app_store_original_transaction_id AS original_transaction_id\n           FROM users\n          WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "subscription_tier?: SubscriptionTier",
+        "type_info": {
+          "Custom": {
+            "name": "subscription_tier",
+            "kind": {
+              "Enum": [
+                "PLUS",
+                "COACH"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "subscription_tier"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "subscription_until",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "subscription_until"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "original_transaction_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "app_store_original_transaction_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "2e5cd7d06ae9740fd0e828b338ad61f0d9165d89d24a05603d12bd8ae97ba681"
+}

@@ -4,12 +4,12 @@
 //! Receives explicit dependencies (`&PgPool`, `&dyn TransactionVerifier`), never
 //! `Arc<AppState>`, and contains zero raw queries.
 
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::errors::EntitlementError;
-use super::repository;
+use super::repository::{self, EntitlementRow, RecordedPurchase};
 use super::types::{Entitlement, Tier};
 use super::verifier::{TransactionVerifier, VerifiedTransaction};
 use crate::proto::breathe::v1 as pb;
@@ -28,20 +28,24 @@ pub async fn submit_transaction(
 ) -> Result<pb::SubmitAppStoreTransactionResponse, EntitlementError> {
     let transaction = verifier.verify(signed_transaction)?;
 
-    let plus_until = if transaction.revoked_at.is_some() {
+    let stored = if transaction.revoked_at.is_some() {
         revoke(pool, user_id, &transaction).await?
     } else {
         repository::record_purchase(
             pool,
             user_id,
-            &transaction.original_transaction_id,
-            transaction.expires_at,
+            &RecordedPurchase {
+                tier: transaction.tier,
+                expires_at: transaction.expires_at,
+                signed_at: transaction.signed_at,
+                original_transaction_id: &transaction.original_transaction_id,
+            },
         )
         .await?
     };
 
     Ok(pb::SubmitAppStoreTransactionResponse {
-        entitlement: Some(to_proto(Entitlement::resolve(plus_until, Utc::now()))),
+        entitlement: Some(to_proto(resolve(&stored))),
     })
 }
 
@@ -57,15 +61,20 @@ async fn revoke(
     pool: &PgPool,
     user_id: Uuid,
     transaction: &VerifiedTransaction,
-) -> Result<Option<DateTime<Utc>>, EntitlementError> {
+) -> Result<EntitlementRow, EntitlementError> {
     let stored = repository::find_entitlement(pool, user_id).await?;
 
     if stored.original_transaction_id.as_deref() != Some(&transaction.original_transaction_id) {
-        return Ok(stored.plus_until);
+        return Ok(stored);
     }
 
     repository::clear_purchase(pool, user_id).await?;
-    Ok(None)
+
+    Ok(EntitlementRow {
+        subscription_tier: None,
+        subscription_until: None,
+        original_transaction_id: stored.original_transaction_id,
+    })
 }
 
 pub async fn get_entitlement(
@@ -75,17 +84,22 @@ pub async fn get_entitlement(
     let stored = repository::find_entitlement(pool, user_id).await?;
 
     Ok(pb::GetEntitlementResponse {
-        entitlement: Some(to_proto(Entitlement::resolve(
-            stored.plus_until,
-            Utc::now(),
-        ))),
+        entitlement: Some(to_proto(resolve(&stored))),
     })
+}
+
+/// The stored row read against the clock, which is the only place the two are
+/// put together — the row is what the database holds and an [`Entitlement`] is
+/// what it means right now.
+fn resolve(row: &EntitlementRow) -> Entitlement {
+    Entitlement::resolve(row.subscription_tier, row.subscription_until, Utc::now())
 }
 
 fn to_proto(entitlement: Entitlement) -> pb::Entitlement {
     let tier = match entitlement.tier() {
         Tier::Free => pb::EntitlementTier::Free,
         Tier::Plus => pb::EntitlementTier::Plus,
+        Tier::Coach => pb::EntitlementTier::Coach,
     };
 
     pb::Entitlement {

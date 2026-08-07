@@ -7,13 +7,17 @@ import "google/protobuf/timestamp.proto";
 // EntitlementService turns an App Store purchase into something the server can
 // act on.
 //
-// The client already knows whether somebody is subscribed — StoreKit answers
-// that offline, and every piece of UI gating reads it from there. This service
-// exists for the one decision the client must not make: how much of the
-// language model a caller may spend. `AssistantService` reads the tier from the
-// row `SubmitAppStoreTransaction` wrote, never from anything a request carries,
-// so a modified client can claim Plus all it likes and still get the free
-// allowance.
+// The client already knows which tier somebody is on — StoreKit answers that
+// offline, and every piece of UI gating reads it from there. This service
+// exists for the one decision the client must not make: whether a caller may
+// spend a language-model call. `AssistantService` reads the tier from the row
+// `SubmitAppStoreTransaction` wrote, never from anything a request carries, so
+// a modified client can claim Coach all it likes and still get the rules.
+//
+// The catalogue's lock is deliberately *not* here. A session runs on the
+// device, so a subscription check in front of it would guard nothing; the
+// division is that the server enforces what costs money to serve and the client
+// enforces what does not.
 //
 // Scoped to the caller exactly like ProfileService — the anonymous identity
 // travels in the `breathe-user-id` header and no request message carries an id.
@@ -38,20 +42,32 @@ service EntitlementService {
 
 // What a person may use.
 //
+// Ordered, and the order is load-bearing: every tier includes everything below
+// it, so a check is "at least this" rather than "exactly this". The numbers are
+// what express that — a client comparing them can add a tier above COACH
+// without revisiting every gate.
+//
 // UNSPECIFIED is never stored or served — the server resolves every caller to
-// FREE or PLUS — and exists only because proto3 demands a zero value. A client
-// that receives it should treat it as FREE.
+// one of the three — and exists only because proto3 demands a zero value. A
+// client that receives it should treat it as FREE, which the ordering already
+// makes the natural reading.
 enum EntitlementTier {
   ENTITLEMENT_TIER_UNSPECIFIED = 0;
 
-  // Everything the app does except the full assistant allowance. Not a trial
-  // and not degraded: the catalogue, the player, the journey, and a daily taste
-  // of the model.
+  // The app, and the two techniques it opens with. Everything that is not the
+  // catalogue's breadth or the language model: the session player, the whole
+  // journey and its leaderboards, schedules, the journal, the basics.
   ENTITLEMENT_TIER_FREE = 1;
 
-  // Breathe Plus. The whole assistant allowance, for as long as
-  // `expires_at` is in the future.
+  // Breathe Plus. The full catalogue, and everything the app does that does not
+  // cost us money per use.
   ENTITLEMENT_TIER_PLUS = 2;
+
+  // Breathe Coach. Plus, and the assistant backed by a language model —
+  // recommendations written for this person and explanations at their level.
+  // The one tier with a marginal cost behind it, which is why it is the one
+  // tier this server enforces.
+  ENTITLEMENT_TIER_COACH = 3;
 }
 
 // What the server holds for one person.

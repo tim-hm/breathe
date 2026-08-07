@@ -230,6 +230,21 @@ public nonisolated struct Breathe_V1_Technique: Sendable {
   /// breathing: a client shows the summary when choosing and this while doing.
   public var safetyNote: String = String()
 
+  /// Whether breathing this one needs a subscription.
+  ///
+  /// Phrased so that `false` — the proto3 zero value, and therefore what an
+  /// absent field, an older server, and a truncated message all mean — is
+  /// *unlocked*. That direction is deliberate. A session runs entirely on the
+  /// device, so there is nothing to enforce here and nothing this saves: the
+  /// costly feature is the language model, and `EntitlementService` guards that
+  /// one server-side. What a decode gap could cost is a person being asked to
+  /// pay for something they were promised, which is worth more than the handful
+  /// of sessions the other direction gives away.
+  ///
+  /// The catalogue is served whole either way. A locked technique is listed,
+  /// described, and shown its rhythm — it is an invitation, not a hidden row.
+  public var requiresSubscription: Bool = false
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -404,7 +419,7 @@ nonisolated extension Breathe_V1_Stage: SwiftProtobuf.Message, SwiftProtobuf._Me
 
 nonisolated extension Breathe_V1_Technique: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Technique"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}slug\0\u{1}name\0\u{1}summary\0\u{1}goal\0\u{2}\u{3}stages\0\u{3}recommended_rounds\0\u{3}safety_note\0\u{b}phases\0\u{b}recommended_cycles\0\u{c}\u{6}\u{1}\u{c}\u{7}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}slug\0\u{1}name\0\u{1}summary\0\u{1}goal\0\u{2}\u{3}stages\0\u{3}recommended_rounds\0\u{3}safety_note\0\u{3}requires_subscription\0\u{b}phases\0\u{b}recommended_cycles\0\u{c}\u{6}\u{1}\u{c}\u{7}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -420,6 +435,7 @@ nonisolated extension Breathe_V1_Technique: SwiftProtobuf.Message, SwiftProtobuf
       case 8: try { try decoder.decodeRepeatedMessageField(value: &self.stages) }()
       case 9: try { try decoder.decodeSingularUInt32Field(value: &self.recommendedRounds) }()
       case 10: try { try decoder.decodeSingularStringField(value: &self.safetyNote) }()
+      case 11: try { try decoder.decodeSingularBoolField(value: &self.requiresSubscription) }()
       default: break
       }
     }
@@ -450,6 +466,9 @@ nonisolated extension Breathe_V1_Technique: SwiftProtobuf.Message, SwiftProtobuf
     if !self.safetyNote.isEmpty {
       try visitor.visitSingularStringField(value: self.safetyNote, fieldNumber: 10)
     }
+    if self.requiresSubscription != false {
+      try visitor.visitSingularBoolField(value: self.requiresSubscription, fieldNumber: 11)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -462,6 +481,7 @@ nonisolated extension Breathe_V1_Technique: SwiftProtobuf.Message, SwiftProtobuf
     if lhs.stages != rhs.stages {return false}
     if lhs.recommendedRounds != rhs.recommendedRounds {return false}
     if lhs.safetyNote != rhs.safetyNote {return false}
+    if lhs.requiresSubscription != rhs.requiresSubscription {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -14,6 +14,7 @@ pub mod appstore;
 use chrono::{DateTime, Utc};
 
 pub use self::appstore::AppStoreVerifier;
+use super::types::SubscriptionTier;
 
 /// What a signed transaction asserts, once its signature has been checked
 /// against Apple's root and its app and product confirmed as ours.
@@ -27,11 +28,27 @@ pub struct VerifiedTransaction {
     /// resubmission recognisable as the same purchase.
     pub original_transaction_id: String,
 
+    /// Which product this is, resolved from the payload's `productId`. A
+    /// `SubscriptionTier` rather than a `Tier` because a transaction is always
+    /// a purchase — there is no free product to be a transaction for, and a
+    /// `productId` naming neither of ours is rejected rather than mapped down.
+    pub tier: SubscriptionTier,
+
     /// When this period ends. Not optional: an auto-renewable subscription
-    /// always carries one, and a payload without it is not a transaction for
-    /// the product this app sells — [`TransactionVerifier::verify`] rejects it
+    /// always carries one, and a payload without it is not a transaction for a
+    /// product this app sells — [`TransactionVerifier::verify`] rejects it
     /// rather than passing a `None` every caller would have to interpret.
     pub expires_at: DateTime<Utc>,
+
+    /// When Apple signed this, which is what orders one submission against
+    /// another.
+    ///
+    /// Carried out of the verifier because it is the only field that can order
+    /// them correctly. The expiry cannot: upgrading Plus to Coach mid-month
+    /// issues a Coach transaction whose expiry is *earlier* than the Plus period
+    /// it replaced, so "keep the later expiry" would keep the subscription the
+    /// person has just stopped paying for.
+    pub signed_at: DateTime<Utc>,
 
     /// When Apple refunded or revoked it, if they did. `Some` means the
     /// transaction entitles nothing, however far in the future its expiry sits.
@@ -58,9 +75,10 @@ pub enum VerificationError {
     #[error("the signed transaction is not signed by Apple: {0}")]
     Untrusted(String),
 
-    /// Genuinely Apple's, and for somebody else's app or somebody else's
-    /// product. The one rejection that is not a bug on either side: a
-    /// development build with the wrong bundle id produces exactly this.
+    /// Genuinely Apple's, and for somebody else's app or a product this build
+    /// does not sell. The one rejection that is not a bug on either side: a
+    /// development build with the wrong bundle id produces exactly this, and so
+    /// does an old client still submitting a product that has been withdrawn.
     #[error("the signed transaction is not for this app: {0}")]
     NotOurs(String),
 }

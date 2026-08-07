@@ -63,24 +63,26 @@ pub struct Recommendation {
 /// whole catalogue would have opened the catalogue.
 pub const RECOMMENDATION_COUNT: usize = 3;
 
-/// Model calls one person may make per UTC day.
+/// Model calls one person may make per UTC day, or `None` for a tier that does
+/// not buy the model at all.
 ///
-/// The one place the subscription is worth money. Both numbers are spend
-/// ceilings first — a runaway client cannot cost more than this either way —
-/// and the gap between them is the product: Plus buys the assistant as it was
-/// designed, and free buys enough of it to know what it does.
+/// The language model *is* Breathe Coach — it is the only thing in the app with
+/// a marginal cost, and the only reason the top tier exists. So the answer is
+/// `None` below it, and a ceiling above it.
 ///
-/// Free is three rather than zero, and that is the business plan's framing
-/// rather than a compromise: the hero experience is not the assistant, so
-/// running out drops to the rule-based answer flagged `FALLBACK`, which is the
-/// same answer everybody gets offline. Nobody hits a wall.
+/// **No free taste, deliberately.** M8's first shape gave everybody three calls
+/// a day, which made sense while the subscription was one $4.99 yearly product
+/// and the model was a bonus. It stops making sense now: an unbounded daily
+/// spend against every install is the whole margin of a £0.99 Plus tier, and it
+/// gives away the one thing Coach sells. Nobody hits a wall for it — every
+/// caller below Coach gets the rule-based answer flagged `FALLBACK`, which is
+/// the same answer everybody gets offline and a genuinely good one.
 ///
-/// Read from the caller's `users` row via `entitlement::service::tier`, never
-/// from anything a request carries.
-pub const fn daily_model_calls(tier: Tier) -> i32 {
+/// Read from the caller's `users` row, never from anything a request carries.
+pub const fn daily_model_calls(tier: Tier) -> Option<i32> {
     match tier {
-        Tier::Free => 3,
-        Tier::Plus => 25,
+        Tier::Free | Tier::Plus => None,
+        Tier::Coach => Some(25),
     }
 }
 

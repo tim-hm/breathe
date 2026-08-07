@@ -145,6 +145,7 @@ mod tests {
                 safety_note: String::new(),
                 goal: TechniqueGoal::Calm,
                 recommended_rounds: 1,
+                requires_subscription: true,
             })
             .collect()
     }

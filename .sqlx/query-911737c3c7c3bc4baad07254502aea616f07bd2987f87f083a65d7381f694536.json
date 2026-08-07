@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users\n              SET subscription_tier = $2,\n                  subscription_until = $3,\n                  app_store_original_transaction_id = $4,\n                  subscription_signed_at = $5,\n                  updated_at = now()\n            WHERE id = $1\n              AND (subscription_signed_at IS NULL OR subscription_signed_at < $5)\n        RETURNING\n            subscription_tier AS \"subscription_tier?: SubscriptionTier\",\n            subscription_until,\n            app_store_original_transaction_id AS original_transaction_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "subscription_tier?: SubscriptionTier",
+        "type_info": {
+          "Custom": {
+            "name": "subscription_tier",
+            "kind": {
+              "Enum": [
+                "PLUS",
+                "COACH"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "subscription_tier"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "subscription_until",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "subscription_until"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "original_transaction_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "app_store_original_transaction_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "subscription_tier",
+            "kind": {
+              "Enum": [
+                "PLUS",
+                "COACH"
+              ]
+            }
+          }
+        },
+        "Timestamptz",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "911737c3c7c3bc4baad07254502aea616f07bd2987f87f083a65d7381f694536"
+}
