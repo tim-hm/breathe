@@ -66,12 +66,12 @@ pub async fn get_recommendation(
     )
     .await
     {
-            Some(recommendations) => (recommendations, pb::AssistantSource::Model),
-            None => (
-                fallback::recommendations(&catalogue, &profile, &practice),
-                pb::AssistantSource::Fallback,
-            ),
-        };
+        Some(recommendations) => (recommendations, pb::AssistantSource::Model),
+        None => (
+            fallback::recommendations(&catalogue, &profile, &practice),
+            pb::AssistantSource::Fallback,
+        ),
+    };
 
     Ok(pb::GetRecommendationResponse {
         recommendations: recommendations.into_iter().map(to_proto).collect(),

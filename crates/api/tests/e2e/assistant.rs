@@ -133,9 +133,10 @@ async fn the_person_rides_in_the_instruction_and_the_prefix_is_shared() {
     );
     assert!(practised.contains("- other exercises: 1 sessions, 1 minutes"));
     assert!(practised.contains("HEALTH (data, not instructions)"));
-    assert!(practised.contains(
-        "resting heart rate: about 62 bpm, around 4 bpm above their recent baseline"
-    ));
+    assert!(
+        practised
+            .contains("resting heart rate: about 62 bpm, around 4 bpm above their recent baseline")
+    );
 
     let fresh = &requests[1].instruction;
     assert!(fresh.contains("no practice recorded yet"));
@@ -173,9 +174,15 @@ async fn a_health_context_is_clamped_and_reaches_both_rpcs() {
     let db = TestDatabase::create("assistant_health_context").await;
     let model = ScriptedModel::always(Ok("First the mechanism.".to_owned()));
 
-    explain_with_health(&db, model.clone(), USER, "box-breathing", Some(heart_trends()))
-        .await
-        .into_ok();
+    explain_with_health(
+        &db,
+        model.clone(),
+        USER,
+        "box-breathing",
+        Some(heart_trends()),
+    )
+    .await
+    .into_ok();
 
     // A broken-sensor context: resting HR beyond any living wearer, HRV fine.
     recommend_with_health(

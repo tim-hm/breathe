@@ -42,14 +42,28 @@ public protocol AssistantReading: Sendable {
 
 public struct AssistantRepository: AssistantReading {
     private let client: Breathe_V1_AssistantServiceClient
+    private let healthContext: @Sendable () async -> CoachHealthContext?
 
-    public init(baseURL: URL, identity: any UserIdentityStore) {
+    /// `healthContext` is asked immediately before each request and its answer
+    /// attached to that request alone — never cached here, because the person
+    /// can withdraw the opt-in between two calls and the very next request
+    /// must already carry nothing. The default provider answers nil, which is
+    /// a request identical to one from a build that predates health context.
+    public init(
+        baseURL: URL,
+        identity: any UserIdentityStore,
+        healthContext: @escaping @Sendable () async -> CoachHealthContext? = { nil }
+    ) {
         client = BreatheClients.assistantService(baseURL: baseURL, userId: identity.userId)
+        self.healthContext = healthContext
     }
 
     public func recommendations() async throws -> Guidance {
-        let response = await client
-            .getRecommendation(request: Breathe_V1_GetRecommendationRequest())
+        var request = Breathe_V1_GetRecommendationRequest()
+        if let context = await healthContext() {
+            request.healthContext = Self.wire(context)
+        }
+        let response = await client.getRecommendation(request: request)
 
         guard let message = response.message else {
             throw AssistantRepositoryError.transport(
@@ -91,19 +105,25 @@ public struct AssistantRepository: AssistantReading {
         AsyncThrowingStream { continuation in
             let stream = client.explainTechnique()
 
-            var request = Breathe_V1_ExplainTechniqueRequest()
-            request.techniqueSlug = techniqueSlug
-
-            do {
-                try stream.send(request)
-            } catch {
-                continuation.finish(throwing: AssistantRepositoryError.transport(
-                    error.localizedDescription
-                ))
-                return
-            }
-
+            // Sending happens inside the task rather than up here, because the
+            // health provider is async: the summary is read from Health at the
+            // moment of the request, and this closure cannot suspend.
             let reader = Task {
+                var request = Breathe_V1_ExplainTechniqueRequest()
+                request.techniqueSlug = techniqueSlug
+                if let context = await healthContext() {
+                    request.healthContext = Self.wire(context)
+                }
+
+                do {
+                    try stream.send(request)
+                } catch {
+                    continuation.finish(throwing: AssistantRepositoryError.transport(
+                        error.localizedDescription
+                    ))
+                    return
+                }
+
                 for await result in stream.results() {
                     switch result {
                     case let .message(message):
@@ -147,6 +167,28 @@ public struct AssistantRepository: AssistantReading {
                 stream.cancel()
             }
         }
+    }
+
+    /// The domain summary as the wire message, metric by metric. A snapshot's
+    /// nil trend stays an absent field — the server reads absence as "too
+    /// little evidence", which is exactly what it was. `clamping` because the
+    /// values are whole-unit physiological means: anything an `Int32` cannot
+    /// hold is a corrupt reading, and the server's range clamp drops it there.
+    private static func wire(_ context: CoachHealthContext) -> Breathe_V1_HealthContext {
+        var wire = Breathe_V1_HealthContext()
+        if let resting = context.restingHeartRate {
+            wire.restingHrBpm = Int32(clamping: resting.sevenDayMean)
+            if let trend = resting.trendFromBaseline {
+                wire.restingHrTrendBpm = Int32(clamping: trend)
+            }
+        }
+        if let variability = context.heartRateVariability {
+            wire.hrvSdnnMs = Int32(clamping: variability.sevenDayMean)
+            if let trend = variability.trendFromBaseline {
+                wire.hrvSdnnTrendMs = Int32(clamping: trend)
+            }
+        }
+        return wire
     }
 }
 

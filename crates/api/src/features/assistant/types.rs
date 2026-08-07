@@ -157,9 +157,8 @@ impl HealthContext {
 
         let context = Self {
             resting_hr_bpm,
-            resting_hr_trend_bpm: resting_hr_bpm.and(
-                resting_hr_trend_bpm.filter(|bpm| RESTING_HR_TREND_BPM_RANGE.contains(bpm)),
-            ),
+            resting_hr_trend_bpm: resting_hr_bpm
+                .and(resting_hr_trend_bpm.filter(|bpm| RESTING_HR_TREND_BPM_RANGE.contains(bpm))),
             hrv_sdnn_ms,
             hrv_sdnn_trend_ms: hrv_sdnn_ms
                 .and(hrv_sdnn_trend_ms.filter(|ms| HRV_SDNN_TREND_MS_RANGE.contains(ms))),

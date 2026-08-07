@@ -532,8 +532,8 @@ mod tests {
     /// stops; a delta of zero is "in line", not "0 above".
     #[test]
     fn a_health_line_degrades_with_its_evidence() {
-        let meanless = HealthContext::clamped(Some(58), None, None, None)
-            .expect("one mean keeps the context");
+        let meanless =
+            HealthContext::clamped(Some(58), None, None, None).expect("one mean keeps the context");
         assert_eq!(
             health_lines(&meanless),
             "resting heart rate: about 58 bpm\n"

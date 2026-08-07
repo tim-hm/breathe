@@ -18,6 +18,18 @@ import Foundation
 enum LiveAssistant {
     static let reading: any AssistantReading = AssistantRepository(
         baseURL: AppConfiguration.apiBaseURL,
-        identity: KeychainUserIdentityStore()
+        identity: KeychainUserIdentityStore(),
+        // Asked per request, so withdrawing the opt-in in Settings takes
+        // effect on the very next question with no restart.
+        healthContext: { await LiveHealth.model.context() }
     )
+}
+
+/// The heart-trends opt-in and its summary, shared between the Settings
+/// toggle that flips it and the repository above that asks it. One instance
+/// on the same file-scoped-composition terms as `LiveAssistant`: the two
+/// surfaces are nowhere near each other in the view tree, and the opt-in has
+/// to be the same switch wherever it is read.
+enum LiveHealth {
+    @MainActor static let model = HealthContextModel(store: HealthKitHealthStore())
 }
