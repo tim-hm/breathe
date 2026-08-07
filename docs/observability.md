@@ -59,6 +59,8 @@ The principle above carries over unchanged. `os.Logger` does not: four of its pr
 | `bolt-store`       | The local controlled-pause file                                          |
 | `journey-sync`     | Sessions, tombstones, and pause scores draining to the server            |
 | `catalogue-cache`  | The offline catalogue's reads and writes                                 |
+| `leaderboard`      | The one screen that needs a connection, and what it does without one     |
+| `assistant`        | Guidance and explanations, including a stream the provider cut short     |
 | `subscription`     | StoreKit purchases and restores, and the entitlement the server stores   |
 | `watch-link`       | The handoff, from both ends                                              |
 | `haptics`, `audio` | The session's cue engines                                                |
