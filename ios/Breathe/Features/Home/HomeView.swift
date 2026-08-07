@@ -5,14 +5,13 @@ import SwiftUI
 
 /// The way in: an aim, the orb, and "begin" — nothing else.
 ///
-/// The aim is one faint word; a horizontal swipe anywhere on the screen cycles
-/// it, and tapping it fans out the full set. It wakes up where it was last
-/// left, the hour's goal decides only the very first launch, and the exercise
-/// it resolves to is never named here: somebody who wants a particular one
-/// goes to the exercises tab, and somebody who just wants to breathe should
-/// not have to read a label to do it. The assistant's suggestions stay in that
-/// tab too — this screen is one decision, and a second opinion beside it would
-/// be two.
+/// The aim is one faint word on a drum that spins sideways, and tapping it fans
+/// out the full set. It wakes up where it was last left, the hour's goal decides
+/// only the very first launch, and the exercise it resolves to is never named
+/// here: somebody who wants a particular one goes to the exercises tab, and
+/// somebody who just wants to breathe should not have to read a label to do it.
+/// The assistant's suggestions stay in that tab too — this screen is one
+/// decision, and a second opinion beside it would be two.
 struct HomeView: View {
     /// The catalogue the composition root owns and every root shares.
     let model: TechniqueListModel
@@ -26,10 +25,6 @@ struct HomeView: View {
     @State private var goal: TechniqueGoal?
     /// Whether the aim word is fanned out into the full set.
     @State private var isChoosingAim = false
-    /// The horizontal travel of a swipe in flight, zero at rest. Handed to the
-    /// selector so the aim word tracks the finger — the feedback that teaches
-    /// the gesture.
-    @State private var aimDrag: CGFloat = 0
     /// Recorded history, oldest first. Re-read after every session, because one
     /// just finished has changed what to offer next.
     @State private var history: [SessionRecord] = []
@@ -118,8 +113,9 @@ struct HomeView: View {
                         AimSelector(
                             goals: TechniqueGoal.present(in: techniques),
                             goal: goal,
+                            locked: lockedGoals(in: techniques),
                             typeScale: typeScale,
-                            drag: aimDrag,
+                            width: proxy.size.width - Theme.Spacing.standard * 2,
                             isExpanded: $isChoosingAim,
                             onSelect: select
                         )
@@ -137,7 +133,6 @@ struct HomeView: View {
             .padding(.horizontal, Theme.Spacing.standard)
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
-            .gesture(aimSwipe(among: TechniqueGoal.present(in: techniques)))
             // Simultaneous, so the fan-out's own buttons and the orb still get
             // their taps — a tap anywhere while the row is out collapses it,
             // and whatever was tapped happens too.
@@ -152,40 +147,28 @@ struct HomeView: View {
         }
     }
 
-    /// The swipe that cycles the aim, and the travel the aim word follows while
-    /// it is in flight.
+    /// The aims this person's tier cannot start, so the drum can mark them.
     ///
-    /// A plain gesture, so the orb's tap wins until 24pt of travel; the
-    /// dominance check leaves anything vertical alone. Off while the row is
-    /// fanned out — with every aim on screen, a swipe has nothing to reveal.
-    private func aimSwipe(among goals: [TechniqueGoal]) -> some Gesture {
-        DragGesture(minimumDistance: 24)
-            .onChanged { value in
-                guard !isChoosingAim,
-                      abs(value.translation.width) > abs(value.translation.height)
-                else { return }
+    /// Asked of `HomeSuggestion` and not of the catalogue at large, because the
+    /// lock has to predict exactly one thing: whether landing here and pressing
+    /// the orb opens a session or the paywall. `HomeStart` resolves the
+    /// technique the same way, so the mark and the outcome cannot disagree —
+    /// an aim with a locked exercise beside a free one is not locked, and
+    /// counting the catalogue's tiers instead would say it was.
+    private func lockedGoals(in techniques: [Technique]) -> Set<TechniqueGoal> {
+        let locked = TechniqueGoal.present(in: techniques).filter { goal in
+            let technique = HomeSuggestion.technique(
+                for: goal,
+                techniques: techniques,
+                history: history
+            )
+            return technique.map { !$0.isUnlocked(for: plus.tier) } ?? false
+        }
 
-                aimDrag = value.translation.width
-            }
-            .onEnded { value in
-                // Sprung back whether or not the swipe commits: on a commit the
-                // selector's push carries the change, and below the threshold
-                // the word settling home is the feedback that nothing did.
-                withAnimation(.easeOut(duration: 0.25)) { aimDrag = 0 }
-
-                let width = value.translation.width
-                guard !isChoosingAim,
-                      abs(width) > abs(value.translation.height),
-                      abs(width) > 40,
-                      let goal,
-                      let stepped = width < 0 ? goal.next(in: goals) : goal.previous(in: goals)
-                else { return }
-
-                select(stepped)
-            }
+        return Set(locked)
     }
 
-    /// The one place a person's choice lands: the swipe, the fan-out, and
+    /// The one place a person's choice lands: the drum, the fan-out, and
     /// VoiceOver's adjust all funnel here. `settleGoal()` deliberately does
     /// not — restoring state is not choosing, and only choices are remembered.
     private func select(_ new: TechniqueGoal) {
