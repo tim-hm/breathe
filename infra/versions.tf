@@ -1,9 +1,5 @@
 # Provisioned with OpenTofu (`mise run infra:plan` / `infra:apply`), composed
 # from the community terraform-aws-modules rather than hand-rolled resources.
-#
-# State is local and gitignored — acceptable while one person applies from one
-# machine. The day a second applier appears, move it to an S3 backend (OpenTofu
-# supports S3-native locking; no DynamoDB table needed) before they run plan.
 
 terraform {
   required_version = ">= 1.8"
@@ -13,6 +9,21 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 6.0"
     }
+  }
+
+  # The bucket is created by infra/bootstrap, which must be applied first.
+  # Written out in full rather than as a partial backend: `tofu init` with no
+  # flags must reach the right state, because the alternative is an operator who
+  # forgets `-backend-config` and silently starts a second, empty state.
+  #
+  # `use_lockfile` is OpenTofu's S3-native locking. The DynamoDB table the old
+  # Terraform docs call for is not needed and is not created.
+  backend "s3" {
+    bucket       = "breathe-tfstate-136339248297"
+    key          = "breathe/infra/terraform.tfstate"
+    region       = "eu-west-2"
+    use_lockfile = true
+    encrypt      = true
   }
 }
 

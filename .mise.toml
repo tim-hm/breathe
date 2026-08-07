@@ -324,6 +324,9 @@ run = ["docker build --platform linux/arm64 -t breathe-api:latest .", """
   host="ubuntu@$(tofu -chdir=infra output -raw elastic_ip)"
   docker save breathe-api:latest | gzip | ssh "$host" 'gunzip | docker load'
   rsync -az infra/box/ "$host":/srv/breathe/
+  # Under /srv/breathe rather than its own tree, so one directory holds
+  # everything a deploy ships and compose can mount it by relative path.
+  rsync -az --delete web/ "$host":/srv/breathe/web/
   ssh "$host" 'cd /srv/breathe && docker compose --profile tools run --rm migrate && docker compose up -d --remove-orphans'
   """]
 

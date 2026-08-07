@@ -5,6 +5,23 @@
 #
 # The hostname's A record must point at the elastic_ip output of infra/ before
 # first boot, or certificate issuance fails and retries with backoff.
-api.breathe.holmie.xyz {
-	reverse_proxy api:18100
+cadence.holmie.xyz {
+	# One host serves both the API and the marketing page, split by path rather
+	# than by hostname — one A record, one certificate.
+	#
+	# The API side is enumerated and the site is the fallback, never the other
+	# way round. gRPC-Web paths are always /<proto package>.<Service>/<Method>,
+	# so matching the package prefix covers every service the contract will ever
+	# grow without touching this file. A static file can therefore never shadow
+	# an RPC, and a new RPC can never fall through into a 404 from file_server.
+	@api path /breathe.v1.* /grpc.reflection.* /health /about
+
+	handle @api {
+		reverse_proxy api:18100
+	}
+
+	handle {
+		root * /srv/web
+		file_server
+	}
 }

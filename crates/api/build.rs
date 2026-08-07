@@ -28,6 +28,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // trigger a rebuild even though it is not yet listed.
     println!("cargo:rerun-if-changed={PROTO_ROOT}");
 
+    println!("cargo:rerun-if-env-changed=BUILD_GIT_COMMIT_HASH");
     println!(
         "cargo:rustc-env=BUILD_GIT_COMMIT_HASH={}",
         git_commit_hash()
@@ -40,15 +41,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// The commit this binary was built from, or `"unknown"` when git cannot answer
-/// — a build from a source tarball or a container without the `.git` directory
-/// is a normal thing, not a build failure.
+/// The commit this binary was built from, or `"unknown"` when nothing can answer
+/// — a build from a source tarball is a normal thing, not a build failure.
+///
+/// `BUILD_GIT_COMMIT_HASH` wins over git because the container build is the case
+/// that matters and it is the case git cannot serve: `.dockerignore` excludes
+/// `.git`, so `mise run deploy` passes the commit in as a build arg instead.
+/// Without it `/about` answers `"unknown"` in production, which is the one place
+/// the question is worth asking.
 fn git_commit_hash() -> String {
-    std::process::Command::new("git")
-        .args(["rev-parse", "--short", "HEAD"])
-        .output()
+    std::env::var("BUILD_GIT_COMMIT_HASH")
         .ok()
-        .filter(|output| output.status.success())
-        .and_then(|output| String::from_utf8(output.stdout).ok())
+        .filter(|hash| !hash.trim().is_empty())
+        .or_else(|| {
+            std::process::Command::new("git")
+                .args(["rev-parse", "--short", "HEAD"])
+                .output()
+                .ok()
+                .filter(|output| output.status.success())
+                .and_then(|output| String::from_utf8(output.stdout).ok())
+        })
         .map_or_else(|| "unknown".to_owned(), |hash| hash.trim().to_owned())
 }

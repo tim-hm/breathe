@@ -10,6 +10,10 @@ services:
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # The marketing one-pager, rsynced beside this file by `mise run deploy`.
+      # Static files served straight off disk: nothing builds it, and no second
+      # container exists to serve two files.
+      - ./web:/srv/web:ro
       # Certificates. Losing this volume means re-issuing against ACME rate
       # limits, so it persists across deploys like any other data.
       - caddy-data:/data
