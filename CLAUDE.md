@@ -29,8 +29,11 @@ crates/api      axum (JSON) + tonic (gRPC-Web) on one port
 crates/migrate  schema migrations + the seeded technique catalogue
 ios/            two app targets — Ond (iOS) and OndWatch (watchOS) —
                 over one local SwiftPM package, OndCore
-web/            the marketing one-pager; static files, no build step
+web/            the marketing one-pager; static at serve time, but its
+                technique figures are generated from the app's own geometry
 infra/          OpenTofu for the one box the whole thing deploys onto
+catalogue.json  the seeded catalogue, exported from crates/migrate so the
+                drawings can be derived from the numbers the database holds
 ```
 
 All önd ports live in **18100–18199** (API 18100, Postgres 18101, `web/` preview 18102). See [docs/contributing.md](docs/contributing.md) for why the block starts there.
@@ -62,29 +65,31 @@ This rule has teeth: a shell that has visited the sibling `connect` repo exports
 
 **Toolkit-first rule**: helper tooling is a mise task or a subcommand of a future `toolkit` crate — never a loose bash/python script. `scripts/` does not exist and should stay that way.
 
-| Intent                              | Task                                                  |
-| :---------------------------------- | :---------------------------------------------------- |
-| Full validation (the gate)          | `mise run check`                                      |
-| Auto-fix formatting + lint          | `mise run fix`                                        |
-| Regenerate proto types + SQLx cache | `mise run generate`                                   |
-| Start Postgres                      | `mise run dev:db`                                     |
-| Apply migrations + seed             | `mise run migrate`                                    |
-| Run the API with reload             | `mise run dev`                                        |
-| Query the database                  | `echo 'select …;' \| mise run db:psql`                |
-| Rebuild the DB from scratch         | `mise run dev:db:reset`                               |
-| Generate + open the Xcode project   | `mise run ios:gen` / `mise run ios:open`              |
-| Build the apps headlessly           | `mise run ios:build` / `mise run ios:build:watch`     |
-| Tests                               | `mise run test` (`test:rs`, `test:e2e`, `test:swift`) |
+| Intent                            | Task                                                  |
+| :-------------------------------- | :---------------------------------------------------- |
+| Full validation (the gate)        | `mise run check`                                      |
+| Auto-fix formatting + lint        | `mise run fix`                                        |
+| Regenerate every derived artefact | `mise run generate`                                   |
+| Start Postgres                    | `mise run dev:db`                                     |
+| Apply migrations + seed           | `mise run migrate`                                    |
+| Run the API with reload           | `mise run dev`                                        |
+| Query the database                | `echo 'select …;' \| mise run db:psql`                |
+| Rebuild the DB from scratch       | `mise run dev:db:reset`                               |
+| Generate + open the Xcode project | `mise run ios:gen` / `mise run ios:open`              |
+| Build the apps headlessly         | `mise run ios:build` / `mise run ios:build:watch`     |
+| Tests                             | `mise run test` (`test:rs`, `test:e2e`, `test:swift`) |
 
 **Before committing** — three commands, in this order:
 
 ```bash
-mise run generate   # 1. Protobuf types + SQLx cache
+mise run generate   # 1. Protobuf, catalogue export, site figures, SQLx cache
 mise run fmt        # 2. Format
 mise run check      # 3. Full validation
 ```
 
 `mise run check` does not include `check:swift` or `test:swift`, because both need a full Xcode toolchain that a headless environment may not have. Run them explicitly when touching `ios/`.
+
+`check:diagrams` is out for the same reason — it builds `OndDiagrams` to redraw the marketing site's figures from the app's own geometry. Run it whenever you touch `ios/` or `web/`; without it the page keeps drawing a technique the app has since changed.
 
 ### Commit messages
 

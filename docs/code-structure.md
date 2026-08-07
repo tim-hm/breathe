@@ -85,12 +85,15 @@ All Swift library code lives in **one** SwiftPM package, `ios/Packages/OndCore`,
 | `OndKit`             | yes      | Domain models, observable feature models, and repositories | `OndAPI`                 |
 | `OndUI`              | yes      | Design tokens and shared components                        | nothing                  |
 | `OndStyle`           | yes      | Mappings from a domain type onto a design token            | `OndKit`, `OndUI`        |
+| `OndCatalogue`       | **no**   | Decodes the committed `catalogue.json`                     | `OndKit`                 |
+| `OndDiagrams`        | **no**   | Redraws the site's figures (executable)                    | `OndKit`, `OndCatalogue` |
 | `Ond` (iOS)          | —        | Features, composition root                                 | the three products above |
 | `OndWatch` (watchOS) | —        | Features, composition root, the phone link                 | the three products above |
 
 Two invariants hold here, and the target graph enforces both:
 
 - **Neither app can import `OndAPI`.** It is a target, not a product, so the module is not merely undeclared in `project.yml` — it is unnameable from an app. "App code never imports a generated protobuf type" is checked by the compiler rather than remembered.
+- **Nor `OndCatalogue` or `OndDiagrams`.** Same mechanism, same reason. `OndCatalogue` is a second way onto a `Technique` — the Rust seed's field names rather than the contract's — and `OndDiagrams` is a development-time tool; neither belongs in a shipping binary, and neither can reach one.
 - **`OndUI` knows nothing about the domain.** It has no dependencies at all. It exposes accents named for feeling (`settle`, `night`, `spark`, `restore`), and something above it maps `TechniqueGoal` onto them — a design module that imported domain types would invert the dependency and make the palette un-reusable. `OndStyle` is where that mapping lives, which is the point of it existing: it can name both sides precisely because nothing depends on _it_.
 
 ### What the two apps share
@@ -99,9 +102,11 @@ Two invariants hold here, and the target graph enforces both:
 
 What falls between the two is a mapping from a domain type onto a design token. `OndUI` cannot hold one by the invariant above, so `OndStyle` does: it depends on both products, which is exactly what lets it name a `TechniqueGoal` and an accent in the same function. `GoalAccent` lives there and both apps read it, so the wrist and the hand cannot drift to different colours for the same technique.
 
-The line is between a **mapping** and a **view**. A mapping goes in `OndStyle`; a view stays duplicated per target, because a wrist is not a small phone and the two really do want different layouts. `SafetyNote` and `TechniqueGlyph` are the two that duplicate today — both views, and both should stay that way until their bodies stop diverging rather than because they are small. `TechniqueGlyph` is the weaker of the two: its copies differ only in a default line width, so if it diverges no further it is the next thing that belongs in `OndStyle`.
+The line is between a **mapping** and a **view**. A mapping goes in `OndStyle`; a view stays duplicated per target, because a wrist is not a small phone and the two really do want different layouts. `SafetyNote` is what duplicates today, and it should stay that way until its bodies stop diverging rather than because it is small.
 
-The same rule catches one pair the compiler cannot see at all. `OndKit/TechniqueDrawing.swift` is a coordinate-for-coordinate port of the hand-authored SVGs in `web/index.html`, and the site is the reference — so a glyph changed there is a glyph the apps keep drawing the old way, with nothing to catch it.
+`FigureShape` is the pair that crossed the line. The phone and the watch each had their own renderer turning a technique's drawing commands into a `Path`, and the copies differed only in a line width — mechanical enough that `OndStyle` now holds one and both apps call it. What stays per target is everything above it: sizes, labels, and how much of a figure a surface chooses to show.
+
+The same rule catches one pair the compiler cannot see at all: the app's figures and the marketing site's. Both are drawn from `OndKit/TechniqueFigure.swift`, and the site's SVGs are generated from it by `mise run generate:diagrams` rather than hand-authored beside it. `mise run check:diagrams` fails on any drift, which is the only reason the two can be trusted to agree — the arrangement it replaced was a coordinate-for-coordinate port of `web/index.html` with nothing checking the copy. It sits outside `mise run check` because it builds Swift, so it is one of the tasks to run when touching `ios/` or `web/`.
 
 The link between the two apps runs one way: the phone sends the anonymous identity and the best controlled pause through `WatchConnectivity`'s `applicationContext` (`ios/Ond/WatchLink.swift`), and the watch only listens (`ios/OndWatch/PhoneLink.swift`). The watch must never mint an identity of its own, so `ProvisionedUserIdentityStore` starts empty and everything above it is written to work without one — the reasoning is on that type.
 
