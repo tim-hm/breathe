@@ -17,3 +17,7 @@ disallowed-types = [{ path = "chrono::Local", reason = "All times are UTC. Use c
 allow-panic-in-tests = true
 allow-unwrap-in-tests = true
 allow-expect-in-tests = true
+
+# Proper nouns `doc_markdown` would otherwise demand backticks around. The
+# trailing ".." keeps clippy's built-in list (CamelCase tech names) in force.
+doc-valid-idents = ["McKeown", ".."]

@@ -10,6 +10,7 @@
 use tonic::Status;
 
 use crate::features::entitlement::errors::EntitlementError;
+use crate::features::journey::errors::JourneyError;
 use crate::features::profile::errors::ProfileError;
 use crate::features::technique::errors::TechniqueError;
 
@@ -47,6 +48,10 @@ pub enum AssistantError {
     #[error("technique error: {0}")]
     Technique(#[from] TechniqueError),
 
+    /// Reading the caller's practice snapshot failed, likewise.
+    #[error("journey error: {0}")]
+    Journey(#[from] JourneyError),
+
     /// Reading what the caller is entitled to failed. Fatal rather than read as
     /// "free", because it is the same row and the same connection the profile
     /// read above needs — a database that cannot answer this one has already
@@ -74,6 +79,7 @@ impl From<AssistantError> for Status {
             }
             AssistantError::Profile(e) => e.into(),
             AssistantError::Technique(e) => e.into(),
+            AssistantError::Journey(e) => e.into(),
             AssistantError::Entitlement(e) => e.into(),
         }
     }

@@ -6,7 +6,7 @@
 //! decides what to believe. Only this one is load-bearing for safety.
 
 use super::types::{FIELD_SEPARATOR, RECOMMENDATION_COUNT, Recommendation};
-use crate::features::technique::types::Technique;
+use crate::features::technique::types::{Technique, resolve};
 
 /// The longest reason kept. A model asked for one sentence that writes five has
 /// misunderstood, and a paragraph in a list row is a layout bug on every client.
@@ -41,7 +41,7 @@ pub fn parse_recommendations(reply: &str, catalogue: &[Technique]) -> Vec<Recomm
 
         // The catalogue is the authority. A slug is kept because a row has it,
         // never because it looks like one.
-        if !catalogue.iter().any(|technique| technique.slug == slug) {
+        if resolve(catalogue, slug).is_none() {
             continue;
         }
 
