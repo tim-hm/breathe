@@ -21,6 +21,7 @@ use sqlx::PgPool;
 use tonic::Status;
 use uuid::Uuid;
 
+use crate::obs;
 use crate::state::AppState;
 
 /// The header every client sends its anonymous id in.
@@ -72,6 +73,12 @@ pub async fn resolve(
         tracing::warn!("rejected a request whose `{USER_ID_HEADER}` is not a UUID");
         return Status::unauthenticated(format!("`{USER_ID_HEADER}` must be a UUID")).into_http();
     };
+
+    // Before the upsert, not after: everything this request logs from here on —
+    // the failure below, each feature's `From<…> for Status`, and the layer's
+    // own completion line — is only attributable to a person once the span
+    // carries them.
+    obs::record_user_id(user_id);
 
     if let Err(error) = ensure_user(&state.pool, user_id).await {
         tracing::error!(%error, "failed to record the calling user");

@@ -53,7 +53,6 @@ use std::sync::Arc;
 use anyhow::Result;
 use axum::Router;
 use tower_http::cors::{Any, CorsLayer};
-use tower_http::trace::TraceLayer;
 
 use crate::state::AppState;
 
@@ -79,10 +78,12 @@ pub fn build_app(state: Arc<AppState>) -> Result<Router> {
         ))
         .layer(tonic_web::GrpcWebLayer::new());
 
+    // Outermost, so the one per-request record covers both protocols and every
+    // rejection the layers below it produce — a CORS refusal included.
     Ok(http::router(state)
         .fallback_service(grpc_router)
         .layer(cors)
-        .layer(TraceLayer::new_for_http()))
+        .layer(obs::trace_layer()))
 }
 
 /// gRPC-Web carries its status out-of-band in the `grpc-status` and

@@ -10,14 +10,38 @@ use std::str::FromStr;
 use anyhow::{Context, Result};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 
+/// Installs this binary's subscriber, in the format the API would have chosen.
+///
+/// Every deploy runs this binary into the same place the API logs, and
+/// unstructured text beside JSON makes "did the migration apply" the one
+/// deploy-time question a field query cannot answer.
+///
+/// A copy of `api::obs::init` rather than a call to it, because the dependency
+/// runs the other way: `api` dev-depends on this crate so its test harness
+/// brings a disposable database up exactly as `mise run migrate` does, and a
+/// migration runner that linked the whole API to share eight lines would be the
+/// wrong direction whether or not Cargo permitted it. A third crate for eight
+/// lines is structure nobody reads.
+///
+/// What the copy can drift on is the *set* of environment names, not the
+/// variable: `api` derives its format from `Environment`, and this compares one
+/// literal. A third environment therefore has to be taught here too.
+fn init_logging() {
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("migrate=info,warn"));
+
+    let builder = tracing_subscriber::fmt().with_env_filter(filter);
+
+    if std::env::var("BREATHE_ENV").as_deref() == Ok("production") {
+        builder.json().init();
+    } else {
+        builder.init();
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("migrate=info")),
-        )
-        .init();
+    init_logging();
 
     let database_url = std::env::var("DATABASE_URL").context("DATABASE_URL is not set")?;
 

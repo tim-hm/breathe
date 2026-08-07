@@ -18,6 +18,20 @@ use crate::proto::breathe::v1::profile_service_server::ProfileServiceServer;
 use crate::proto::breathe::v1::technique_service_server::TechniqueServiceServer;
 use crate::state::AppState;
 
+/// The largest request body any service will decode.
+///
+/// tonic reserves whatever a frame's length prefix declares, once it has
+/// checked that number against this limit — so the ceiling is what a hostile
+/// client can make this process allocate per request, and the default leaves it
+/// at 4 MiB. The service-level bounds (`journey`'s 200 sessions per batch, the
+/// 8 KiB ceiling on a submitted App Store token) cannot help: they run against
+/// a message that has already been read.
+///
+/// 256 KiB sits roughly six times above the biggest legitimate request, a full
+/// 200-session `RecordSessions` batch, which leaves the contract room to grow
+/// fields without anybody having to remember this number exists.
+const MAX_REQUEST_BYTES: usize = 256 * 1024;
+
 /// Reflection is registered on local environments only, so `grpcurl` can call a
 /// development server without a local copy of the .proto files. Serving it in
 /// production would publish every RPC, field and enum — including the
@@ -33,21 +47,26 @@ use crate::state::AppState;
 /// dependency and a status reporter to keep correct for no reader.
 pub fn build_services(state: &Arc<AppState>) -> Result<Routes> {
     let mut routes = Routes::default()
-        .add_service(TechniqueServiceServer::new(TechniqueServiceImpl::new(
-            Arc::clone(state),
-        )))
-        .add_service(ProfileServiceServer::new(ProfileServiceImpl::new(
-            Arc::clone(state),
-        )))
-        .add_service(JourneyServiceServer::new(JourneyServiceImpl::new(
-            Arc::clone(state),
-        )))
-        .add_service(AssistantServiceServer::new(AssistantServiceImpl::new(
-            Arc::clone(state),
-        )))
-        .add_service(EntitlementServiceServer::new(EntitlementServiceImpl::new(
-            Arc::clone(state),
-        )));
+        .add_service(
+            TechniqueServiceServer::new(TechniqueServiceImpl::new(Arc::clone(state)))
+                .max_decoding_message_size(MAX_REQUEST_BYTES),
+        )
+        .add_service(
+            ProfileServiceServer::new(ProfileServiceImpl::new(Arc::clone(state)))
+                .max_decoding_message_size(MAX_REQUEST_BYTES),
+        )
+        .add_service(
+            JourneyServiceServer::new(JourneyServiceImpl::new(Arc::clone(state)))
+                .max_decoding_message_size(MAX_REQUEST_BYTES),
+        )
+        .add_service(
+            AssistantServiceServer::new(AssistantServiceImpl::new(Arc::clone(state)))
+                .max_decoding_message_size(MAX_REQUEST_BYTES),
+        )
+        .add_service(
+            EntitlementServiceServer::new(EntitlementServiceImpl::new(Arc::clone(state)))
+                .max_decoding_message_size(MAX_REQUEST_BYTES),
+        );
 
     if state.config.is_local() {
         let reflection = tonic_reflection::server::Builder::configure()
@@ -58,4 +77,75 @@ pub fn build_services(state: &Arc<AppState>) -> Result<Routes> {
     }
 
     Ok(routes)
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::body::Body;
+    use axum::http::Request;
+    use sqlx::PgPool;
+    use tonic::Code;
+    use tower::ServiceExt;
+
+    use super::*;
+    use crate::assistant::DisabledModelClient;
+    use crate::config::{Config, Environment};
+    use crate::entitlement::AppStoreVerifier;
+
+    /// The reflection service's path, as `tonic-reflection` registers it. A
+    /// literal rather than a constant read back from the crate: the point of
+    /// the test is that this exact path is unreachable in production, and a
+    /// name derived from the same source as the registration could not fail.
+    const REFLECTION_PATH: &str = "/grpc.reflection.v1.ServerReflection/ServerReflectionInfo";
+
+    const DATABASE_URL: &str = "postgres://postgres@localhost:18101/breathe";
+
+    /// A state with no database behind it. `connect_lazy` parses the URL and
+    /// connects on first use, and registration touches neither — nor does it
+    /// touch the model or the verifier, which are here only because `AppState`
+    /// has the fields.
+    fn state_for(environment: Environment) -> Arc<AppState> {
+        AppState::new(
+            PgPool::connect_lazy(DATABASE_URL).unwrap(),
+            Config {
+                environment,
+                database_url: DATABASE_URL.to_owned(),
+                port: 18100,
+                openrouter_api_key: None,
+            },
+            Arc::new(DisabledModelClient),
+            Arc::new(AppStoreVerifier),
+        )
+    }
+
+    /// Whether the router answers a path with tonic's "no such service"
+    /// fallback, which is what an unregistered service looks like from outside.
+    async fn is_unimplemented(environment: Environment) -> bool {
+        let router = build_services(&state_for(environment))
+            .unwrap()
+            .prepare()
+            .into_axum_router();
+
+        let response = router
+            .oneshot(Request::post(REFLECTION_PATH).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        response
+            .headers()
+            .get("grpc-status")
+            .is_some_and(|status| Code::from_bytes(status.as_bytes()) == Code::Unimplemented)
+    }
+
+    /// Serving reflection from a deployment would publish every RPC, field and
+    /// enum — the entitlement surface included — to anyone who asks. The gate
+    /// is one `if`, and this is what stops the next person deleting it.
+    #[tokio::test]
+    async fn reflection_is_absent_from_a_deployment() {
+        assert!(is_unimplemented(Environment::Production).await);
+        assert!(
+            !is_unimplemented(Environment::Dev).await,
+            "a developer's `grpcurl` still needs it"
+        );
+    }
 }
