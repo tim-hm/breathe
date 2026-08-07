@@ -3,7 +3,7 @@ import Foundation
 import Testing
 
 /// The home screen's rules are trivial to eyeball and easy to get quietly
-/// wrong: an off-by-one hour boundary points the wheel at bellows breath at
+/// wrong: an off-by-one hour boundary points the aim at bellows breath at
 /// bedtime, and a goal the catalogue stopped serving must still resolve to
 /// something Begin can start.
 @Suite("Choosing what the home screen leads with")
@@ -40,7 +40,7 @@ struct HomeSuggestionTests {
         ]
     }
 
-    @Test("The wheel offers what this person last used towards the goal")
+    @Test("Home offers what this person last used towards the goal")
     func prefersTheirOwnTechnique() {
         let catalogue = catalogue + [technique(slug: "extended", goal: .sleep)]
 
@@ -64,7 +64,7 @@ struct HomeSuggestionTests {
         #expect(chosen?.slug == "478")
     }
 
-    /// The wheel only offers goals the catalogue can serve, but a technique
+    /// Home only offers goals the catalogue can serve, but a technique
     /// retired between load and tap must still start something rather than
     /// leaving Begin pointing at nothing.
     @Test("A goal the catalogue cannot serve still yields a technique")
@@ -77,10 +77,10 @@ struct HomeSuggestionTests {
         #expect(HomeSuggestion.technique(for: .sleep, techniques: [], history: []) == nil)
     }
 
-    /// The wheel, the techniques list's sections, and anything else built from
-    /// a catalogue read this one order. A catalogue that came back sorted
-    /// differently must not move sleep out from under a thumb that has learned
-    /// where it is.
+    /// The home screen's aims, the techniques list's sections, and anything
+    /// else built from a catalogue read this one order. A catalogue that came
+    /// back sorted differently must not move sleep out from under a thumb that
+    /// has learned where it is.
     @Test("Present goals come back in the enum's order, not the catalogue's")
     func presentGoalsFollowTheEnum() {
         let shuffled = [
@@ -94,7 +94,7 @@ struct HomeSuggestionTests {
     }
 
     @Test(
-        "Each stretch of the day points the wheel at its own goal",
+        "Each stretch of the day points the aim at its own goal",
         arguments: [
             (hour: 5, goal: TechniqueGoal.energy),
             (hour: 10, goal: .energy),
@@ -108,5 +108,39 @@ struct HomeSuggestionTests {
     )
     func hourPicksTheGoal(hour: Int, goal: TechniqueGoal) {
         #expect(HomeSuggestion.goal(forHour: hour) == goal)
+    }
+
+    @Test("A swipe past the last aim wraps to the first, and back past the first to the last")
+    func cyclingWrapsAtBothEnds() {
+        let goals: [TechniqueGoal] = [.calm, .sleep, .energy]
+
+        #expect(TechniqueGoal.energy.next(in: goals) == .calm)
+        #expect(TechniqueGoal.calm.previous(in: goals) == .energy)
+    }
+
+    @Test("Cycling steps through the list's order")
+    func cyclingFollowsTheOrder() {
+        let goals: [TechniqueGoal] = [.calm, .sleep, .energy]
+
+        #expect(TechniqueGoal.calm.next(in: goals) == .sleep)
+        #expect(TechniqueGoal.sleep.previous(in: goals) == .calm)
+    }
+
+    /// `lastGoal` can restore an aim the catalogue no longer serves; a swipe
+    /// from there starts over at the front — the same answer settling gives.
+    @Test("A restored aim the catalogue no longer serves cycles from the first")
+    func absentGoalCyclesFromTheFront() {
+        let goals: [TechniqueGoal] = [.calm, .sleep]
+
+        #expect(TechniqueGoal.focus.next(in: goals) == .calm)
+        #expect(TechniqueGoal.focus.previous(in: goals) == .calm)
+    }
+
+    @Test("One aim cycles to itself; none cycles to nothing")
+    func degenerateListsCycleSafely() {
+        #expect(TechniqueGoal.calm.next(in: [.calm]) == .calm)
+        #expect(TechniqueGoal.calm.previous(in: [.calm]) == .calm)
+        #expect(TechniqueGoal.calm.next(in: []) == nil)
+        #expect(TechniqueGoal.calm.previous(in: []) == nil)
     }
 }

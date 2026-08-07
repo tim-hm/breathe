@@ -19,16 +19,12 @@ struct AppRoots {
     let foundations: FoundationsModel
     let schedules: ScheduleStore
 
-    /// Opens Settings, which has no root of its own — it arrives as a sheet from
-    /// the gear in any of the three corners.
-    let showSettings: () -> Void
-
     var homeRoot: some View {
-        HomeView(model: catalogue, sessions: sessions, showSettings: showSettings)
+        HomeView(model: catalogue, sessions: sessions)
     }
 
     var exercisesRoot: some View {
-        TechniqueListView(model: catalogue, sessions: sessions, showSettings: showSettings)
+        TechniqueListView(model: catalogue, sessions: sessions)
     }
 
     var journeyRoot: some View {
@@ -36,8 +32,7 @@ struct AppRoots {
             model: journey,
             profiles: profiles,
             catalogue: catalogue,
-            foundations: foundations,
-            showSettings: showSettings
+            foundations: foundations
         )
     }
 

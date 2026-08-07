@@ -187,9 +187,9 @@ public final class SessionSettings {
         didSet { defaults.set(hapticStrength.rawValue, forKey: Self.hapticStrengthKey) }
     }
 
-    /// Where the intent wheel last sat, restored on the next launch — the
-    /// home screen remembers what this person wanted rather than guessing
-    /// again. Nil until the wheel is first moved; the time-of-day rule covers
+    /// The aim last chosen on the home screen, restored on the next launch —
+    /// the home screen remembers what this person wanted rather than guessing
+    /// again. Nil until an aim is first chosen; the time-of-day rule covers
     /// that first launch.
     public var lastGoal: TechniqueGoal? {
         didSet { defaults.set(lastGoal?.rawValue, forKey: Self.lastGoalKey) }

@@ -20,8 +20,12 @@ import SwiftUI
 /// anyway — there is no bar and no hairline, and the palette's ground runs to the
 /// physical edge, so the whole thing reads as one continuous page.
 ///
-/// The Settings sheet is owned here rather than by the screens that open it.
-/// None of the three roots has a Settings tab, and a sheet per screen would be
+/// Everything that is not a root arrives through the drawer: swiping up on the
+/// word row lifts a short sheet of secondary destinations (`ChromeDrawer`),
+/// and choosing one dismisses it before the chosen sheet is presented — a
+/// sheet cannot present the next sheet itself, so its `onDismiss` is where the
+/// routing lives. The Settings sheet stays owned here for the same reason it
+/// always was: no root has a Settings tab, and a sheet per screen would be
 /// three presentations of one screen that could each be open at once.
 struct AppChrome: View {
     let catalogue: TechniqueListModel
@@ -33,6 +37,10 @@ struct AppChrome: View {
 
     @State private var selection: WordTab = .breathe
     @State private var isShowingSettings = false
+    @State private var isShowingDrawer = false
+    /// What was chosen in the drawer, held across its dismissal: the drawer's
+    /// `onDismiss` reads it to present the chosen sheet, then clears it.
+    @State private var drawerChoice: DrawerDestination?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -50,6 +58,30 @@ struct AppChrome: View {
         .sheet(isPresented: $isShowingSettings) {
             roots.settingsRoot { isShowingSettings = false }
         }
+        .sheet(isPresented: $isShowingDrawer, onDismiss: routeDrawerChoice) {
+            ChromeDrawer { choice in
+                drawerChoice = choice
+                isShowingDrawer = false
+            }
+            .presentationDetents([.height(180)])
+            // The visual echo of the swipe that opened it, and the one hint
+            // the drawer can be dragged back down.
+            .presentationDragIndicator(.visible)
+        }
+    }
+
+    /// Where a drawer choice lands, after the drawer has gone: presenting from
+    /// `onDismiss` is the reliable ordering, because one sheet cannot hand
+    /// over to the next while it is still up.
+    private func routeDrawerChoice() {
+        switch drawerChoice {
+        case .settings:
+            isShowingSettings = true
+        case nil:
+            break
+        }
+
+        drawerChoice = nil
     }
 
     private var roots: AppRoots {
@@ -59,8 +91,7 @@ struct AppChrome: View {
             journey: journey,
             profiles: profiles,
             foundations: foundations,
-            schedules: schedules,
-            showSettings: { isShowingSettings = true }
+            schedules: schedules
         )
     }
 
@@ -82,6 +113,19 @@ struct AppChrome: View {
         }
         .padding(.top, Theme.Spacing.close)
         .sensoryFeedback(.selection, trigger: selection)
+        // Simultaneous so the word buttons keep their taps — a tap has no
+        // translation, so it never trips the threshold. The row sits above the
+        // bottom safe area, clear of the home indicator's own gesture.
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 20).onEnded { value in
+                let h = value.translation.height
+                if h < -30, abs(h) > abs(value.translation.width) {
+                    isShowingDrawer = true
+                }
+            }
+        )
+        // The swipe is invisible to VoiceOver; this is its spoken route in.
+        .accessibilityAction(named: Text("More")) { isShowingDrawer = true }
     }
 
     /// One word, letter-spaced and lowercase, with the whole column beneath it as

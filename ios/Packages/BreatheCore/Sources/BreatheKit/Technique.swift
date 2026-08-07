@@ -227,9 +227,9 @@ public extension TechniqueGoal {
         "I want to \(intentObject)"
     }
 
-    /// The intent without its "I want to" prefix, for the home screen's
-    /// wheel, which renders the prefix as a fixed label beside the options.
-    /// One word each, so the spun-past neighbours read at a glance.
+    /// The intent without its "I want to" prefix, for the home screen's aim
+    /// word and the row it fans out into. One word each, so a row of all five
+    /// reads at a glance.
     var intentObject: String {
         switch self {
         case .calm: "relax"
