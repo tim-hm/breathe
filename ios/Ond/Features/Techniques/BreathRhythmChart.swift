@@ -66,7 +66,7 @@ struct BreathRhythmChart: View {
 
         return ZStack {
             ZStack {
-                FigureShape(commands: figure.fill, bounds: bounds, inset: Self.lineWidth)
+                FigureShape(commands: figure.fill, bounds: bounds, lineWidth: Self.lineWidth)
                     .fill(
                         LinearGradient(
                             colors: [accent.opacity(0.16), accent.opacity(0.03)],
@@ -76,20 +76,24 @@ struct BreathRhythmChart: View {
                     )
 
                 ForEach(Array(figure.drawable.enumerated()), id: \.offset) { _, stroke in
-                    FigureShape(commands: stroke.commands, bounds: bounds, inset: Self.lineWidth)
-                        .stroke(
-                            stroke.ink.colour(on: accent),
-                            style: StrokeStyle(
-                                lineWidth: stroke.weight(on: Self.lineWidth),
-                                lineCap: .round,
-                                lineJoin: .round,
-                                // Dashing is a separate axis from colour: it
-                                // marks an open-ended stage, whose durations
-                                // describe a typical pass rather than a
-                                // scheduled one.
-                                dash: stroke.dashed ? [4, 5] : []
-                            )
+                    FigureShape(
+                        commands: stroke.commands,
+                        bounds: bounds,
+                        lineWidth: Self.lineWidth
+                    )
+                    .stroke(
+                        stroke.ink.colour(on: accent),
+                        style: StrokeStyle(
+                            lineWidth: stroke.weight(on: Self.lineWidth),
+                            lineCap: .round,
+                            lineJoin: .round,
+                            // Dashing is a separate axis from colour: it
+                            // marks an open-ended stage, whose durations
+                            // describe a typical pass rather than a
+                            // scheduled one.
+                            dash: stroke.dashed ? TechniqueFigure.Stroke.dash : []
                         )
+                    )
                 }
             }
             .frame(width: side, height: side)
@@ -111,7 +115,7 @@ struct BreathRhythmChart: View {
         // Anchors are computed in the drawing's own frame and then shifted by
         // the gutter, because the drawing sits centred inside this larger one.
         let drawn = CGRect(x: 0, y: 0, width: side, height: side)
-        let transform = figure.transform(into: drawn, inset: Self.lineWidth)
+        let transform = figure.transform(into: drawn, lineWidth: Self.lineWidth)
 
         return ForEach(Array(figure.labels.enumerated()), id: \.offset) { index, label in
             let anchor = label.at.applying(transform)

@@ -32,6 +32,28 @@ enum SeededCatalogue {
         return technique
     }
 
+    /// One stage's figure, drawn from the seeded technique.
+    static func figure(_ slug: String, stage: Int = 0) -> TechniqueFigure {
+        TechniqueFigure.all(for: technique(slug))[stage]
+    }
+
+    /// Every point a figure's strokes pass through, for measuring a silhouette
+    /// without caring which command drew it. The baseline is left out: it is
+    /// reference rather than subject, and it spans the full width whatever the
+    /// line inside it does.
+    static func points(of figure: TechniqueFigure) -> [CGPoint] {
+        figure.strokes.filter { $0.role != .baseline }.flatMap { stroke in
+            stroke.commands.compactMap { command in
+                switch command {
+                case let .move(point), let .line(point): point
+                case let .quadCurve(point, _): point
+                case let .curve(point, _, _): point
+                case .circle: nil
+                }
+            }
+        }
+    }
+
     /// Found by walking up from this file rather than by counting directories
     /// to the repo root — a count is silently wrong the day the package moves,
     /// and this reports a missing file rather than a wrong path.

@@ -52,12 +52,15 @@ public struct TechniqueFigure: Sendable, Equatable {
 
     /// Which of the two grammars a figure is drawn in.
     ///
-    /// Stored rather than left to be inferred. Every renderer and every test
-    /// needs to know, and the facts they would otherwise infer it from — a
-    /// baseline stroke, a stroke count — are drawing details that happen to
-    /// correlate today. One of them already went wrong: a wash was laid inside
-    /// every hold-free technique because "three or more strokes" was standing in
-    /// for "this is a closed figure".
+    /// Named rather than left to be inferred. The renderers do not branch on it
+    /// — they draw whatever `fill` and `drawable` hand them, which is the point
+    /// — but the construction below does, and the tests assert on it, so the
+    /// grammar a figure belongs to should be something the type says rather than
+    /// something a reader reconstructs from a stroke count or an empty `fill`.
+    /// Those are drawing details that happen to correlate, and one of them
+    /// already went wrong: a wash was laid inside every hold-free technique
+    /// because "three or more strokes" was standing in for "this is a closed
+    /// figure".
     public enum Family: Sendable, Equatable {
         /// A closed polygon, with a corner at every phase boundary.
         case polygon
@@ -94,6 +97,26 @@ public struct TechniqueFigure: Sendable, Equatable {
             self.commands = commands
             self.dashed = dashed
         }
+
+        /// How heavily to draw this stroke, relative to a figure's line width.
+        ///
+        /// A baseline is reference rather than subject, so it is drawn at a
+        /// hairline whatever weight the figure carries.
+        ///
+        /// Here rather than in `OndStyle` because the SVG generator cannot see
+        /// that module and was left spelling the rule out a fourth time — and a
+        /// renderer holding its own copy of the rule is the one divergence
+        /// `mise run check:diagrams` structurally cannot catch, since both sides
+        /// regenerate from whatever each happens to believe.
+        public func weight(on lineWidth: CGFloat) -> CGFloat {
+            role == .baseline ? 1 : lineWidth
+        }
+
+        /// The dash a person-timed phase draws in — on for four, off for five,
+        /// in the same units as the line width. Shared with the site for the
+        /// reason above: an open-ended retention that dashed differently in the
+        /// two places would look like two different exercises.
+        public static let dash: [CGFloat] = [4, 5]
     }
 
     /// A word on the figure — `in · 4`, or `L`. The site labels its figures this
@@ -142,6 +165,21 @@ public struct TechniqueFigure: Sendable, Equatable {
     /// cubic's reach by a little, which lands as margin rather than as a clipped
     /// wave.
     public let bounds: CGRect
+    /// The strokes a renderer should actually draw, merged into one per pen.
+    ///
+    /// Every command list starts with a `move`, so runs that share a pen
+    /// concatenate into one path with no visual change. That matters because a
+    /// renderer makes one view per stroke: bellows breath's eleven cycles are
+    /// twenty-three strokes, and drawing them merged is three views instead of
+    /// twenty-three — inside a 38-point list row, twenty-three times over.
+    ///
+    /// Stored for the same reason `bounds` is, and it is the stronger case of
+    /// the two: the merge concatenates arrays as it folds, so recomputing it
+    /// re-copied every command on every layout pass, at all four call sites.
+    ///
+    /// Ordered by first appearance so the baseline still lands under the line
+    /// and the start dot still lands on top of it.
+    public let drawable: [Stroke]
 
     /// One figure per stage, in play order.
     ///
@@ -150,14 +188,17 @@ public struct TechniqueFigure: Sendable, Equatable {
     /// then a three-phase recovery that is a triangle. One drawing spanning all
     /// three would have to pick a grammar and misrepresent two of them.
     public static func all(for technique: Technique) -> [Self] {
-        let sides = PhaseHints.sides(for: technique)
+        // Both tables are stage-indexed and shape-checked against this very
+        // technique, so a plain subscript is in bounds by construction — the
+        // check is the guard.
         let hints = PhaseHints.hints(for: technique)
+        let sides = PhaseHints.sides(for: technique, hints: hints)
 
         return technique.stages.enumerated().map { index, stage in
             Self(
                 stage: stage,
-                sides: sides?.indices.contains(index) == true ? sides?[index] : nil,
-                hints: hints?.indices.contains(index) == true ? hints?[index] : nil,
+                sides: sides?[index],
+                hints: hints?[index],
                 // A staged protocol draws one figure per stage side by side, and
                 // three sets of labels at a third of the width is a smudge. The
                 // stage titles beside the chart carry what they would have said.
@@ -201,19 +242,11 @@ public struct TechniqueFigure: Sendable, Equatable {
         }
 
         bounds = Self.extent(of: strokes)
+        drawable = Self.merge(strokes)
     }
 
-    /// The strokes a renderer should actually draw, merged into one per pen.
-    ///
-    /// Every command list starts with a `move`, so runs that share a pen
-    /// concatenate into one path with no visual change. That matters because a
-    /// renderer makes one view per stroke: bellows breath's eleven cycles are
-    /// twenty-three strokes, and drawing them merged is three views instead of
-    /// twenty-three — inside a 38-point list row, twenty-three times over.
-    ///
-    /// Ordered by first appearance so the baseline still lands under the line
-    /// and the start dot still lands on top of it.
-    public var drawable: [Stroke] {
+    /// Merges `strokes` into one per pen, for the renderers.
+    private static func merge(_ strokes: [Stroke]) -> [Stroke] {
         var order: [Stroke] = []
 
         for stroke in strokes {
@@ -252,10 +285,13 @@ public struct TechniqueFigure: Sendable, Equatable {
     /// inscribed in the unit circle leaves two corners of empty space, and
     /// fitting the box would shrink every figure to make room for nothing.
     ///
-    /// - Parameter inset: room for the stroke's own width, which straddles the
-    ///   path.
-    public func transform(into rect: CGRect, inset: CGFloat = 0) -> CGAffineTransform {
-        Self.transform(fitting: bounds, into: rect, inset: inset)
+    /// - Parameter lineWidth: the weight the figure will be stroked at. The rect
+    ///   is inset by half of it, which is exactly what a stroke straddling the
+    ///   path needs — asked for as the width rather than as the inset because
+    ///   the four renderers had four answers to the same question, from the full
+    ///   width down to nothing at all.
+    public func transform(into rect: CGRect, lineWidth: CGFloat = 0) -> CGAffineTransform {
+        Self.transform(fitting: bounds, into: rect, lineWidth: lineWidth)
     }
 
     /// The same rule against an extent the caller already holds — a renderer
@@ -264,8 +300,9 @@ public struct TechniqueFigure: Sendable, Equatable {
     public static func transform(
         fitting bounds: CGRect,
         into rect: CGRect,
-        inset: CGFloat = 0
+        lineWidth: CGFloat = 0
     ) -> CGAffineTransform {
+        let inset = lineWidth / 2
         let available = rect.insetBy(dx: inset, dy: inset)
         guard bounds.width > 0, bounds.height > 0, available.width > 0, available.height > 0 else {
             return .identity

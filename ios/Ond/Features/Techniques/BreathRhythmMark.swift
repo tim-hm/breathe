@@ -34,7 +34,7 @@ struct BreathRhythmMark: View {
                     FigureShape(
                         commands: figure.fill,
                         bounds: bounds,
-                        inset: Self.lineWidth / 2
+                        lineWidth: Self.lineWidth
                     )
                     .fill(
                         LinearGradient(
@@ -48,7 +48,7 @@ struct BreathRhythmMark: View {
                         FigureShape(
                             commands: stroke.commands,
                             bounds: bounds,
-                            inset: Self.lineWidth / 2
+                            lineWidth: Self.lineWidth
                         )
                         .stroke(
                             stroke.ink.colour(on: accent),

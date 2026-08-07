@@ -45,8 +45,13 @@ public enum PhaseHints {
     /// across the midline at full lungs and draw a jump where the exercise has
     /// none. Taking the inhale's side for the exhale that empties it keeps every
     /// crossing at empty lungs, which is where the breath actually pauses.
-    public static func sides(for technique: Technique) -> [[Double]?]? {
-        guard let stages = table[technique.slug], hints(for: technique) != nil else { return nil }
+    ///
+    /// - Parameter hints: this technique's own `hints(for:)`, passed in rather
+    ///   than fetched again. Sides are only meaningful where the shape check
+    ///   passed, and every caller needs the hints anyway — so asking for them
+    ///   here runs that check once per figure instead of twice.
+    public static func sides(for technique: Technique, hints: [[String?]]?) -> [[Double]?]? {
+        guard let stages = table[technique.slug], hints != nil else { return nil }
 
         let sides = zip(stages, technique.stages).map { stage, phases -> [Double]? in
             guard stage.hints.contains(where: { $0 != nil }) else { return nil }
@@ -79,6 +84,19 @@ public enum PhaseHints {
             return nil
         }
         return hints[beat.stage][beat.phase]
+    }
+
+    /// The hint for one phase of a single stage's table, or nil where that phase
+    /// has none.
+    ///
+    /// The sibling of `hint(for:in:)` for callers holding one stage's row rather
+    /// than the whole technique's. Here rather than at the call sites because a
+    /// row is `[String?]?` — optional table, optional entry — and every safe
+    /// lookup into one comes back double-wrapped. Flattening that in the type
+    /// that owns the shape beats spelling it out wherever a figure asks.
+    public static func hint(_ hints: [String?]?, at index: Int) -> String? {
+        guard let hints, hints.indices.contains(index) else { return nil }
+        return hints[index]
     }
 
     /// "Breathe in, left nostril" — the phase as VoiceOver should say it.

@@ -89,7 +89,7 @@ mise run check      # 3. Full validation
 
 `mise run check` does not include `check:swift` or `test:swift`, because both need a full Xcode toolchain that a headless environment may not have. Run them explicitly when touching `ios/`.
 
-`check:diagrams` is out for the same reason — it builds `OndDiagrams` to redraw the marketing site's figures from the app's own geometry. Run it whenever you touch `ios/` or `web/`; without it the page keeps drawing a technique the app has since changed.
+`check:diagrams` is out for the same reason — it builds `OndDiagrams` to redraw the marketing site's figures from the app's own geometry. Run it whenever you touch `ios/` or `web/`; without it the page keeps drawing a technique the app has since changed. CI runs it on the macOS job beside `check:swift`, so a forgotten regeneration fails the PR rather than shipping.
 
 ### Commit messages
 

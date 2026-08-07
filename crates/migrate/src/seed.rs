@@ -611,6 +611,13 @@ mod tests {
     /// technique in the catalogue that has stages worth calling stages.
     const WIM_HOF: &str = "wim-hof-rounds";
 
+    /// The committed export, parsed. Both tests below read it, and neither cares
+    /// how it was produced.
+    fn exported() -> serde_json::Value {
+        serde_json::from_str(&catalogue_json().expect("the catalogue serialises"))
+            .expect("the export is valid JSON")
+    }
+
     /// The export is what the app's drawings and the marketing site's are both
     /// derived from, so a technique missing from it is a technique that silently
     /// stops having a picture. Checking every slug and every phase kind rather
@@ -618,9 +625,7 @@ mod tests {
     /// produce nine entries.
     #[test]
     fn the_export_carries_every_technique_and_every_phase() {
-        let json: serde_json::Value =
-            serde_json::from_str(&catalogue_json().expect("the catalogue serialises"))
-                .expect("the export is valid JSON");
+        let json = exported();
         let exported = json["techniques"]
             .as_array()
             .expect("the export holds a technique array");
@@ -654,9 +659,7 @@ mod tests {
     /// generate step rather than here.
     #[test]
     fn the_export_speaks_the_contract_vocabulary() {
-        let json: serde_json::Value =
-            serde_json::from_str(&catalogue_json().expect("the catalogue serialises"))
-                .expect("the export is valid JSON");
+        let json = exported();
 
         assert_eq!(json["techniques"][0]["goal"], "CALM");
         assert_eq!(

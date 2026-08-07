@@ -23,41 +23,51 @@ public struct FigureShape: Shape {
     /// The whole figure's extent, so every stroke of one drawing shares a
     /// transform and the baseline still lines up under the curve.
     public let bounds: CGRect
-    /// Room for the stroke's own width, which straddles the path.
-    public let inset: CGFloat
+    /// The weight this figure is stroked at, so the fit can leave room for it.
+    public let lineWidth: CGFloat
 
-    public init(commands: [TechniqueFigure.Command], bounds: CGRect, inset: CGFloat) {
+    public init(commands: [TechniqueFigure.Command], bounds: CGRect, lineWidth: CGFloat) {
         self.commands = commands
         self.bounds = bounds
-        self.inset = inset
+        self.lineWidth = lineWidth
     }
 
     public func path(in rect: CGRect) -> Path {
+        // Placed as each point is added rather than by transforming the finished
+        // path: SwiftUI calls this on every layout pass for every stroke of
+        // every visible figure, and `applying` walks the whole path a second
+        // time to build a second one.
+        let fit = TechniqueFigure.transform(fitting: bounds, into: rect, lineWidth: lineWidth)
         var path = Path()
 
         for command in commands {
             switch command {
             case let .move(point):
-                path.move(to: point)
+                path.move(to: point.applying(fit))
             case let .line(point):
-                path.addLine(to: point)
+                path.addLine(to: point.applying(fit))
             case let .quadCurve(point, control):
-                path.addQuadCurve(to: point, control: control)
+                path.addQuadCurve(to: point.applying(fit), control: control.applying(fit))
             case let .curve(point, control1, control2):
-                path.addCurve(to: point, control1: control1, control2: control2)
+                path.addCurve(
+                    to: point.applying(fit),
+                    control1: control1.applying(fit),
+                    control2: control2.applying(fit)
+                )
             case let .circle(centre, radius):
+                let placed = centre.applying(fit)
+                // Uniform scale, so either axis gives the placed radius.
+                let scaled = radius * fit.a
                 path.addEllipse(in: CGRect(
-                    x: centre.x - radius,
-                    y: centre.y - radius,
-                    width: radius * 2,
-                    height: radius * 2
+                    x: placed.x - scaled,
+                    y: placed.y - scaled,
+                    width: scaled * 2,
+                    height: scaled * 2
                 ))
             }
         }
 
-        return path.applying(
-            TechniqueFigure.transform(fitting: bounds, into: rect, inset: inset)
-        )
+        return path
     }
 }
 
@@ -89,16 +99,5 @@ public extension TechniqueFigure.Ink {
         // palette's own faintest step, which already resolves per appearance.
         case .baseline: Theme.Ink.tertiary.opacity(0.5)
         }
-    }
-}
-
-public extension TechniqueFigure.Stroke {
-    /// How heavily to draw this stroke, relative to a figure's line width.
-    ///
-    /// A baseline is reference rather than subject, so it is drawn at a hairline
-    /// whatever weight the figure carries. One rule, because all three renderers
-    /// were spelling out the same ternary.
-    func weight(on lineWidth: CGFloat) -> CGFloat {
-        role == .baseline ? 1 : lineWidth
     }
 }

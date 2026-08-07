@@ -147,7 +147,7 @@ private enum SVG {
         // same arrangement the phone's chart uses.
         for (index, figure) in figures.enumerated() {
             let cell = cell(index: index, of: figures.count)
-            let transform = figure.transform(into: cell)
+            let transform = figure.transform(into: cell, lineWidth: lineWidth)
 
             lines += figure.drawable.map { inner + path($0, through: transform) }
             lines += figure.labels.map { inner + text($0, through: transform) }
@@ -187,19 +187,6 @@ private enum SVG {
         _ stroke: TechniqueFigure.Stroke,
         through transform: CGAffineTransform
     ) -> String {
-        // The start dot, which the site draws as a <circle> rather than as a
-        // path arc. Asked of the stroke rather than inferred from its commands,
-        // so the phone's list row and this agree on what the dot is.
-        if stroke.role == .start, case let .circle(centre, radius) = stroke.commands[0] {
-            let placed = centre.applying(transform)
-            let scaled = radius * transform.a
-            return """
-            <circle cx="\(number(placed.x))" cy="\(number(placed.y))" \
-            r="\(number(scaled))" fill="none" stroke-width="\(number(lineWidth))" \
-            class="\(className(stroke.ink))" />
-            """
-        }
-
         var d: [String] = []
         for command in stroke.commands {
             switch command {
@@ -214,17 +201,29 @@ private enum SVG {
                     "C\(pair(control1, transform)) \(pair(control2, transform)) \(pair(point, transform))"
                 )
             case let .circle(centre, radius):
-                // No figure emits a circle alongside other commands today; a
-                // silent skip would be a mark that vanished, so say so.
+                // Two half-turn arcs, which is how a path spells a circle. The
+                // earlier shortcut emitted a <circle> element whenever the
+                // stroke's role was `.start`, and left this branch appending a
+                // bare move — valid SVG that draws nothing. That made the one
+                // command a renderer could silently swallow the one marking
+                // where the breath begins, with a clean `check:diagrams` diff.
                 let placed = centre.applying(transform)
-                d.append("M\(number(placed.x - radius * transform.a)) \(number(placed.y))")
+                let scaled = number(radius * transform.a)
+                let left = number(placed.x - radius * transform.a)
+                d.append("M\(left) \(number(placed.y))")
+                d.append("a\(scaled) \(scaled) 0 1 0 \(number(radius * transform.a * 2)) 0")
+                d.append("a\(scaled) \(scaled) 0 1 0 -\(number(radius * transform.a * 2)) 0")
             }
         }
 
+        let dash = stroke.dashed
+            ? " stroke-dasharray=\"\(TechniqueFigure.Stroke.dash.map { number($0) }.joined(separator: " "))\""
+            : ""
+
         return """
         <path d="\(d.joined(separator: " "))" fill="none" \
-        stroke-width="\(number(stroke.role == .baseline ? 1 : lineWidth))" stroke-linecap="round" \
-        stroke-linejoin="round"\(stroke.dashed ? " stroke-dasharray=\"4 5\"" : "") \
+        stroke-width="\(number(stroke.weight(on: lineWidth)))" stroke-linecap="round" \
+        stroke-linejoin="round"\(dash) \
         class="\(className(stroke.ink))" />
         """
     }

@@ -41,6 +41,10 @@ public struct BreathRhythm: Sendable, Equatable {
         public let cycle: Int
         public let phase: Int
 
+        /// No defaults on `cycle` and `phase`: they say which segment this *is*,
+        /// and a caller that forgot one would get a segment quietly claiming to
+        /// be the first phase of the first cycle — which is the one the labels
+        /// are drawn from.
         public init(
             kind: PhaseKind,
             start: Double,
@@ -48,8 +52,8 @@ public struct BreathRhythm: Sendable, Equatable {
             startLevel: Double,
             endLevel: Double,
             dashed: Bool,
-            cycle: Int = 0,
-            phase: Int = 0
+            cycle: Int,
+            phase: Int
         ) {
             self.kind = kind
             self.start = start
@@ -69,14 +73,14 @@ public struct BreathRhythm: Sendable, Equatable {
     /// hold-free exercise in the catalogue (coherent breathing, at eleven
     /// seconds a cycle) and eleven of the fastest (bellows, at two) — so the two
     /// that are geometrically identical are never visually similar.
-    public static let window = Duration.seconds(22)
+    private static let window = Duration.seconds(22)
 
     /// The ceiling on repeats. Past a dozen the humps stop being countable and
     /// start being texture, which says "fast" just as well and draws faster.
-    static let maximumCycles = 12
+    private static let maximumCycles = 12
 
     /// The floor under one phase's share of a cycle.
-    public static let minimumPhaseShare = 0.08
+    private static let minimumPhaseShare = 0.08
 
     public let segments: [Segment]
     /// How many cycles of the stage the line draws.
@@ -89,7 +93,7 @@ public struct BreathRhythm: Sendable, Equatable {
     ///
     /// An open-ended stage draws one: there is no clock to fit, and a retention
     /// repeated is not a thing the exercise does.
-    public static func cycles(fitting stage: Stage) -> Int {
+    private static func cycles(fitting stage: Stage) -> Int {
         guard !stage.openEnded else { return 1 }
 
         let cycle = max(stage.cycleDuration.seconds, 0.1)
@@ -124,7 +128,7 @@ public struct BreathRhythm: Sendable, Equatable {
                 // A one-sided line, and a signs array shorter than the cycle,
                 // both mean "above the midline" — the figure stays a drawing
                 // rather than half-vanishing below a line it never established.
-                let sign = signs.flatMap { $0.indices.contains(index) ? $0[index] : nil } ?? 1
+                let sign = signs?[safe: index] ?? 1
 
                 segments.append(Segment(
                     kind: phase.kind,

@@ -23,22 +23,13 @@ extension TechniqueFigure {
     // MARK: The polygon
 
     static func strokes(of polygon: BreathPolygon) -> [Stroke] {
+        // Each phase runs from the middle of the corner it leaves, along its
+        // straight side, to the middle of the corner it enters — so the two
+        // phases meeting at a vertex own half the turn each and neither colour
+        // bleeds across it. `Side.commands` is that run, shared with the outline
+        // the wash fills.
         var strokes = polygon.sides.map { side in
-            Stroke(
-                ink(side.kind),
-                .phase,
-                // Each phase runs from the middle of the corner it leaves,
-                // along its straight side, to the middle of the corner it
-                // enters — so the two phases meeting at a vertex own half the
-                // turn each and neither colour bleeds across it.
-                [
-                    .move(to: side.leaving.middle),
-                    .quadCurve(to: side.from, control: side.leaving.control),
-                    .line(to: side.to),
-                    .quadCurve(to: side.entering.middle, control: side.entering.control),
-                ],
-                dashed: side.dashed
-            )
+            Stroke(ink(side.kind), .phase, side.commands, dashed: side.dashed)
         }
 
         strokes.append(
@@ -55,7 +46,7 @@ extension TechniqueFigure {
             let reach = max(hypot(midpoint.x - centre.x, midpoint.y - centre.y), 0.001)
 
             return Label(
-                text: word(for: phase, dashed: side.dashed),
+                text: word(phase.kind, lasting: [phase.duration], dashed: side.dashed),
                 at: midpoint,
                 // Outward from the middle of the figure, which for a convex
                 // polygon is away from every side it could collide with.
@@ -211,27 +202,23 @@ extension TechniqueFigure {
         }
     }
 
-    /// `in · 4`, `in · 1.5 + 0.7`, or `in · 4 · L` where a nostril is named.
+    /// `in · 1.5 + 0.7`, or `in · 4 L` where a nostril is named.
     static func word(
         for run: [BreathRhythm.Segment],
         of stage: Stage,
         hints: [String?]?
     ) -> String {
-        let phases = run.compactMap { segment in
-            stage.phases.indices.contains(segment.phase) ? stage.phases[segment.phase] : nil
-        }
+        let phases = run.compactMap { stage.phases[safe: $0.phase] }
         guard let first = phases.first else { return "" }
-        guard !run[0].dashed else { return name(of: first.kind) }
 
-        let counts = phases.map(\.duration).map(seconds(_:)).joined(separator: " + ")
-        let nostril = hints?.indices.contains(run[0].phase) == true
-            ? hints?[run[0].phase]?.prefix(1)
-            : nil
+        let hint = PhaseHints.hint(hints, at: run[0].phase)
 
-        // The nostril rides on a space rather than another middle dot: `in · 4 L`
-        // reads as one item where `in · 4 · L` reads as three.
-        let word = "\(name(of: first.kind)) · \(counts)"
-        return nostril.map { "\(word) \($0)" } ?? word
+        return word(
+            first.kind,
+            lasting: phases.map(\.duration),
+            dashed: run[0].dashed,
+            nostril: hint.map { String($0.prefix(1)) }
+        )
     }
 
     // MARK: Words
@@ -243,9 +230,22 @@ extension TechniqueFigure {
     /// An open-ended phase gets the word alone: its seeded duration describes a
     /// typical hold, and printing it would promise a length the session does not
     /// keep.
-    static func word(for phase: Phase, dashed: Bool) -> String {
-        guard !dashed else { return name(of: phase.kind) }
-        return "\(name(of: phase.kind)) · \(seconds(phase.duration))"
+    ///
+    /// - Parameters:
+    ///   - lasting: one duration per phase in the run. The sigh's two inhales
+    ///     join with a `+`, which reads as the double breath it is.
+    ///   - nostril: `L` or `R`, riding on a space rather than another middle dot
+    ///     — `in · 4 L` reads as one item where `in · 4 · L` reads as three.
+    static func word(
+        _ kind: PhaseKind,
+        lasting: [Duration],
+        dashed: Bool,
+        nostril: String? = nil
+    ) -> String {
+        guard !dashed else { return name(of: kind) }
+
+        let word = "\(name(of: kind)) · \(lasting.map(\.inSeconds).joined(separator: " + "))"
+        return nostril.map { "\(word) \($0)" } ?? word
     }
 
     static func name(of kind: PhaseKind) -> String {
@@ -254,10 +254,6 @@ extension TechniqueFigure {
         case .exhale: "out"
         case .holdIn, .holdOut: "hold"
         }
-    }
-
-    static func seconds(_ duration: Duration) -> String {
-        duration.inSeconds
     }
 
     /// What a screen reader says instead of the picture.
@@ -269,8 +265,7 @@ extension TechniqueFigure {
     /// technique identically.
     static func describe(stage: Stage, hints: [String?]?) -> String {
         let phases = stage.phases.enumerated().map { index, phase -> String in
-            let hint = hints?.indices.contains(index) == true ? hints?[index] : nil
-            let instruction = PhaseHints.spoken(phase.kind, hint: hint)
+            let instruction = PhaseHints.spoken(phase.kind, hint: PhaseHints.hint(hints, at: index))
 
             guard !stage.openEnded else { return "\(instruction), for as long as you can" }
             // Spelled out as a measurement rather than a number and a bare

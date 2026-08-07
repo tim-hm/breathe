@@ -332,13 +332,19 @@ run = ["mise run generate:proto", "mise run generate:catalogue", "git diff --exi
 
 [tasks."check:diagrams"]
 description = "Assert the site's committed figures match the app's geometry"
-# Deliberately outside `check`, beside check:swift and test:swift and for the
-# same reason: it builds Swift, which a headless environment may not have. Run it
-# when touching ios/ or web/.
+# Outside `check`, beside check:swift and test:swift and for the same reason: it
+# builds Swift, which a headless environment may not have. Run it when touching
+# ios/ or web/ — and CI's macOS job runs it too, because "the page and the app
+# draw a technique the same way" is the invariant this whole arrangement exists
+# to create, and leaving its only enforcement to a human habit would put web/ a
+# catalogue behind on the first geometry change somebody forgot to regenerate
+# from.
 #
-# Chained after the export rather than diffing alone, so a reseeded duration
-# fails here rather than leaving web/ silently a catalogue behind.
-run = ["mise run generate:catalogue", "mise run generate:diagrams", "git diff --exit-code HEAD -- catalogue.json web/index.html"]
+# No generate:catalogue ahead of it, deliberately. That would drag the Rust
+# toolchain onto a 10x-billed macOS runner to re-derive a file check:generated
+# already pins on the Linux job — so a reseeded duration fails there, and this
+# task only has to answer whether the figures match the export as committed.
+run = ["mise run generate:diagrams", "git diff --exit-code HEAD -- web/index.html"]
 
 [tasks."check:audit"]
 description = "Match Cargo.lock against the RustSec advisory database"

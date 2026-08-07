@@ -27,20 +27,44 @@ public struct BreathPolygon: Sendable, Equatable {
         public let kind: PhaseKind
         /// Whether the phase's length is the person's rather than the clock's.
         public let dashed: Bool
-        /// The straight run, after the corner it leaves and before the one it
-        /// enters.
-        public let from: CGPoint
-        public let to: CGPoint
         /// The corner this side leaves, and the corner it enters — each already
         /// split in half, so the two phases meeting at a vertex own one half
         /// each and neither colour bleeds across the turn.
         public let leaving: Corner
         public let entering: Corner
 
+        /// Where the straight run starts and ends. Read off the corners rather
+        /// than stored beside them: they are the same two points, and a copy is
+        /// a second place for the corner-splitting rule to be edited into
+        /// disagreement with itself.
+        public var from: CGPoint {
+            leaving.edge
+        }
+
+        public var to: CGPoint {
+            entering.edge
+        }
+
         /// The point a label for this side hangs off: the middle of the straight
         /// run.
         public var midpoint: CGPoint {
-            CGPoint(x: (from.x + to.x) / 2, y: (from.y + to.y) / 2)
+            BreathPolygon.midpoint(from, to)
+        }
+
+        /// This side as a path: out of half the corner behind it, along the
+        /// straight run, into half of the corner ahead.
+        ///
+        /// The one place that sequence is written. Both the stroked phase and
+        /// the closed outline the wash fills come from here, so the two cannot
+        /// trace different paths — a divergence neither `check:diagrams` nor a
+        /// screenshot would catch, because both sides regenerate together.
+        public var commands: [TechniqueFigure.Command] {
+            [
+                .move(to: leaving.middle),
+                .quadCurve(to: from, control: leaving.control),
+                .line(to: to),
+                .quadCurve(to: entering.middle, control: entering.control),
+            ]
         }
     }
 
@@ -57,7 +81,7 @@ public struct BreathPolygon: Sendable, Equatable {
     /// two vertices are close enough that the side between them reads as a nick
     /// in the outline rather than a phase, and the physiological sigh's 0.7
     /// second sip would sit well under it.
-    public static let minimumShare = 0.055
+    private static let minimumShare = 0.055
 
     /// How far back from a vertex the straight run stops, as a fraction of the
     /// shorter of the two sides meeting there. Every other surface in the app
@@ -82,16 +106,12 @@ public struct BreathPolygon: Sendable, Equatable {
     /// renderer that stitched the strokes back together would depend on each
     /// one starting with a `move`, and on being able to tell a closed figure
     /// from an open line by counting them.
+    ///
+    /// Only the first side keeps its `move`; the rest continue the path they are
+    /// already on, which is what closes the figure.
     public var outline: [TechniqueFigure.Command] {
         guard let first = sides.first else { return [] }
-
-        var commands: [TechniqueFigure.Command] = [.move(to: first.leaving.middle)]
-        for side in sides {
-            commands.append(.quadCurve(to: side.from, control: side.leaving.control))
-            commands.append(.line(to: side.to))
-            commands.append(.quadCurve(to: side.entering.middle, control: side.entering.control))
-        }
-        return commands
+        return first.commands + sides.dropFirst().flatMap { $0.commands.dropFirst() }
     }
 
     /// Whether this stage should be drawn as a polygon at all.
@@ -178,8 +198,6 @@ public struct BreathPolygon: Sendable, Equatable {
             return Side(
                 kind: phases[index].kind,
                 dashed: dashed,
-                from: halves[index].outOf.edge,
-                to: halves[next].into.edge,
                 leaving: halves[index].outOf,
                 entering: halves[next].into
             )
@@ -190,7 +208,7 @@ public struct BreathPolygon: Sendable, Equatable {
         Double(hypot(b.x - a.x, b.y - a.y))
     }
 
-    private static func midpoint(_ a: CGPoint, _ b: CGPoint) -> CGPoint {
+    static func midpoint(_ a: CGPoint, _ b: CGPoint) -> CGPoint {
         CGPoint(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2)
     }
 

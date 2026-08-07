@@ -34,7 +34,7 @@ struct TechniqueGlyph: View {
 
                 ZStack {
                     ForEach(Array(figure.drawable.enumerated()), id: \.offset) { _, stroke in
-                        FigureShape(commands: stroke.commands, bounds: bounds, inset: lineWidth)
+                        FigureShape(commands: stroke.commands, bounds: bounds, lineWidth: lineWidth)
                             .stroke(
                                 stroke.ink.colour(on: accent),
                                 style: StrokeStyle(
