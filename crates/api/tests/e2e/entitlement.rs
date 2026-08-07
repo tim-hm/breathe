@@ -11,6 +11,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicI64, Ordering};
 
 use api::entitlement::{
     SubscriptionTier, Tier, TransactionVerifier, VerificationError, VerifiedTransaction,
@@ -63,21 +64,29 @@ impl TransactionVerifier for ScriptedVerifier {
     }
 }
 
-/// One purchase, signed now.
+/// Signing dates advance a second per fixture built.
 ///
-/// `signed_at` defaults to the moment the fixture is built, so the tests that
-/// care about ordering set it explicitly and every other test gets a
-/// monotonically sensible value for free.
+/// `Utc::now()` for all of them would be correct in principle and flaky in
+/// practice: the column stores microseconds, and two fixtures constructed in one
+/// expression can land in the same one — at which point the server's `<`
+/// correctly refuses the second as not newer, and a test that meant them as a
+/// sequence fails perhaps one run in ten. A counter makes "built later" and
+/// "signed later" the same fact.
+static FIXTURE_SEQUENCE: AtomicI64 = AtomicI64::new(0);
+
+/// One purchase, signed after every fixture built before it.
 fn subscription(
     original_transaction_id: &str,
     tier: SubscriptionTier,
     expires_in: Duration,
 ) -> VerifiedTransaction {
+    let sequence = FIXTURE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+
     VerifiedTransaction {
         original_transaction_id: original_transaction_id.to_owned(),
         tier,
         expires_at: Utc::now() + expires_in,
-        signed_at: Utc::now(),
+        signed_at: Utc::now() + Duration::seconds(sequence),
         revoked_at: None,
     }
 }
@@ -87,12 +96,11 @@ fn plus(original_transaction_id: &str) -> VerifiedTransaction {
     subscription(original_transaction_id, SubscriptionTier::Plus, MONTH)
 }
 
+/// A refund, signed after the purchase it revokes — which is both what Apple
+/// sends and what the ordering rule requires to let it through.
 fn refund(original_transaction_id: &str) -> VerifiedTransaction {
     VerifiedTransaction {
         revoked_at: Some(Utc::now()),
-        // Later than the purchase it revokes, which is what Apple sends and
-        // what the ordering rule requires to let it through.
-        signed_at: Utc::now() + Duration::seconds(1),
         ..plus(original_transaction_id)
     }
 }

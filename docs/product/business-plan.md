@@ -21,12 +21,12 @@ We sit in the gap: **Watch-grade craft, phone-first, science-led catalogue, AI p
 
 ## Differentiators
 
-1. **Haptic craft.** Distinct vibration patterns for inhale, hold, and exhale — the phone breathes with you, eyes closed, sound off, and the same sessions live on your wrist in a full Apple Watch app. This is the hero experience and it is free, forever.
+1. **Haptic craft.** Distinct vibration patterns for inhale, hold, and exhale — the phone breathes with you, eyes closed, sound off, and the same sessions live on your wrist in a full Apple Watch app. This is the hero experience, and it is free forever: the paywall is about how many techniques you can point it at, never about the quality of the minute itself.
 2. **Science, stated honestly.** Every technique carries its evidence and its safety notes (the seeded catalogue already writes in this voice — see `crates/migrate/src/seed.rs`). No mysticism, no medical claims.
 3. **Guided personalisation.** Onboarding learns your goals; an LLM tailors recommendations and explains the why. Not a chatbot — a guide with fixed, useful entry points.
 4. **User-owned attention.** Reminder intensity is a dial the user sets, and "never" is the default, not an opt-out. Nothing nudges, upsells, or guilts.
 5. **Radical privacy.** No ads, no third-party trackers, no data resale. Anonymous identity by default. Privacy is a stated feature, not a settings page.
-6. **Honest price.** ~$4.99/year against Calm's ~$70. Cheap enough to be an impulse subscription, sustainable because the costly feature (LLM) is what the price gates.
+6. **Honest price.** $0.99 a month for the catalogue, $4.99 for the AI coach, against Calm's ~$70 a year. Cheap enough to be an impulse subscription, sustainable because the costly feature (LLM) is what the top tier gates.
 
 ## Technique catalogue
 
@@ -63,15 +63,21 @@ All of this is free: the growth loop should have zero friction.
 
 ## Monetisation
 
-One auto-renewable subscription via StoreKit 2. No Stripe, no web checkout, no other SKUs at launch. Small Business Program commission (15%) nets ~$4.24 of a
-$4.99 year.
+Two auto-renewable monthly subscriptions via StoreKit 2, in one App Store subscription group so that moving between them is an upgrade rather than a second purchase. No Stripe, no web checkout, no other SKUs at launch. The Small Business Program commission (15%) nets ~$0.84 and ~$4.24 a month.
 
-| Tier                | Contents                                                                                                                                                   |
-| :------------------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Free**            | Full catalogue, session player with haptics + audio, the Apple Watch app, all stats and leaderboards, one-time AI onboarding recommendation                |
-| **Plus — $4.99/yr** | Ongoing AI personalisation (re-tuning, "why this technique" explanations), smart LLM-written reminders, audio soundscapes, unlimited session customisation |
+| Tier | Contents |
+| :-- | :-- |
+| **Free** | Two techniques — box breathing and the physiological sigh — plus the whole app around them: the session player with haptics and audio, the Apple Watch app, the journal, streaks, schedules, stats and leaderboards, and the basics |
+| **Plus — $0.99/mo** | The full catalogue: the sleep, focus and energy protocols, the Wim Hof-style rounds, and everything else that costs nothing per use |
+| **Coach — $4.99/mo** | Everything in Plus, plus the AI breathing coach: recommendations written for this person, and "why this technique works" explained at their level |
 
-The logic: the hero experience and the growth loop stay free; the marginal-cost feature (every LLM call costs real money) is exactly what the subscription gates, so cost scales with revenue. The price is low enough that the paywall funds the product rather than gating wellbeing.
+**What the price gates, and why it moved.** The rule is unchanged: the marginal-cost feature is the one the top tier sells, so cost scales with revenue. Every LLM call is real money, and Coach is the only tier that can make one — the server reads the tier from the row it verified a StoreKit transaction against, and nothing below Coach reaches the model at any price. There is no free daily taste; below Coach the assistant answers from the server's own rules, which is the same answer everybody gets offline and a genuinely good one. Nobody meets a wall.
+
+**What changed, and it is a real change.** The free tier no longer includes the full catalogue. That is a deliberate walk-back of an earlier position, and it is worth stating plainly rather than quietly: catalogue breadth has become the Plus hook, because a $0.99 monthly tier needs something to sell that costs nothing to serve, and the catalogue is exactly that.
+
+The growth loop is untouched — the journal, streaks, leaderboards, the Watch app, and the haptic session player are all free, so the thing people show each other and come back for is still not for sale. What free loses is choice, not the experience: the two free techniques carry no safety caution between them and cover the two reasons somebody downloads a breathing app at all — a couple of minutes to settle before something, and thirty seconds to come down after it. Somebody who never pays still has an app worth opening every day.
+
+The locked techniques stay visible, described, and shown their rhythm. They are an invitation rather than a hidden row, and the lock is enforced on the device only: a session runs locally, so there is nothing to guard server-side and pretending otherwise would cost engineering for no revenue.
 
 ## Privacy & trust commitments
 
@@ -89,7 +95,8 @@ Written as testable product rules, not aspirations:
 | Risk                                                | Mitigation                                                                                                                                     |
 | :-------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------- |
 | App Review scrutiny of AI + health-adjacent content | Wellness framing, no medical claims, per-technique safety notes (already the seed-data voice); contraindications surfaced in-session           |
-| LLM cost per free user                              | Personalisation is the paid tier; free tier gets one onboarding call; per-user quotas and a rule-based fallback                                |
+| LLM cost per non-paying user                        | Zero by construction: only Coach reaches the model, enforced server-side from a verified transaction, with a daily per-caller ceiling on top   |
+| A two-technique free tier reads as mean             | The locked ones stay visible and described; the free two carry no safety caution and cover both reasons people install a breathing app         |
 | Crowded category, weak discoverability              | Distinctive coined name + keyword-carrying subtitle ([naming.md](naming.md)); haptic craft as the reviewable "wow"                             |
 | Competition mechanics undermine the calm brand      | Opt-in only, consistency-framed copy, no maximal-hold contests                                                                                 |
 | Solo-maintainer scope creep                         | Roadmap milestones are each independently shippable; the parking lot is a real fence ([roadmap.md](roadmap.md))                                |
