@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(DISTINCT (started_at AT TIME ZONE 'UTC')::date) AS \"days!\"\n         FROM sessions\n         WHERE user_id = $1 AND started_at >= now() - make_interval(days => $2)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "days!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "19007326c036b69013bdf0d85bf441caf3fd77da0dd927485647d5111fa61db3"
+}

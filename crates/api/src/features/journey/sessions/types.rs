@@ -1,10 +1,64 @@
-//! Where a page of session history stopped.
+//! Where a page of session history stopped, and the bounded practice snapshot
+//! the assistant reads instead of rows.
 
 use chrono::{DateTime, SecondsFormat, Utc};
 use uuid::Uuid;
 
+use super::super::bolt::types::BoltSnapshot;
 use super::super::errors::JourneyError;
 use super::repository::SessionRow;
+
+/// How far back the practice snapshot looks, in whole days ending now.
+///
+/// Thirty days of UTC, deliberately without a client offset: the snapshot is
+/// prompt input, not a screen, and it feeds offset-insensitive phrasing ("on 11
+/// of the last 30 days") rather than streak-precise claims. A window that
+/// shifted with the caller's time zone would change the numbers without
+/// changing the practice — and no offset travels on the assistant's requests.
+///
+/// A `u16` so both consumers convert losslessly: the queries widen it to the
+/// `int` `make_interval` takes, and [`PracticeSnapshot::window_days`] to `u32`.
+pub const PRACTICE_WINDOW_DAYS: u16 = 30;
+
+/// How many techniques the snapshot names individually.
+///
+/// Six covers everything a person deliberately practises; past that the entries
+/// are one-offs and typos, and each would cost a prompt line. The cap bounds
+/// the lines, not the arithmetic — the totals still count every session.
+pub const MAX_SNAPSHOT_TECHNIQUES: usize = 6;
+
+/// What one person has practised recently, folded down to what a prompt can
+/// afford.
+///
+/// A bounded aggregate rather than rows, by design: the assistant renders this
+/// as a handful of prompt lines, so everything here is already summed, capped,
+/// and free of instants. `by_technique` keeps the busiest
+/// [`MAX_SNAPSHOT_TECHNIQUES`] entries while the totals count everything, so a
+/// long tail widens no prompt.
+#[derive(Debug, PartialEq, Eq)]
+pub struct PracticeSnapshot {
+    /// The window the aggregates cover — [`PRACTICE_WINDOW_DAYS`], carried so a
+    /// consumer can phrase "of the last N days" without importing the constant.
+    pub window_days: u32,
+    pub sessions: u32,
+    pub minutes: u32,
+    /// Distinct UTC days with at least one session in the window.
+    pub active_days: u32,
+    /// Busiest first. The slugs are client-supplied free text with no foreign
+    /// key — resolving them against the catalogue is the consumer's business,
+    /// because only it knows what to do with one it cannot resolve.
+    pub by_technique: Vec<TechniquePractice>,
+    /// `None` before they have ever taken the test.
+    pub bolt: Option<BoltSnapshot>,
+}
+
+/// One technique's share of the window.
+#[derive(Debug, PartialEq, Eq)]
+pub struct TechniquePractice {
+    pub technique_slug: String,
+    pub sessions: u32,
+    pub minutes: u32,
+}
 
 /// The separator between the two halves of an encoded cursor.
 ///

@@ -38,10 +38,10 @@ async fn a_resent_bolt_score_does_not_become_a_second_one() {
     let db = TestDatabase::create("journey_bolt_idempotent").await;
     let id = "99999999-0000-4000-8000-000000000001";
 
-    let first = bolt_with(&db, ADA, id, 24).await.into_ok();
+    let first = bolt_with(&db, ADA, id, 24, None).await.into_ok();
     assert_eq!((first.best_seconds, first.is_personal_best), (24, true));
 
-    let resent = bolt_with(&db, ADA, id, 24).await.into_ok();
+    let resent = bolt_with(&db, ADA, id, 24, None).await.into_ok();
     assert_eq!(resent.best_seconds, 24);
     assert!(
         !resent.is_personal_best,
@@ -51,10 +51,10 @@ async fn a_resent_bolt_score_does_not_become_a_second_one() {
 
     // Another person may hold the same client id without colliding: the key is
     // the pair, not the id alone.
-    bolt_with(&db, BEA, id, 30).await.into_ok();
+    bolt_with(&db, BEA, id, 30, None).await.into_ok();
     assert_eq!(count_bolt_scores(&db).await, 2);
 
-    let malformed = bolt_with(&db, ADA, "not-a-uuid", 20).await;
+    let malformed = bolt_with(&db, ADA, "not-a-uuid", 20, None).await;
     assert_eq!(malformed.status, tonic::Code::InvalidArgument as i32);
 }
 

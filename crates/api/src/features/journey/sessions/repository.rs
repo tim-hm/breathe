@@ -10,7 +10,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::super::errors::JourneyError;
-use super::types::SessionCursor;
+use super::types::{PRACTICE_WINDOW_DAYS, SessionCursor};
 use crate::identity::UserId;
 
 /// One row of `sessions`, in both directions.
@@ -189,6 +189,67 @@ pub async fn streaks(
     .await?;
 
     Ok(row)
+}
+
+/// One technique's aggregate over the snapshot window.
+pub struct TechniquePracticeRow {
+    pub technique_slug: String,
+    pub sessions: i64,
+    /// Summed rather than pre-divided, for the same reason as [`TotalsRow`].
+    pub duration_ms: i64,
+}
+
+/// The caller's last [`PRACTICE_WINDOW_DAYS`] of practice, grouped by
+/// technique, busiest first.
+///
+/// Every group rather than the top few: the snapshot's totals must count all of
+/// them, and the group count is bounded by the caller's own session count in a
+/// thirty-day window, so there is nothing here worth a `LIMIT`. The cap on how
+/// many are *named* is the service's, next to the totals it must not distort.
+///
+/// The slug tie-break is not decoration — equal session counts would otherwise
+/// order on heap order, and a cap over an unstable order names different
+/// techniques on different reads of the same history.
+pub async fn recent_practice(
+    pool: &PgPool,
+    user_id: UserId,
+) -> Result<Vec<TechniquePracticeRow>, JourneyError> {
+    let rows = sqlx::query_as!(
+        TechniquePracticeRow,
+        r#"SELECT technique_slug,
+                count(*) AS "sessions!",
+                sum(duration_ms)::bigint AS "duration_ms!"
+         FROM sessions
+         WHERE user_id = $1 AND started_at >= now() - make_interval(days => $2)
+         GROUP BY technique_slug
+         ORDER BY count(*) DESC, technique_slug"#,
+        user_id.0,
+        i32::from(PRACTICE_WINDOW_DAYS)
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows)
+}
+
+/// Distinct UTC days with at least one session in the snapshot window.
+///
+/// UTC rather than the caller's offset, unlike [`streaks`]: the snapshot feeds
+/// offset-insensitive phrasing, and no offset travels on the requests that read
+/// it — the why lives on
+/// [`PRACTICE_WINDOW_DAYS`](super::types::PRACTICE_WINDOW_DAYS).
+pub async fn active_days(pool: &PgPool, user_id: UserId) -> Result<i64, JourneyError> {
+    let days = sqlx::query_scalar!(
+        r#"SELECT count(DISTINCT (started_at AT TIME ZONE 'UTC')::date) AS "days!"
+         FROM sessions
+         WHERE user_id = $1 AND started_at >= now() - make_interval(days => $2)"#,
+        user_id.0,
+        i32::from(PRACTICE_WINDOW_DAYS)
+    )
+    .fetch_one(pool)
+    .await?;
+
+    Ok(days)
 }
 
 /// One page of the caller's history, newest first.

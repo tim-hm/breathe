@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT technique_slug,\n                count(*) AS \"sessions!\",\n                sum(duration_ms)::bigint AS \"duration_ms!\"\n         FROM sessions\n         WHERE user_id = $1 AND started_at >= now() - make_interval(days => $2)\n         GROUP BY technique_slug\n         ORDER BY count(*) DESC, technique_slug",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "technique_slug",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "sessions",
+            "name": "technique_slug"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "sessions!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "duration_ms!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "5102a1ad37891ef3effa1fb31571ce563b8a1eabb699f41977fa4ea2eabcb5f1"
+}

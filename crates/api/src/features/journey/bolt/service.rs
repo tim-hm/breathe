@@ -10,6 +10,7 @@ use uuid::Uuid;
 use super::super::errors::JourneyError;
 use super::super::wire::{counted, timestamp_from_proto};
 use super::repository;
+use super::types::BoltSnapshot;
 use crate::identity::UserId;
 use crate::proto::breathe::v1 as pb;
 
@@ -73,4 +74,26 @@ pub async fn best_seconds(pool: &PgPool, user_id: UserId) -> Result<Option<u32>,
         .await?
         .map(|seconds| counted("best_bolt_seconds", seconds))
         .transpose()
+}
+
+/// The caller's whole BOLT history folded to [`BoltSnapshot`], or `None`
+/// before they have taken the test.
+///
+/// Read by `sessions::service::practice_snapshot` on the same terms as
+/// [`best_seconds`]: a sibling sub-feature reaches this history through the
+/// service, never the repository.
+pub async fn bolt_snapshot(
+    pool: &PgPool,
+    user_id: UserId,
+) -> Result<Option<BoltSnapshot>, JourneyError> {
+    let row = repository::bolt_aggregate(pool, user_id).await?;
+    let (Some(best), Some(latest)) = (row.best, row.latest) else {
+        return Ok(None);
+    };
+
+    Ok(Some(BoltSnapshot {
+        best: counted("best_bolt_seconds", best)?,
+        latest: counted("latest_bolt_seconds", latest)?,
+        count: counted("bolt_count", row.count)?,
+    }))
 }
