@@ -5,14 +5,13 @@ import SwiftUI
 
 /// The way in: an aim, the orb, and "begin" — nothing else.
 ///
-/// The aim is one faint word; a horizontal swipe anywhere on the screen cycles
-/// it, and tapping it fans out the full set. It wakes up where it was last
-/// left, the hour's goal decides only the very first launch, and the exercise
-/// it resolves to is never named here: somebody who wants a particular one
-/// goes to the exercises tab, and somebody who just wants to breathe should
-/// not have to read a label to do it. The assistant's suggestions stay in that
-/// tab too — this screen is one decision, and a second opinion beside it would
-/// be two.
+/// The aim is one faint word on a drum that spins sideways, and tapping it fans
+/// out the full set. It wakes up where it was last left, the hour's goal decides
+/// only the very first launch, and the exercise it resolves to is never named
+/// here: somebody who wants a particular one goes to the exercises tab, and
+/// somebody who just wants to breathe should not have to read a label to do it.
+/// The assistant's suggestions stay in that tab too — this screen is one
+/// decision, and a second opinion beside it would be two.
 struct HomeView: View {
     /// The catalogue the composition root owns and every root shares.
     let model: TechniqueListModel
@@ -99,60 +98,98 @@ struct HomeView: View {
     /// One band, centred: the aim word above the orb, held between equal
     /// spacers so the pair sits in the middle of any screen height.
     private func loaded(_ techniques: [Technique]) -> some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: Theme.Spacing.loose)
+        // Resolved out here, not inside the `GeometryReader`: none of it
+        // depends on geometry, and that closure re-runs on every rotation,
+        // resize, and keyboard. `locked` walks the whole history once per aim
+        // it has never been used for, so leaving it in there put an unbounded
+        // scan on the path of every layout pass.
+        let goals = TechniqueGoal.present(in: techniques)
+        let locked = lockedGoals(among: goals, in: techniques)
+        let chosen = chosen(from: techniques)
 
-            if let goal {
-                VStack(spacing: Theme.Spacing.loose) {
-                    AimSelector(
-                        goals: TechniqueGoal.present(in: techniques),
-                        goal: goal,
-                        isExpanded: $isChoosingAim,
-                        onSelect: select
-                    )
+        return GeometryReader { proxy in
+            // Dynamic Type follows the person's text setting, not the
+            // hardware, so type sized for the smallest phones sits a touch
+            // small on a Pro. Grown gently with the width and capped before
+            // it stops reading as the same quiet screen.
+            let typeScale = min(max(proxy.size.width / 375, 1), 1.25)
+            // The width inside the padding applied below, which is the drum's
+            // container. Named once so the two cannot drift apart.
+            let content = proxy.size.width - Theme.Spacing.standard * 2
 
-                    if let chosen = chosen(from: techniques) {
-                        OrbBeginButton(technique: chosen) { begin(chosen) }
+            VStack(spacing: 0) {
+                Spacer(minLength: Theme.Spacing.loose)
+
+                if let goal {
+                    VStack(spacing: Theme.Spacing.loose) {
+                        AimSelector(
+                            goals: goals,
+                            goal: goal,
+                            locked: locked,
+                            typeScale: typeScale,
+                            width: content,
+                            isExpanded: $isChoosingAim,
+                            onSelect: select
+                        )
+
+                        if let chosen {
+                            OrbBeginButton(
+                                technique: chosen,
+                                isLocked: !chosen.isUnlocked(for: plus.tier),
+                                typeScale: typeScale
+                            ) {
+                                begin(chosen)
+                            }
+                        }
                     }
                 }
-            }
 
-            Spacer(minLength: Theme.Spacing.loose)
+                Spacer(minLength: Theme.Spacing.loose)
+            }
+            .padding(.horizontal, Theme.Spacing.standard)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+            // Simultaneous, so the fan-out's own buttons and the orb still get
+            // their taps — a tap anywhere while the row is out collapses it,
+            // and whatever was tapped happens too. Guarded rather than
+            // unconditional: the aim word's own tap opens the row, and two
+            // writers to one flag in a single event leave which one lands to
+            // SwiftUI's ordering. Only collapsing when there is something to
+            // collapse means the two can never both fire.
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    if isChoosingAim {
+                        isChoosingAim = false
+                    }
+                }
+            )
+            // One firm tap as the aim changes. An impact rather than
+            // `.selection`, which is the lightest haptic there is. Skipped for
+            // the settle on launch — that is the app restoring state, not the
+            // person choosing.
+            .sensoryFeedback(.impact(weight: .medium), trigger: goal) { old, _ in old != nil }
         }
-        .padding(.horizontal, Theme.Spacing.standard)
-        .frame(maxWidth: .infinity)
-        .contentShape(Rectangle())
-        // The swipe that cycles the aim. A plain gesture, so the orb's tap
-        // wins until 24pt of travel; the dominance check leaves anything
-        // vertical alone. Off while the row is fanned out — with every aim on
-        // screen, a swipe has nothing to reveal.
-        .gesture(
-            DragGesture(minimumDistance: 24).onEnded { value in
-                let w = value.translation.width
-                guard !isChoosingAim,
-                      abs(w) > abs(value.translation.height),
-                      abs(w) > 40,
-                      let goal,
-                      case let goals = TechniqueGoal.present(in: techniques),
-                      let stepped = w < 0 ? goal.next(in: goals) : goal.previous(in: goals)
-                else { return }
-
-                select(stepped)
-            }
-        )
-        // Simultaneous, so the fan-out's own buttons and the orb still get
-        // their taps — a tap anywhere while the row is out collapses it, and
-        // whatever was tapped happens too.
-        .simultaneousGesture(
-            TapGesture().onEnded { isChoosingAim = false }
-        )
-        // One firm tap as the aim changes. An impact rather than `.selection`,
-        // which is the lightest haptic there is. Skipped for the settle on
-        // launch — that is the app restoring state, not the person choosing.
-        .sensoryFeedback(.impact(weight: .medium), trigger: goal) { old, _ in old != nil }
     }
 
-    /// The one place a person's choice lands: the swipe, the fan-out, and
+    /// The aims this person's tier cannot start, so the drum can mark them.
+    ///
+    /// Asked of `HomeSuggestion` and not of the catalogue at large, because the
+    /// lock has to predict exactly one thing: whether landing here and pressing
+    /// the orb opens a session or the paywall. `chosen(from:)` resolves the
+    /// technique the same way, so the mark and the orb beneath it cannot
+    /// disagree — an aim with a locked exercise beside a free one is not
+    /// locked, and counting the catalogue's tiers instead would say it was.
+    private func lockedGoals(
+        among goals: [TechniqueGoal],
+        in techniques: [Technique]
+    ) -> Set<TechniqueGoal> {
+        Set(goals.filter { goal in
+            HomeSuggestion.technique(for: goal, techniques: techniques, history: history)?
+                .isUnlocked(for: plus.tier) == false
+        })
+    }
+
+    /// The one place a person's choice lands: the drum, the fan-out, and
     /// VoiceOver's adjust all funnel here. `settleGoal()` deliberately does
     /// not — restoring state is not choosing, and only choices are remembered.
     private func select(_ new: TechniqueGoal) {

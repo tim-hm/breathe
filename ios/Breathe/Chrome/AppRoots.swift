@@ -36,8 +36,9 @@ struct AppRoots {
         )
     }
 
-    /// Settings, with the dismissal a sheet needs.
-    func settingsRoot(onDone: @escaping () -> Void) -> some View {
-        SettingsView(schedules: schedules, catalogue: catalogue, onDone: onDone)
+    /// Settings, with no `onDone`: it is a root behind a word like any other,
+    /// not a sheet that has to offer its own way out.
+    var settingsRoot: some View {
+        SettingsView(schedules: schedules, catalogue: catalogue)
     }
 }

@@ -16,11 +16,36 @@ import SwiftUI
 /// answers the wheel above it.
 struct OrbBeginButton: View {
     let technique: Technique
+
+    /// Whether a subscription owns this exercise, in which case pressing opens
+    /// the paywall rather than a session. It changes nothing that is drawn —
+    /// the aim above the orb already carries the lock, and a second mark on the
+    /// one control this screen has would be the screen arguing with itself —
+    /// but VoiceOver is told, because "starts the session" would be a lie.
+    let isLocked: Bool
+
+    /// How much the screen's width grows the type, 1 on the smallest phones.
+    /// A multiplier on a Dynamic Type–scaled base, so the person's text setting
+    /// still applies over the top.
+    let typeScale: CGFloat
+
     let action: () -> Void
+
+    /// `title3`'s size as a metric, so `typeScale` multiplies it without
+    /// detaching the word from Dynamic Type. A step up from the `headline` it
+    /// read at, and one step ahead of the aim word above the orb — the same
+    /// gap in emphasis those two had before, at a size that carries an
+    /// otherwise empty screen.
+    @ScaledMetric(relativeTo: .title3) private var wordSize: CGFloat = 20
+
+    /// The band the word sits in, matching the aim row's so the two words are
+    /// equidistant from the orb whatever either one's line height is — which
+    /// matching the gaps above and below alone would not achieve.
+    @ScaledMetric(relativeTo: .body) private var band: CGFloat = 44
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: Theme.Spacing.standard) {
+            VStack(spacing: Theme.Spacing.loose) {
                 AmbientOrb(accent: technique.goal.accent)
 
                 // Lowercase to match the word row at the foot of the screen —
@@ -28,14 +53,17 @@ struct OrbBeginButton: View {
                 // spells it as a proper sentence instead. VoiceOver reading
                 // "begin box breathing" would sound like a fragment.
                 Text("begin")
-                    .font(.headline)
+                    .font(.system(size: wordSize * typeScale, weight: .semibold))
                     .foregroundStyle(technique.goal.accent)
+                    .frame(minHeight: band)
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(OrbPress())
         .accessibilityLabel("Begin \(technique.name)")
-        .accessibilityHint("Starts the session")
+        .accessibilityHint(
+            isLocked ? "Shows what Breathe Plus includes" : "Starts the session"
+        )
     }
 }
 
@@ -64,6 +92,13 @@ private struct OrbPress: ButtonStyle {
                 .scaleEffect(isPressed && !reduceMotion ? 0.95 : 1)
                 .brightness(isPressed ? 0.08 : 0)
                 .animation(.easeOut(duration: 0.16), value: isPressed)
+                // On the press rather than the release, which is what makes a
+                // control feel like a button: the finger is answered while it
+                // is still down. Heavier than the aim's step above it, because
+                // this is the screen's one committing action.
+                .sensoryFeedback(.impact(weight: .heavy), trigger: isPressed) { _, pressed in
+                    pressed
+                }
         }
     }
 }
