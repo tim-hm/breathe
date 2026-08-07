@@ -7,85 +7,23 @@
 //! code these tests do not reach is the thin layer in `openrouter` that turns a
 //! `ModelRequest` into an HTTP body.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
-use api::assistant::{
-    DAILY_MODEL_CALLS, GuardedModelClient, ModelClient, ModelError, ModelRequest, ModelStream,
-};
+use api::assistant::{GuardedModelClient, ModelClient, ModelError};
+use api::entitlement::Tier;
 use api::identity::USER_ID_HEADER;
 use api::proto::breathe::v1 as pb;
 
-use crate::harness::{TestDatabase, call_grpc_web_stream_with, call_grpc_web_with};
+use crate::harness::{
+    ScriptedModel, TestDatabase, allowance, call_grpc_web_stream_with, call_grpc_web_with,
+};
 
 const GET_RECOMMENDATION: &str = "/breathe.v1.AssistantService/GetRecommendation";
 const EXPLAIN_TECHNIQUE: &str = "/breathe.v1.AssistantService/ExplainTechnique";
 
 const USER: &str = "5c4d3e2f-0000-4000-8000-000000000001";
 const OTHER_USER: &str = "5c4d3e2f-0000-4000-8000-000000000002";
-
-/// A model that says whatever the test told it to, and counts how often it was
-/// asked.
-///
-/// The count is what makes the quota and the breaker observable: both are
-/// supposed to stop a call from happening at all, and a test that only checked
-/// the response could not tell "answered from the rules" apart from "called the
-/// model and ignored it".
-struct ScriptedModel {
-    /// Replies in order; the last one repeats once the script runs out.
-    replies: Mutex<Vec<Result<String, ModelError>>>,
-    calls: AtomicUsize,
-}
-
-impl ScriptedModel {
-    /// `next` repeats a sole entry forever, so "always" is one-element script.
-    fn always(reply: Result<String, ModelError>) -> Arc<Self> {
-        Self::script(vec![reply])
-    }
-
-    fn script(replies: Vec<Result<String, ModelError>>) -> Arc<Self> {
-        Arc::new(Self {
-            replies: Mutex::new(replies),
-            calls: AtomicUsize::new(0),
-        })
-    }
-
-    fn calls(&self) -> usize {
-        self.calls.load(Ordering::Relaxed)
-    }
-
-    fn next(&self) -> Result<String, ModelError> {
-        self.calls.fetch_add(1, Ordering::Relaxed);
-
-        let mut replies = self.replies.lock().expect("the script is not poisoned");
-        if replies.len() > 1 {
-            replies.remove(0)
-        } else {
-            match replies.first() {
-                Some(Ok(reply)) => Ok(reply.clone()),
-                Some(Err(_)) | None => Err(ModelError::Failed("scripted failure".to_owned())),
-            }
-        }
-    }
-}
-
-#[tonic::async_trait]
-impl ModelClient for ScriptedModel {
-    async fn complete(&self, _request: &ModelRequest) -> Result<String, ModelError> {
-        self.next()
-    }
-
-    /// One chunk per line, so a test can assert the client received them in the
-    /// order the model wrote them.
-    async fn stream(&self, _request: &ModelRequest) -> Result<ModelStream, ModelError> {
-        let reply = self.next()?;
-        let chunks: Vec<Result<String, ModelError>> =
-            reply.lines().map(|line| Ok(line.to_owned())).collect();
-
-        Ok(Box::pin(tokio_stream::iter(chunks)))
-    }
-}
 
 /// The contract the client relies on: every slug it is handed resolves in the
 /// catalogue it already holds. The model here names one real technique among
@@ -154,12 +92,16 @@ async fn the_fallback_ranks_by_the_goals_they_picked() {
 /// degraded answer rather than an error: the person asked a question and gets
 /// one, flagged. Without the flag a client would present rule-based copy as
 /// personalised.
+///
+/// Nobody here has bought anything, so the ceiling is the free tier's. What a
+/// subscription changes is `entitlement.rs`'s business.
 #[tokio::test]
 async fn an_exhausted_quota_answers_from_the_rules() {
     let db = TestDatabase::create("assistant_quota").await;
     let model = ScriptedModel::always(Ok("box-breathing | Steady.".to_owned()));
+    let allowance = allowance(Tier::Free);
 
-    for _ in 0..DAILY_MODEL_CALLS {
+    for _ in 0..allowance {
         let response = recommend(&db, model.clone(), USER).await;
         assert_eq!(response.source, pb::AssistantSource::Model as i32);
     }
@@ -170,7 +112,7 @@ async fn an_exhausted_quota_answers_from_the_rules() {
 
     assert_eq!(
         model.calls(),
-        DAILY_MODEL_CALLS as usize,
+        allowance,
         "the call past the limit must not reach the model at all"
     );
 
@@ -185,9 +127,14 @@ async fn an_exhausted_quota_answers_from_the_rules() {
 /// start again once it might not be. Both halves are asserted through the call
 /// count, because a breaker that never opened and one that never closed both
 /// still return an answer.
+///
+/// The caller is put on Plus first, so the only ceiling in play is the breaker's
+/// — five attempts is more than the free allowance, and a quota that ran out
+/// mid-test would look exactly like a breaker that never closed.
 #[tokio::test]
 async fn the_breaker_trips_and_then_recovers() {
     let db = TestDatabase::create("assistant_breaker").await;
+    subscribe(&db, USER).await;
 
     let model = ScriptedModel::script(vec![
         Err(ModelError::Failed("first".to_owned())),
@@ -426,6 +373,23 @@ async fn explain(
         &[(USER_ID_HEADER, user)],
     )
     .await
+}
+
+/// Puts somebody on Plus by writing the column `EntitlementService` writes.
+///
+/// Straight into the row rather than through a submission, because this suite
+/// scripts no verifier and the only thing it wants from a subscription is the
+/// larger allowance. What a real purchase does to that column is
+/// `entitlement.rs`'s business.
+async fn subscribe(db: &TestDatabase, user: &str) {
+    sqlx::query(
+        "INSERT INTO users (id, plus_until) VALUES ($1, now() + interval '1 year')
+         ON CONFLICT (id) DO UPDATE SET plus_until = EXCLUDED.plus_until",
+    )
+    .bind(user.parse::<uuid::Uuid>().expect("a valid uuid"))
+    .execute(&db.pool)
+    .await
+    .expect("the subscription is written");
 }
 
 /// Stores goals through the real `ProfileService`, so the rows the assistant

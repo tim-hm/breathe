@@ -60,6 +60,14 @@ struct WhyThisWorksView: View {
                     Text(caption(for: source))
                         .font(.caption)
                         .foregroundStyle(Theme.Ink.secondary)
+
+                    // The same rule as the suggestion strip's: only where the
+                    // person has just read the plainer answer, so the offer is
+                    // about something they can see rather than something they
+                    // are told.
+                    if case .fallback = source {
+                        PlusUpsell(reason: "Want it explained for you?")
+                    }
                 }
             }
 

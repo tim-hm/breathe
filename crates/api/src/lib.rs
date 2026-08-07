@@ -10,9 +10,9 @@
 mod features;
 mod grpc;
 
-/// The assistant's model seam — the one dependency this crate takes that its
-/// caller has to choose, and therefore the only thing a feature exposes outside
-/// the crate.
+/// The assistant's model seam — one of the two dependencies this crate takes
+/// that its caller has to choose, and therefore one of the few things a feature
+/// exposes outside the crate.
 ///
 /// A named re-export rather than making `features` public: the composition root
 /// and `tests/e2e` need to name a handful of types, and publishing the whole
@@ -27,7 +27,18 @@ pub mod assistant {
     pub use crate::features::assistant::model::{
         ModelClient, ModelError, ModelRequest, ModelStream, from_config,
     };
-    pub use crate::features::assistant::types::DAILY_MODEL_CALLS;
+    pub use crate::features::assistant::types::daily_model_calls;
+}
+
+/// The App Store signature seam, published on the same terms as `assistant`.
+///
+/// `Tier` travels with it because the allowance is a function of one, so a test
+/// asking how many calls a subscriber gets has to be able to name it.
+pub mod entitlement {
+    pub use crate::features::entitlement::types::Tier;
+    pub use crate::features::entitlement::verifier::{
+        AppStoreVerifier, TransactionVerifier, VerificationError, VerifiedTransaction,
+    };
 }
 
 pub mod config;

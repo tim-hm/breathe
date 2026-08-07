@@ -4,10 +4,12 @@
 //! router itself is `api::build_app` so that the integration tests exercise the
 //! same stack this binary serves.
 
+use std::sync::Arc;
+
 use anyhow::{Context, Result};
-use api::assistant;
+use api::entitlement::AppStoreVerifier;
 use api::state::AppState;
-use api::{config, http, obs};
+use api::{assistant, config, http, obs};
 use sqlx::postgres::PgPoolOptions;
 
 /// Sized for a local machine and a small deployment. Postgres' own default
@@ -42,7 +44,10 @@ async fn main() -> Result<()> {
     // model seam this process runs. Logged there, either way.
     let assistant = assistant::from_config(&config);
 
-    let state = AppState::new(pool, config, assistant);
+    // No equivalent choice for the App Store: the trust anchor is compiled in,
+    // so every environment runs the same verifier and there is no configuration
+    // that could relax it.
+    let state = AppState::new(pool, config, assistant, Arc::new(AppStoreVerifier));
     let port = state.config.port;
     let app = api::build_app(state)?;
 

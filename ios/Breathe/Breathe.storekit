@@ -1,0 +1,54 @@
+{
+  "identifier" : "3B9C1D2E",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+
+  ],
+  "settings" : {
+    "_applicationInternalID" : "",
+    "_developerTeamID" : "",
+    "_lastSynchronizedDate" : 0
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21571893",
+      "localizations" : [
+
+      ],
+      "name" : "Plus",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "4.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6472019384",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "The assistant in full: guidance written for you, and why any technique works, explained at your level.",
+              "displayName" : "Breathe Plus",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "xyz.holmie.breathe.plus.yearly",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Breathe Plus (yearly)",
+          "subscriptionGroupID" : "21571893",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

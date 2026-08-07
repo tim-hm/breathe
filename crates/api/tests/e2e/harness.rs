@@ -2,10 +2,14 @@
 
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
-use api::assistant::{DisabledModelClient, ModelClient};
+use api::assistant::{
+    DisabledModelClient, ModelClient, ModelError, ModelRequest, ModelStream, daily_model_calls,
+};
 use api::config::{Config, Environment};
+use api::entitlement::{AppStoreVerifier, Tier, TransactionVerifier};
 use api::state::AppState;
 use axum::Router;
 use axum::body::{Body, Bytes};
@@ -99,7 +103,96 @@ impl TestDatabase {
     /// model is the one thing that varies, and twenty unrelated tests should not
     /// carry it.
     pub fn app_with_model(&self, assistant: Arc<dyn ModelClient>) -> Router {
-        build_app_with_model(self.pool.clone(), assistant)
+        build_app_with(self.pool.clone(), assistant, Arc::new(AppStoreVerifier))
+    }
+
+    /// The same router with a scripted App Store verifier behind the seam.
+    ///
+    /// Paired with [`Self::app`] for the same reason as [`Self::app_with_model`]
+    /// — and needed for the same reason the model seam is: no test can hold an
+    /// Apple-signed transaction, so a suite driven through the real verifier
+    /// could only ever assert that everything is rejected.
+    pub fn app_with_verifier(&self, entitlement: Arc<dyn TransactionVerifier>) -> Router {
+        build_app_with(
+            self.pool.clone(),
+            Arc::new(DisabledModelClient),
+            entitlement,
+        )
+    }
+}
+
+/// One person's daily model allowance, in the `usize` a call count is compared
+/// against.
+///
+/// Derived rather than written out, so a test says which tier it is asserting
+/// about and the numbers stay in `features::assistant::types` where the product
+/// decision lives.
+pub fn allowance(tier: Tier) -> usize {
+    usize::try_from(daily_model_calls(tier)).expect("an allowance is never negative")
+}
+
+/// A model that answers from a script and counts how often it was asked.
+///
+/// The count is what makes the quota and the breaker observable: both are
+/// supposed to stop a call from happening at all, and a test that only checked
+/// the response could not tell "answered from the rules" apart from "called the
+/// model and ignored it".
+///
+/// In the harness rather than in one suite because two of them need it — the
+/// assistant's, which is about what the model says, and the entitlement's, which
+/// is about how often it may be asked.
+pub struct ScriptedModel {
+    /// Replies in order; the last one repeats once the script runs out.
+    replies: Mutex<Vec<Result<String, ModelError>>>,
+    calls: AtomicUsize,
+}
+
+impl ScriptedModel {
+    /// `next` repeats a sole entry forever, so "always" is a one-element script.
+    pub fn always(reply: Result<String, ModelError>) -> Arc<Self> {
+        Self::script(vec![reply])
+    }
+
+    pub fn script(replies: Vec<Result<String, ModelError>>) -> Arc<Self> {
+        Arc::new(Self {
+            replies: Mutex::new(replies),
+            calls: AtomicUsize::new(0),
+        })
+    }
+
+    pub fn calls(&self) -> usize {
+        self.calls.load(Ordering::Relaxed)
+    }
+
+    fn next(&self) -> Result<String, ModelError> {
+        self.calls.fetch_add(1, Ordering::Relaxed);
+
+        let mut replies = self.replies.lock().expect("the script is not poisoned");
+        if replies.len() > 1 {
+            replies.remove(0)
+        } else {
+            match replies.first() {
+                Some(Ok(reply)) => Ok(reply.clone()),
+                Some(Err(_)) | None => Err(ModelError::Failed("scripted failure".to_owned())),
+            }
+        }
+    }
+}
+
+#[tonic::async_trait]
+impl ModelClient for ScriptedModel {
+    async fn complete(&self, _request: &ModelRequest) -> Result<String, ModelError> {
+        self.next()
+    }
+
+    /// One chunk per line, so a test can assert the client received them in the
+    /// order the model wrote them.
+    async fn stream(&self, _request: &ModelRequest) -> Result<ModelStream, ModelError> {
+        let reply = self.next()?;
+        let chunks: Vec<Result<String, ModelError>> =
+            reply.lines().map(|line| Ok(line.to_owned())).collect();
+
+        Ok(Box::pin(tokio_stream::iter(chunks)))
     }
 }
 
@@ -108,11 +201,19 @@ impl TestDatabase {
 /// Separate from [`TestDatabase::app`] so a test can supply a pool that is
 /// deliberately broken — see `health.rs`.
 pub fn build_app(pool: PgPool) -> Router {
-    build_app_with_model(pool, Arc::new(DisabledModelClient))
+    build_app_with(
+        pool,
+        Arc::new(DisabledModelClient),
+        Arc::new(AppStoreVerifier),
+    )
 }
 
-/// [`build_app`], plus the model the assistant should call.
-pub fn build_app_with_model(pool: PgPool, assistant: Arc<dyn ModelClient>) -> Router {
+/// [`build_app`], plus both of the seams a deployment chooses at startup.
+pub fn build_app_with(
+    pool: PgPool,
+    assistant: Arc<dyn ModelClient>,
+    entitlement: Arc<dyn TransactionVerifier>,
+) -> Router {
     let config = Config {
         environment: Environment::Dev,
         // Read only while building the pool, which the caller has already done.
@@ -124,7 +225,8 @@ pub fn build_app_with_model(pool: PgPool, assistant: Arc<dyn ModelClient>) -> Ro
         openrouter_api_key: None,
     };
 
-    api::build_app(AppState::new(pool, config, assistant)).expect("the router assembles")
+    api::build_app(AppState::new(pool, config, assistant, entitlement))
+        .expect("the router assembles")
 }
 
 fn database_url() -> String {

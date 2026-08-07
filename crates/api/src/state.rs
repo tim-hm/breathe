@@ -6,6 +6,7 @@ use sqlx::PgPool;
 
 use crate::config::Config;
 use crate::features::assistant::model::ModelClient;
+use crate::features::entitlement::verifier::TransactionVerifier;
 
 /// Shared as `Arc<AppState>` by both transports.
 ///
@@ -25,14 +26,29 @@ pub struct AppState {
     /// for the composition root; this field carries the chosen implementation
     /// down to the one service that calls it.
     pub assistant: Arc<dyn ModelClient>,
+
+    /// The App Store signature checker.
+    ///
+    /// Injected for the same reason as the model, and with the opposite
+    /// emphasis: the model is here so a test can point it somewhere harmless,
+    /// and this is here so a test can supply a transaction Apple never signed.
+    /// Nothing configures it — the trust anchor is compiled in — so the field
+    /// exists purely as the seam.
+    pub entitlement: Arc<dyn TransactionVerifier>,
 }
 
 impl AppState {
-    pub fn new(pool: PgPool, config: Config, assistant: Arc<dyn ModelClient>) -> Arc<Self> {
+    pub fn new(
+        pool: PgPool,
+        config: Config,
+        assistant: Arc<dyn ModelClient>,
+        entitlement: Arc<dyn TransactionVerifier>,
+    ) -> Arc<Self> {
         Arc::new(Self {
             pool,
             config,
             assistant,
+            entitlement,
         })
     }
 }

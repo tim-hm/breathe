@@ -2,6 +2,7 @@
 //! see docs/code-structure.md.
 
 pub mod assistant;
+pub mod entitlement;
 pub mod journey;
 pub mod profile;
 pub mod technique;

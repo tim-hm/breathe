@@ -5,6 +5,7 @@
 //! assistant's words for a goal should be the same whether a model or this
 //! server wrote the sentence around them.
 
+use crate::features::entitlement::types::Tier;
 use crate::features::profile::types::ExperienceLevel;
 use crate::features::technique::types::TechniqueGoal;
 
@@ -64,17 +65,24 @@ pub const RECOMMENDATION_COUNT: usize = 3;
 
 /// Model calls one person may make per UTC day.
 ///
-/// Generous by design: the free tier gets a real taste of the assistant, and
-/// falls back to the rules afterwards rather than hitting a wall (the business
-/// plan's framing — the paywall is M8, not this). It is a spend ceiling, not a
-/// product tier.
+/// The one place the subscription is worth money. Both numbers are spend
+/// ceilings first — a runaway client cannot cost more than this either way —
+/// and the gap between them is the product: Plus buys the assistant as it was
+/// designed, and free buys enough of it to know what it does.
 ///
-/// **The entitlement seam.** M8 makes this depend on the caller: a subscriber
-/// gets a higher allowance, and the entitlement is read from the `users` row the
-/// backend verified a `StoreKit` transaction against — never from a client
-/// boolean. The change lands as a per-caller limit passed into
-/// `super::repository::claim_daily_call`, which already takes one.
-pub const DAILY_MODEL_CALLS: i32 = 25;
+/// Free is three rather than zero, and that is the business plan's framing
+/// rather than a compromise: the hero experience is not the assistant, so
+/// running out drops to the rule-based answer flagged `FALLBACK`, which is the
+/// same answer everybody gets offline. Nobody hits a wall.
+///
+/// Read from the caller's `users` row via `entitlement::service::tier`, never
+/// from anything a request carries.
+pub const fn daily_model_calls(tier: Tier) -> i32 {
+    match tier {
+        Tier::Free => 3,
+        Tier::Plus => 25,
+    }
+}
 
 /// The output ceiling on a recommendation call.
 ///

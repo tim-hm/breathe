@@ -27,6 +27,8 @@ The existing tests are the pattern:
 | `no_domain_goal_maps_to_unspecified`                | The proto zero value never escapes as a real enum case                                              |
 | `slugs_are_unique`                                  | The seed upsert is keyed on `slug`; a duplicate would make array order decide which definition wins |
 | `rejectsAnUnspecifiedGoal`                          | The Swift side of the same boundary — a newer server cannot put a technique in the wrong section    |
+| `a_forged_chain_does_not_verify`                    | A structurally perfect App Store transaction that is nobody's but its author's entitles nobody      |
+| `the_compiled_in_root_is_apples`                    | The one trust anchor with no runtime check behind it; a swapped file would refuse every real buyer  |
 
 Every one covers a decision that is invisible in the code and expensive to rediscover.
 
@@ -63,6 +65,9 @@ The tests and what they pin:
 | `an_exhausted_quota_answers_from_the_rules`                  | The spend ceiling binds, and running out is a flagged answer rather than an error                                   |
 | `the_breaker_trips_and_then_recovers`                        | Both halves, through the call count — a breaker that never opened and one that never closed both still answer       |
 | `the_explanation_streams_ordered_chunks`                     | The first server-streaming RPC: separate frames, in order, over the real gRPC-Web framing                           |
+| `plus_raises_the_daily_model_allowance`                      | The only mechanical thing a subscription buys, read from the caller's row and never from the request                |
+| `resubmitting_the_same_transaction_changes_nothing`          | The client resubmits on every launch; the expiry not moving is what says the grant was not applied twice            |
+| `an_older_transaction_cannot_shorten_a_renewed_subscription` | `Transaction.updates` and `currentEntitlements` have no ordering, so last year's purchase can arrive last           |
 
 Each was verified by breaking the code it covers and confirming it fails.
 
@@ -80,3 +85,5 @@ mise run test:swift  # Swift Testing, on the host
 ## What is not covered yet
 
 There are no UI tests, and nothing exercises the Swift client against a live server — `TechniqueRepository` is tested against constructed proto values, not a socket. Closing that gap means a booted simulator and a running backend in the same job, which is a CI problem before it is a testing one. Until then, the contract between the two is held by `check:generated` (the committed Swift matches `proto/`) and by the decoding tests on either side of the boundary.
+
+**No test verifies a real Apple signature**, and none can: minting one needs Apple's private key, and a transaction captured from a sandbox purchase would go stale as soon as its certificate chain rotated. The boundary is drawn deliberately. What _is_ covered is every rejection path — a forged chain, an unsigned token, a malformed one, another app's bundle id, another product — plus the identity of the compiled-in root, so a swapped or truncated certificate fails on the host rather than in production. What is _not_ covered is the accept path: that a genuine Apple chain verifies has only ever been observed by a sandbox purchase on a device. Simulator purchases cannot close it either — Xcode's local StoreKit configuration signs with a per-machine test certificate, which this server correctly refuses.
