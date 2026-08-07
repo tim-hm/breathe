@@ -15,6 +15,11 @@ struct SettingsView: View {
     let schedules: ScheduleStore
     let catalogue: TechniqueListModel
 
+    /// Dismisses the screen. Non-nil only where Settings arrived as a sheet
+    /// rather than as a tab root, which is the only presentation that needs a
+    /// way out of its own.
+    var onDone: (() -> Void)?
+
     @Environment(SessionSettings.self) private var settings
 
     var body: some View {
@@ -22,6 +27,10 @@ struct SettingsView: View {
 
         NavigationStack {
             List {
+                #if DEBUG
+                    DesignLabSection()
+                #endif
+
                 Section {
                     Picker("Appearance", selection: $settings.appearance) {
                         ForEach(Appearance.allCases) { appearance in
@@ -82,6 +91,13 @@ struct SettingsView: View {
             .scrollContentBackground(.hidden)
             .paletteGround()
             .navigationTitle("Settings")
+            .toolbar {
+                if let onDone {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done", action: onDone)
+                    }
+                }
+            }
         }
     }
 

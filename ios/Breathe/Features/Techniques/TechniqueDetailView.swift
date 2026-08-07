@@ -275,11 +275,3 @@ struct TechniqueDetailView: View {
         duration.formatted(.units(allowed: [.minutes, .seconds], width: .abbreviated))
     }
 }
-
-/// Wraps the model so `fullScreenCover(item:)` has something `Identifiable` to
-/// present. The identity is the presentation's, not the session's — a new tap on
-/// Begin is a new session, and this is what makes that unambiguous.
-private struct StartedSession: Identifiable {
-    let id = UUID()
-    let model: SessionModel
-}

@@ -12,6 +12,15 @@ struct TechniqueListView: View {
     let model: TechniqueListModel
     let sessions: any SessionRecording
 
+    /// Opens Settings. Non-nil only under a chrome with no Settings tab, which
+    /// is what puts a gear in this screen's toolbar.
+    var showSettings: (() -> Void)?
+
+    /// The basics, as a row at the foot of the catalogue. Non-nil only under a
+    /// chrome with no tab for them — the same screen, pushed from here rather
+    /// than rooted in a tab of its own.
+    var foundations: FoundationsModel?
+
     @Environment(SubscriptionStore.self) private var plus
 
     /// The locked technique somebody tapped, which is both the paywall's trigger
@@ -29,6 +38,13 @@ struct TechniqueListView: View {
                 }
                 .sheet(item: $locked) { technique in
                     PaywallView(highlighting: technique.requires)
+                }
+                .toolbar {
+                    if let showSettings {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            SettingsGearButton(action: showSettings)
+                        }
+                    }
                 }
         }
         // Home usually starts the shared load first, but this tab must not
@@ -62,7 +78,7 @@ struct TechniqueListView: View {
                 // be told what to do is told first.
                 SuggestedForYouView(techniques: techniques)
 
-                ForEach(goals(in: techniques), id: \.self) { goal in
+                ForEach(TechniqueGoal.present(in: techniques), id: \.self) { goal in
                     Section {
                         ForEach(techniques.filter { $0.goal == goal }) { technique in
                             row(for: technique)
@@ -74,6 +90,8 @@ struct TechniqueListView: View {
                             .textCase(nil)
                     }
                 }
+
+                basicsRow
             }
             .listStyle(.plain)
 
@@ -86,6 +104,34 @@ struct TechniqueListView: View {
                 Button("Try again") {
                     Task { await model.load() }
                 }
+            }
+        }
+    }
+
+    /// The basics at the foot of the catalogue, where a chrome with no tab for
+    /// them puts them.
+    ///
+    /// Last rather than first: somebody scrolling nine techniques and finding
+    /// none of them obvious is exactly who the questions underneath are for, and
+    /// they read as a footnote to the catalogue rather than a gate in front of
+    /// it.
+    @ViewBuilder
+    private var basicsRow: some View {
+        if let foundations {
+            Section {
+                NavigationLink {
+                    FoundationsView(model: foundations)
+                } label: {
+                    Label("The basics", systemImage: "book")
+                        .font(.headline)
+                        .padding(.vertical, Theme.Spacing.close)
+                }
+                .listRowBackground(Color.clear)
+            } footer: {
+                Text("Belly or chest, nose or mouth, eyes open or closed — the "
+                    + "questions under every technique here.")
+                    .font(.footnote)
+                    .foregroundStyle(Theme.Ink.tertiary)
             }
         }
     }
@@ -115,15 +161,6 @@ struct TechniqueListView: View {
             // start competing with the unlocked rows above it.
             .buttonStyle(.plain)
             .listRowBackground(Color.clear)
-        }
-    }
-
-    /// The goals present in the catalogue, in the fixed calm-first order of
-    /// the enum — stable across loads, so sections never reshuffle under a
-    /// person who has learned where sleep lives.
-    private func goals(in techniques: [Technique]) -> [TechniqueGoal] {
-        TechniqueGoal.allCases.filter { goal in
-            techniques.contains { $0.goal == goal }
         }
     }
 }

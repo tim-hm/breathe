@@ -17,6 +17,10 @@ struct JourneyView: View {
     /// its technique; the slug then stands in rather than hiding the row.
     let catalogue: TechniqueListModel
 
+    /// Opens Settings. Non-nil only under a chrome with no Settings tab, which
+    /// is what puts a gear in this screen's toolbar.
+    var showSettings: (() -> Void)?
+
     /// The row awaiting the person's confirmation before it goes — deletion
     /// takes the stats with it, so it is asked about, not swiped away.
     @State private var toDelete: SessionRecord?
@@ -35,6 +39,13 @@ struct JourneyView: View {
             }
             .paletteGround()
             .navigationTitle("Journey")
+            .toolbar {
+                if let showSettings {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        SettingsGearButton(action: showSettings)
+                    }
+                }
+            }
         }
         // Local read first, so the screen is complete before anything touches
         // the network; the sync then runs behind what is already drawn.
