@@ -24,4 +24,6 @@
 
 **Keep docs verifiable.** Reference specific file paths and type names. Prefer pointing at code over describing behaviour that can drift from it — `mise run check:doc-links` catches a path that stops resolving, but nothing catches a paragraph that quietly stopped being true.
 
+Nor does the check reach as far as it looks: `lychee` resolves **markdown links**, so a path written as prose in backticks is invisible to it — which is how `transport.md` went on placing `GrpcWebLayer` in `main.rs` after it had moved to `lib.rs`, with the gate green throughout. Make a path to a document a link, so the check does see it. A path to code stays a claim only a person can check.
+
 **New cross-cutting pattern?** Create or update the doc, then add a row to the table in [CLAUDE.md](../CLAUDE.md) §2. A pattern nobody can find is a pattern nobody follows.

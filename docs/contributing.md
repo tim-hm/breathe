@@ -42,10 +42,11 @@ Pick any iPhone simulator and press ⌘R. You should see nine techniques, served
 
 ## Ports
 
-| Service    | Port  | Notes                                  |
-| :--------- | :---- | :------------------------------------- |
-| API        | 18100 | gRPC-Web and JSON on the same listener |
-| PostgreSQL | 18101 | `mise run db:psql` to query it         |
+| Service    | Port  | Notes                                     |
+| :--------- | :---- | :---------------------------------------- |
+| API        | 18100 | gRPC-Web and JSON on the same listener    |
+| PostgreSQL | 18101 | `mise run db:psql` to query it            |
+| `web/`     | 18102 | `mise run web:serve`, static preview only |
 
 **breathe owns 18100–18199.** Every port this repo uses comes from that block, and nothing else on the machine should claim it — one range means one thing to remember and one thing to check.
 
@@ -77,14 +78,14 @@ CI (`.github/workflows/checks.yml`) runs the formatting and lint subset on every
 
 ## Common tasks
 
-| Intent                         | Command                                                        |
-| :----------------------------- | :------------------------------------------------------------- |
-| Wipe and rebuild the database  | `mise run dev:db:reset`                                        |
-| Query the database             | `echo 'select * from techniques;' \| mise run db:psql`         |
-| Change the technique catalogue | Edit `crates/migrate/src/seed.rs`, then `mise run migrate`     |
-| Change the API contract        | Edit `proto/breathe/v1/…`, then `mise run generate`            |
-| Add a Swift file               | Create it under `ios/Breathe/`; `mise run ios:gen` picks it up |
-| Build the app headlessly       | `mise run ios:build`                                           |
+| Intent                         | Command                                                                               |
+| :----------------------------- | :------------------------------------------------------------------------------------ |
+| Wipe and rebuild the database  | `mise run dev:db:reset`                                                               |
+| Query the database             | `echo 'select * from techniques;' \| mise run db:psql`                                |
+| Change the technique catalogue | Edit `crates/migrate/src/seed.rs`, then `mise run migrate`                            |
+| Change the API contract        | Edit `proto/breathe/v1/…`, then `mise run generate`                                   |
+| Add a Swift file               | Create it under `ios/Breathe/` or `ios/BreatheWatch/`; `mise run ios:gen` picks it up |
+| Build the apps headlessly      | `mise run ios:build`, `mise run ios:build:watch`                                      |
 
 ## Things that will bite you
 

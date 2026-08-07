@@ -15,7 +15,7 @@ The asymmetry is deliberate. Rust regenerates on every `cargo build`, so a stale
 
 ## Why gRPC-Web
 
-The server is tonic wrapped in `tonic_web::GrpcWebLayer` (`crates/api/src/main.rs`). The client is `connect-swift` configured with `networkProtocol: .grpcWeb` (`ios/Packages/BreatheCore/Sources/BreatheAPI/Clients.swift`).
+The server is tonic wrapped in `tonic_web::GrpcWebLayer` (`crates/api/src/lib.rs`, where the router is assembled — `main.rs` is process startup and nothing else). The client is `connect-swift` configured with `networkProtocol: .grpcWeb` (`ios/Packages/BreatheCore/Sources/BreatheAPI/Clients.swift`).
 
 connect-swift speaks three protocols — Connect, gRPC, and gRPC-Web — and the server has to speak the same one:
 
@@ -25,7 +25,7 @@ connect-swift speaks three protocols — Connect, gRPC, and gRPC-Web — and the
 
 gRPC-Web is the only option where both ends are maintained by their upstreams and neither side needed code written to bridge them.
 
-**Consequence to remember:** the status lives in the `grpc-status` and `grpc-message` headers. A CORS policy that does not `expose_headers` those two produces a request that succeeds on the wire and fails in the client, with nothing in the server log to suggest why. `cors_layer` in `crates/api/src/main.rs` exposes them, and that is the only reason it exists.
+**Consequence to remember:** the status lives in the `grpc-status` and `grpc-message` headers. A CORS policy that does not `expose_headers` those two produces a request that succeeds on the wire and fails in the client, with nothing in the server log to suggest why. `cors_layer` in `crates/api/src/lib.rs` exposes them, and that is the only reason it exists.
 
 ## One port, two protocols
 
@@ -35,12 +35,21 @@ Both surfaces share a listener:
 let grpc_router = grpc::build_services(&state)?
     .prepare()
     .into_axum_router()
+    .layer(axum::middleware::from_fn_with_state(
+        Arc::clone(&state),
+        identity::resolve,
+    ))
     .layer(tonic_web::GrpcWebLayer::new());
 
-let app = http::router(state).fallback_service(grpc_router);
+Ok(http::router(state)
+    .fallback_service(grpc_router)
+    .layer(cors)
+    .layer(TraceLayer::new_for_http()))
 ```
 
 gRPC paths are `/breathe.v1.<Service>/<Method>` and can never collide with `/health` or `/about`, so axum matches its own routes first and everything else falls through to gRPC. One port means one thing to configure, one thing to port-forward, and one thing to point the app at.
+
+Tower applies the outermost `.layer` last, so `identity::resolve` sits _inside_ `GrpcWebLayer`: it sees a plain gRPC request, and the `Status` it returns for a header it cannot parse is re-framed as gRPC-Web on the way out. Outside the layer it would answer an `UNAUTHENTICATED` the client could not read as one. It is also on the gRPC router alone — `/health` must answer with an unreachable database, and resolving an identity upserts a `users` row, which is exactly the dependency that would break it.
 
 ## Server streaming
 

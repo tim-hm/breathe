@@ -79,17 +79,28 @@ Every piece of code has a default home. Start at the lowest tier and escalate on
 
 All Swift library code lives in **one** SwiftPM package, `ios/Packages/BreatheCore`, split into targets. One package rather than three because SwiftPM cannot share a tools-version or platform list across packages — and, more importantly, because each package carries its own `Package.resolved`, so a split means several lockfiles free to pin different versions of the same dependency.
 
-| Target          | Product? | Role                                                       | May depend on             |
-| :-------------- | :------- | :--------------------------------------------------------- | :------------------------ |
-| `BreatheAPI`    | **no**   | Generated protobuf + the Connect client factory            | Connect, SwiftProtobuf    |
-| `BreatheKit`    | yes      | Domain models, observable feature models, and repositories | `BreatheAPI`              |
-| `BreatheUI`     | yes      | Design tokens and shared components                        | nothing                   |
-| `Breathe` (app) | —        | Features, composition root                                 | `BreatheKit`, `BreatheUI` |
+| Target                   | Product? | Role                                                       | May depend on             |
+| :----------------------- | :------- | :--------------------------------------------------------- | :------------------------ |
+| `BreatheAPI`             | **no**   | Generated protobuf + the Connect client factory            | Connect, SwiftProtobuf    |
+| `BreatheKit`             | yes      | Domain models, observable feature models, and repositories | `BreatheAPI`              |
+| `BreatheUI`              | yes      | Design tokens and shared components                        | nothing                   |
+| `Breathe` (iOS)          | —        | Features, composition root                                 | `BreatheKit`, `BreatheUI` |
+| `BreatheWatch` (watchOS) | —        | Features, composition root, the phone link                 | `BreatheKit`, `BreatheUI` |
 
 Two invariants hold here, and the target graph enforces both:
 
-- **The app cannot import `BreatheAPI`.** It is a target, not a product, so the module is not merely undeclared in `project.yml` — it is unnameable from the app. "App code never imports a generated protobuf type" is checked by the compiler rather than remembered.
+- **Neither app can import `BreatheAPI`.** It is a target, not a product, so the module is not merely undeclared in `project.yml` — it is unnameable from an app. "App code never imports a generated protobuf type" is checked by the compiler rather than remembered.
 - **`BreatheUI` knows nothing about the domain.** It has no dependencies at all. It exposes accents named for feeling (`settle`, `night`, `spark`, `restore`), and the _feature_ maps `TechniqueGoal` onto them — a design module that imported domain types would invert the dependency and make the palette un-reusable.
+
+### What the two apps share
+
+`BreatheWatch` is a second app over the same package. Everything platform-neutral is already in `BreatheKit` and the watch composes the same instances — the session timeline, the catalogue cache, the local session store, the sync queue. Views are never shared: a wrist is not a small phone, and `BreathRing` exists precisely because there is only room for one shape where the phone has two.
+
+What falls between the two is a mapping from a domain type onto a design token, and it is **duplicated per target on purpose** — `BreatheUI` takes no dependencies by the invariant above, so it cannot be the shared home, and each copy documents that. Three pairs duplicate today: `GoalAccent`, `SafetyNote`, `TechniqueGlyph`. A fourth is the signal to add a `BreatheAppUI` target depending on both products, never to weaken `BreatheUI`.
+
+The same rule catches one pair the compiler cannot see at all. `BreatheKit/TechniqueDrawing.swift` is a coordinate-for-coordinate port of the hand-authored SVGs in `web/index.html`, and the site is the reference — so a glyph changed there is a glyph the apps keep drawing the old way, with nothing to catch it.
+
+The link between the two apps runs one way: the phone sends the anonymous identity and the best controlled pause through `WatchConnectivity`'s `applicationContext` (`ios/Breathe/WatchLink.swift`), and the watch only listens (`ios/BreatheWatch/PhoneLink.swift`). The watch must never mint an identity of its own, so `ProvisionedUserIdentityStore` starts empty and everything above it is written to work without one — the reasoning is on that type.
 
 ## Module Size Tiers
 

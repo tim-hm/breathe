@@ -10,6 +10,7 @@ infra/bootstrap/  applied once, before everything — the state bucket and the I
 infra/box/        what runs on the instance — compose.yaml + Caddyfile, rsynced by deploy
 infra/cloud-init.yaml   first-boot setup — Docker, the data volume, the backup cron
 Dockerfile        one image, both workspace binaries (api + migrate)
+web/              the marketing one-pager, rsynced beside infra/box and served by Caddy
 ```
 
 The public hostname is **`cadence.holmie.xyz`**, named in `infra/box/Caddyfile`. `holmie.xyz` is registered at **Porkbun** and served by Porkbun's nameservers, so its records are edited there — nothing in `infra/` manages DNS, and the `elastic_ip` output is what the A record points at.
@@ -21,6 +22,14 @@ The instance is disposable; the things worth keeping live elsewhere:
 - **TLS certificates** — in the `caddy-data` Docker volume, persisted so redeploys never touch ACME rate limits.
 
 The public entrance is Caddy on 443 (80 redirects and answers ACME challenges), reverse-proxying to the API on 18100. gRPC-Web is plain HTTP POST underneath, so no special proxy handling is needed. Postgres is not reachable from outside the compose network at all.
+
+## The site
+
+`web/` is two static files — `index.html` and `style.css`, no build step and no bundler. `mise run deploy` rsyncs the directory to `/srv/breathe/web/`, which `infra/box/compose.yaml` mounts read-only into Caddy.
+
+`infra/box/Caddyfile` splits the hostname by path rather than running a second one, so there is one A record and one certificate. The API side is enumerated (`/breathe.v1.*`, `/health`, `/about`) and the site is the fallback, never the other way round: matching the proto package prefix covers every service the contract will ever grow, so a static file can never shadow an RPC.
+
+The one-pager's technique glyphs are the reference for the apps' own drawings, with nothing checking the two agree — see [code-structure.md](code-structure.md) before editing them.
 
 ## Environment
 
@@ -71,7 +80,7 @@ State lives in the S3 bucket `infra/bootstrap` creates — versioned, encrypted,
 ## First launch (deliberate, in order)
 
 1. Bootstrap, above.
-2. Create `infra/terraform.tfvars` (gitignored) with `ssh_public_key`, and `admin_cidr` if your IP is stable.
+2. Create `infra/terraform.tfvars` (gitignored) with both required variables: `ssh_public_key`, and `admin_cidr` as `<your-ip>/32` for a stable address or the range your ISP hands out. Neither has a default — `tofu plan` prompts for a missing one and fails outright under `-input=false` — and `infra/variables.tf` says why a default for `admin_cidr` would be the wrong thing to commit. Being stranded outside your own CIDR by a DHCP renewal is not the failure it sounds like: the instance carries an SSM role, so Session Manager reaches it without 22/tcp.
 3. `mise run infra:init` — downloads providers and modules, and reaches the S3 backend.
 4. `mise run infra:plan` — read the plan — then `mise run infra:apply`.
 5. At Porkbun, point `cadence.holmie.xyz` at the `elastic_ip` output with an `A` record. Do this before the first deploy: Caddy requests its certificate on first boot, and issuance fails (then retries with backoff) until the name resolves.
