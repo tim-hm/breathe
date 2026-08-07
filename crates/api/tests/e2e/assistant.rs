@@ -10,7 +10,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use api::assistant::{GuardedModelClient, ModelClient, ModelError};
+use api::assistant::{GuardedModelClient, ModelClient, ModelError, ModelRequest, ModelStream};
 use api::entitlement::Tier;
 use api::identity::USER_ID_HEADER;
 use api::proto::breathe::v1 as pb;
@@ -227,6 +227,47 @@ async fn an_unavailable_model_still_explains() {
         text.contains("water"),
         "the fallback carries the technique's safety note, which for this one is not optional"
     );
+}
+
+/// A provider that dies two sentences in ends the stream with a status rather
+/// than with `OK`. What arrived still reaches the client — the person is reading
+/// it — but an ended stream is otherwise indistinguishable from a finished one,
+/// and the client would caption half an explanation as the whole of it.
+#[tokio::test]
+async fn a_broken_stream_ends_with_a_status() {
+    let db = TestDatabase::create("assistant_broken_stream").await;
+
+    let response = explain(&db, Arc::new(HalfAnswer), USER, "box-breathing").await;
+
+    assert_eq!(response.status, tonic::Code::Unavailable as i32);
+    assert_eq!(
+        response.messages.len(),
+        1,
+        "the chunk that arrived before the failure still reaches the client"
+    );
+    assert_eq!(
+        response.messages[0].source,
+        pb::AssistantSource::Model as i32
+    );
+}
+
+/// A model that starts answering and then breaks — the one shape
+/// [`ScriptedModel`] cannot express, because a scripted reply either fails the
+/// call or answers it and this case does both.
+struct HalfAnswer;
+
+#[tonic::async_trait]
+impl ModelClient for HalfAnswer {
+    async fn complete(&self, _request: &ModelRequest) -> Result<String, ModelError> {
+        Err(ModelError::Failed("down".to_owned()))
+    }
+
+    async fn stream(&self, _request: &ModelRequest) -> Result<ModelStream, ModelError> {
+        Ok(Box::pin(tokio_stream::iter(vec![
+            Ok("First the mechanism.".to_owned()),
+            Err(ModelError::Failed("the stream broke mid-answer".to_owned())),
+        ])))
+    }
 }
 
 /// A slug the catalogue does not hold is `NOT_FOUND`, not an explanation of

@@ -11,25 +11,36 @@
 //! end of the prefix that should be cached, and it is why `ModelRequest` splits
 //! the prompt in two rather than handing over one string.
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use tokio_stream::StreamExt as _;
 
-use super::{ModelClient, ModelError, ModelRequest, ModelStream};
+use super::{ModelClient, ModelError, ModelRequest, ModelStream, millis};
 use crate::config;
 
-/// Bounds a single call. Generous enough for a long explanation on a slow day
-/// and short enough that a hung provider does not hold a connection — and, more
-/// to the point, does not hold the person's screen: the breaker needs failures
-/// to arrive to be able to trip on them.
+/// Bounds a whole non-streaming call. Generous enough for a long reply on a slow
+/// day and short enough that a hung provider does not hold the person's screen:
+/// the breaker needs failures to arrive to be able to trip on them.
+///
+/// Applied per request rather than on the client, because the streaming path
+/// must not carry it — there the same ceiling would cut a healthy answer
+/// mid-sentence at 45 seconds of perfectly good reading.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(45);
 
-/// How far the caller's own text is echoed into a log line when a call fails.
-///
-/// Enough to recognise which prompt broke, short enough that an intent note
-/// somebody typed does not end up whole in a log aggregator.
-const ERROR_EXCERPT_CHARS: usize = 200;
+/// Bounds reaching the provider at all. A connection that has not been accepted
+/// is a hang with nothing to wait for, on either path.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Bounds the gap *between* bytes, which is what "the provider stopped
+/// answering" actually looks like on a stream. A working stream resets it on
+/// every chunk, so it bounds a hang without bounding a long explanation.
+const READ_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// The provider's own handle on a call, echoed on every response. Logged when
+/// one fails, because it is what lets somebody raise that call with
+/// `OpenRouter`.
+const REQUEST_ID_HEADER: &str = "x-request-id";
 
 /// Chunks held between the provider's stream and the client's.
 ///
@@ -53,17 +64,19 @@ pub struct OpenRouterClient {
 impl OpenRouterClient {
     /// Builds a client around one long-lived connection pool.
     ///
-    /// Returns `None` when the key's `reqwest::Client` cannot be built, which
-    /// in practice means the TLS backend failed to initialise — a boot-time
-    /// fault, and one the caller answers by running without an assistant rather
-    /// than refusing to serve the rest of the API.
-    pub fn new(api_key: &str) -> Option<Self> {
+    /// Fails when the `reqwest::Client` cannot be built, which in practice means
+    /// the TLS backend failed to initialise — a boot-time fault, and one the
+    /// caller answers by running without an assistant rather than refusing to
+    /// serve the rest of the API. The error travels rather than being dropped:
+    /// that caller's log line is the only account of why the assistant stayed
+    /// quiet for the life of the process.
+    pub fn new(api_key: &str) -> Result<Self, reqwest::Error> {
         let http = reqwest::Client::builder()
-            .timeout(REQUEST_TIMEOUT)
-            .build()
-            .ok()?;
+            .connect_timeout(CONNECT_TIMEOUT)
+            .read_timeout(READ_TIMEOUT)
+            .build()?;
 
-        Some(Self {
+        Ok(Self {
             http,
             endpoint: format!("{}/chat/completions", config::OPENROUTER_BASE_URL),
             api_key: api_key.to_owned(),
@@ -108,27 +121,31 @@ impl OpenRouterClient {
             ],
         };
 
-        let response = self
+        let mut call = self
             .http
             .post(&self.endpoint)
             .bearer_auth(&self.api_key)
-            .json(&body)
-            .send()
-            .await
-            .map_err(|error| {
-                ModelError::Failed(format!("the request did not complete: {error}"))
-            })?;
+            .json(&body);
+        if !streaming {
+            call = call.timeout(REQUEST_TIMEOUT);
+        }
+
+        let response = call.send().await.map_err(|error| {
+            ModelError::Failed(format!("the request did not complete: {error}"))
+        })?;
 
         let status = response.status();
         if !status.is_success() {
-            // The body is read for the log, not for the caller: a provider
-            // error can quote the prompt back, and the prompt carries the
-            // person's own words.
-            let detail = response.text().await.unwrap_or_default();
+            // The body is not read at all: a moderation refusal is the likeliest
+            // failure here and routinely quotes the input back, so any excerpt
+            // of it is the person's own words with a length limit on them.
             tracing::warn!(
                 feature = "assistant",
                 %status,
-                detail = %excerpt(&detail),
+                request_id = response
+                    .headers()
+                    .get(REQUEST_ID_HEADER)
+                    .and_then(|value| value.to_str().ok()),
                 "the model provider refused the call"
             );
             return Err(ModelError::Failed(format!(
@@ -143,12 +160,31 @@ impl OpenRouterClient {
 #[tonic::async_trait]
 impl ModelClient for OpenRouterClient {
     async fn complete(&self, request: &ModelRequest) -> Result<String, ModelError> {
+        let started = Instant::now();
         let response = self.post(request, false).await?;
 
         let body: ChatResponse = response
             .json()
             .await
             .map_err(|error| ModelError::Failed(format!("the reply did not decode: {error}")))?;
+
+        // One line per paid call, before the content is judged — the call was
+        // billed whatever the reply turns out to say. `info` survives the
+        // million-requests test because the daily allowance bounds how many of
+        // these a person can cause, and nothing else in the process records
+        // what the assistant costs.
+        let usage = body.usage.as_ref();
+        tracing::info!(
+            feature = "assistant",
+            model = config::OPENROUTER_MODEL_ID,
+            duration_ms = millis(started.elapsed()),
+            prompt_tokens = usage.map(|usage| usage.prompt_tokens),
+            completion_tokens = usage.map(|usage| usage.completion_tokens),
+            cached_tokens = usage
+                .and_then(|usage| usage.prompt_tokens_details.as_ref())
+                .map(|details| details.cached_tokens),
+            "the model answered"
+        );
 
         body.choices
             .into_iter()
@@ -159,6 +195,10 @@ impl ModelClient for OpenRouterClient {
     }
 
     async fn stream(&self, request: &ModelRequest) -> Result<ModelStream, ModelError> {
+        // Timed to the first chunk, which is the wait the reader experiences;
+        // the rest of a stream is bounded by how fast they read. No token
+        // counts: this endpoint reports usage only when it is not streaming.
+        let mut started = Some(Instant::now());
         let response = self.post(request, true).await?;
 
         // Server-sent events: `data: {json}` frames separated by blank lines,
@@ -192,10 +232,14 @@ impl ModelClient for OpenRouterClient {
                     return;
                 };
 
-                let Ok(frame) = frame else {
-                    let broken = ModelError::Failed("the stream broke mid-answer".to_owned());
-                    drop(sender.send(Err(broken)).await);
-                    return;
+                let frame = match frame {
+                    Ok(frame) => frame,
+                    Err(error) => {
+                        let broken =
+                            ModelError::Failed(format!("the stream broke mid-answer: {error}"));
+                        drop(sender.send(Err(broken)).await);
+                        return;
+                    }
                 };
 
                 buffer.extend_from_slice(&frame);
@@ -210,6 +254,15 @@ impl ModelClient for OpenRouterClient {
                     match event {
                         Event::Done => return,
                         Event::Text(text) if !text.is_empty() => {
+                            if let Some(started) = started.take() {
+                                tracing::info!(
+                                    feature = "assistant",
+                                    model = config::OPENROUTER_MODEL_ID,
+                                    duration_ms = millis(started.elapsed()),
+                                    "the model started answering"
+                                );
+                            }
+
                             if sender.send(Ok(text)).await.is_err() {
                                 return;
                             }
@@ -259,12 +312,6 @@ fn parse_event(line: &str) -> Event {
         .map_or(Event::Ignored, Event::Text)
 }
 
-/// Trims text for a log line, counting characters so a multi-byte excerpt is
-/// never cut mid-character.
-fn excerpt(text: &str) -> String {
-    text.chars().take(ERROR_EXCERPT_CHARS).collect()
-}
-
 #[derive(Serialize)]
 struct ChatRequest<'a> {
     model: &'static str,
@@ -299,6 +346,31 @@ struct CacheControl {
 #[derive(Deserialize)]
 struct ChatResponse {
     choices: Vec<Choice>,
+    /// What the call cost, as the provider counted it. Optional because a route
+    /// that does not report it is not a failed call.
+    #[serde(default)]
+    usage: Option<Usage>,
+}
+
+/// The token counts behind one call — the safe substitute for logging what was
+/// asked and what came back.
+#[derive(Deserialize)]
+struct Usage {
+    #[serde(default)]
+    prompt_tokens: u32,
+    #[serde(default)]
+    completion_tokens: u32,
+    #[serde(default)]
+    prompt_tokens_details: Option<PromptTokensDetails>,
+}
+
+/// Carries `cached_tokens`: the part of the prefix the provider served from its
+/// cache, and the only evidence that the `cache_control` marker above is worth
+/// splitting the prompt for.
+#[derive(Deserialize)]
+struct PromptTokensDetails {
+    #[serde(default)]
+    cached_tokens: u32,
 }
 
 #[derive(Deserialize)]
