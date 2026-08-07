@@ -157,7 +157,7 @@ struct TechniqueDetailView: View {
             started = StartedSession(
                 model: SessionModel(
                     technique: dialled,
-                    cues: SessionCues(mode: settings.cueMode),
+                    cues: SessionCues(mode: settings.cueMode, strength: settings.hapticStrength),
                     recorder: sessions
                 )
             )

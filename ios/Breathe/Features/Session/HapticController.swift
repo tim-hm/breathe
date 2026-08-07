@@ -20,8 +20,17 @@ final class HapticController {
     /// fallback marks boundaries rather than shaping phases.
     private let supportsHaptics = CHHapticEngine.capabilitiesForHardware().supportsHaptics
 
+    /// How hard everything below lands. Resolved once, when the session is
+    /// composed: the patterns are built from it and a change mid-session would
+    /// mean two halves of one breath at two strengths.
+    private let strength: HapticStrength
+
     private var engine: CHHapticEngine?
     private var impacts: [UIImpactFeedbackGenerator.FeedbackStyle: UIImpactFeedbackGenerator] = [:]
+
+    init(strength: HapticStrength) {
+        self.strength = strength
+    }
 
     func prepare() {
         guard supportsHaptics else {
@@ -68,7 +77,7 @@ final class HapticController {
     /// the person to look at the screen to know they are done.
     func playCompletion() {
         guard let engine else {
-            impacts[.medium]?.impactOccurred()
+            impacts[.medium]?.impactOccurred(intensity: CGFloat(strength.intensity(1)))
             return
         }
 
@@ -79,9 +88,12 @@ final class HapticController {
                     parameters: [
                         CHHapticEventParameter(
                             parameterID: .hapticIntensity,
-                            value: 0.5 + Float(index) * 0.2
+                            value: strength.intensity(0.5 + Float(index) * 0.2)
                         ),
-                        CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.4),
+                        CHHapticEventParameter(
+                            parameterID: .hapticSharpness,
+                            value: strength.sharpness(0.4)
+                        ),
                     ],
                     relativeTime: time
                 )
@@ -148,17 +160,30 @@ final class HapticController {
             eventType: .hapticContinuous,
             parameters: [
                 CHHapticEventParameter(parameterID: .hapticIntensity, value: 1),
-                CHHapticEventParameter(parameterID: .hapticSharpness, value: sharpness),
+                CHHapticEventParameter(
+                    parameterID: .hapticSharpness,
+                    value: strength.sharpness(sharpness)
+                ),
             ],
             relativeTime: 0,
             duration: seconds
         )
 
+        // The curve, not the event, is where the strength lands: the event is
+        // authored at full intensity precisely so the shape lives in these
+        // control points, and scaling the event instead would flatten the swell
+        // rather than raise it.
         let curve = CHHapticParameterCurve(
             parameterID: .hapticIntensityControl,
             controlPoints: [
-                CHHapticParameterCurve.ControlPoint(relativeTime: 0, value: start),
-                CHHapticParameterCurve.ControlPoint(relativeTime: seconds, value: end),
+                CHHapticParameterCurve.ControlPoint(
+                    relativeTime: 0,
+                    value: strength.intensity(start)
+                ),
+                CHHapticParameterCurve.ControlPoint(
+                    relativeTime: seconds,
+                    value: strength.intensity(end)
+                ),
             ],
             relativeTime: 0
         )
@@ -172,8 +197,14 @@ final class HapticController {
                 CHHapticEvent(
                     eventType: .hapticTransient,
                     parameters: [
-                        CHHapticEventParameter(parameterID: .hapticIntensity, value: intensity),
-                        CHHapticEventParameter(parameterID: .hapticSharpness, value: sharpness),
+                        CHHapticEventParameter(
+                            parameterID: .hapticIntensity,
+                            value: strength.intensity(intensity)
+                        ),
+                        CHHapticEventParameter(
+                            parameterID: .hapticSharpness,
+                            value: strength.sharpness(sharpness)
+                        ),
                     ],
                     relativeTime: 0
                 ),
@@ -193,7 +224,9 @@ final class HapticController {
         }
 
         guard let generator = impacts[style] else { return }
-        generator.impactOccurred()
+        // The one strength knob this API has. A device without CoreHaptics still
+        // deserves the setting to mean something.
+        generator.impactOccurred(intensity: CGFloat(strength.intensity(1)))
         // Re-armed straight away: the next boundary is seconds away, and a cold
         // generator is the one that arrives late.
         generator.prepare()

@@ -6,9 +6,9 @@ import UIKit
 
 /// The way in: say what you want, start breathing.
 ///
-/// One decision on the screen — the intent wheel — under the brand's own
-/// breathing orb. Everything else lives in the tab bar's other tabs; the only
-/// extra here is the technique the wheel resolves to. The wheel wakes up
+/// One decision on the screen — the intent wheel — and nothing competing with
+/// it. Everything else lives in the tab bar's other tabs; the only extra here
+/// is the technique the wheel resolves to. The wheel wakes up
 /// where it was last left — the hour's goal decides only the very first
 /// launch — and offers the technique this person last used towards that
 /// goal, which is as much context as an on-device rule should claim
@@ -38,8 +38,9 @@ struct HomeView: View {
         NavigationStack {
             content
                 .paletteGround()
-                // The wordmark below is this screen's title; the bar would
-                // duplicate it and cage the orb under a hairline.
+                // Nothing to title. The screen is one decision and the button
+                // that acts on it; a bar would add a word, a hairline, and a
+                // reason to look at the top of the screen instead of the middle.
                 .toolbar(.hidden, for: .navigationBar)
                 .navigationDestination(for: Technique.self) { technique in
                     TechniqueDetailView(technique: technique, sessions: sessions)
@@ -103,21 +104,15 @@ struct HomeView: View {
         }
     }
 
-    /// The screen's rhythm in three equal breaths of space: one above the
-    /// orb, one between orb and wheel, one between wheel and Begin. Equal
-    /// spacers are what keep the wheel exactly halfway between the breathing
-    /// and the button on any screen height.
+    /// The screen's rhythm in two equal breaths of space, one either side of
+    /// the wheel. Equal spacers are what centre the screen's one decision on
+    /// any screen height — the same structure that used to carry a wordmark and
+    /// an orb above it, with the spacers absorbing both slots rather than the
+    /// layout being redrawn around their absence.
     private func loaded(_ techniques: [Technique]) -> some View {
         let chosen = chosen(from: techniques)
 
         return VStack(spacing: 0) {
-            wordmark
-                .padding(.top, Theme.Spacing.standard)
-
-            Spacer(minLength: Theme.Spacing.standard)
-
-            AmbientOrb(accent: chosen?.goal.accent ?? Theme.Accent.brand)
-
             Spacer(minLength: Theme.Spacing.standard)
 
             intentWheel(over: goals(in: techniques))
@@ -136,15 +131,6 @@ struct HomeView: View {
         }
         .padding(.horizontal, Theme.Spacing.standard)
         .padding(.bottom, Theme.Spacing.loose)
-    }
-
-    /// The site's wordmark, in the site's voice: serif, letterspaced, quiet.
-    private var wordmark: some View {
-        Text("BREATHE")
-            .font(.system(size: 15, weight: .medium, design: .serif))
-            .tracking(6)
-            .foregroundStyle(Theme.Ink.secondary)
-            .accessibilityAddTraits(.isHeader)
     }
 
     /// The one control: "I want to" beside a wheel of outcomes, reading as
@@ -225,7 +211,7 @@ struct HomeView: View {
         started = StartedSession(
             model: SessionModel(
                 technique: dialled,
-                cues: SessionCues(mode: settings.cueMode),
+                cues: SessionCues(mode: settings.cueMode, strength: settings.hapticStrength),
                 recorder: sessions
             )
         )
