@@ -31,6 +31,18 @@ service AssistantService {
   // immediately, where a unary call would show a spinner for as long as the
   // model takes to finish.
   rpc ExplainTechnique(ExplainTechniqueRequest) returns (stream ExplainTechniqueResponse);
+
+  // Streams the coach's reply to one message in a conversation.
+  //
+  // On this service rather than its own, because a conversation shares
+  // everything the one-shot RPCs already settled: the same identity scoping,
+  // the same daily allowance, the same fallback doctrine, and the same
+  // `AssistantSource` honesty on every chunk.
+  //
+  // The server keeps no conversation state at all — no transcript, no prompt,
+  // no reply is persisted or logged anywhere. The transcript lives on the
+  // device, and each call carries as much of it as the client wants read back.
+  rpc Chat(ChatRequest) returns (stream ChatResponse);
 }
 
 // Where an answer came from.
@@ -84,6 +96,58 @@ message HealthContext {
   // Held for `session_hr_response_bpm`, the in-session heart-rate response
   // summary, which ships with the hardware slice that can actually measure it.
   reserved 5;
+}
+
+// Who said one turn of a conversation.
+enum ChatRole {
+  CHAT_ROLE_UNSPECIFIED = 0;
+
+  // The person using the app.
+  CHAT_ROLE_PERSON = 1;
+
+  // The coach — this service's own earlier replies, read back to it.
+  CHAT_ROLE_COACH = 2;
+}
+
+// One turn of the conversation, as the device remembers it.
+message ChatTurn {
+  // Never UNSPECIFIED: a turn that does not say who spoke is INVALID_ARGUMENT,
+  // because the server hands these to the model as genuinely attributed
+  // speech and cannot guess an attribution.
+  ChatRole role = 1;
+
+  // What was said. Bounded to the same length as a new message; a longer turn
+  // fails the request rather than being silently trimmed.
+  string text = 2;
+}
+
+message ChatRequest {
+  // The conversation so far, oldest first, supplied by the client. The server
+  // holds no transcript, so the device's copy is the only one — the same
+  // inversion of the empty-request rule `HealthContext` documents. COACH turns
+  // cannot be verified as genuinely the coach's words; they are accepted and
+  // treated as conversation data, on the same terms as the intent note. Only
+  // the most recent turns are read; older ones are silently ignored.
+  repeated ChatTurn history = 1;
+
+  // The person's new message. Required, and bounded; an empty or over-long
+  // message is INVALID_ARGUMENT.
+  string message = 2;
+
+  // The same coarse heart trends the other two RPCs may carry, on the same
+  // terms: optional, device-computed, used transiently, never stored.
+  HealthContext health_context = 3;
+}
+
+message ChatResponse {
+  // The next piece of the reply, to be appended to what came before — chunk
+  // boundaries carry no meaning, exactly as on `ExplainTechniqueResponse`.
+  string text = 1;
+
+  // Identical on every chunk of one stream. FALLBACK here is a short fixed
+  // sentence rather than a conversation: the rules can rank exercises, but
+  // they cannot chat.
+  AssistantSource source = 2;
 }
 
 message GetRecommendationRequest {

@@ -41,6 +41,19 @@ public protocol Breathe_V1_AssistantServiceClientInterface: Sendable {
     /// model takes to finish.
     @available(iOS 13, *)
     func `explainTechnique`(headers: Connect.Headers) -> any Connect.ServerOnlyAsyncStreamInterface<Breathe_V1_ExplainTechniqueRequest, Breathe_V1_ExplainTechniqueResponse>
+
+    /// Streams the coach's reply to one message in a conversation.
+    ///
+    /// On this service rather than its own, because a conversation shares
+    /// everything the one-shot RPCs already settled: the same identity scoping,
+    /// the same daily allowance, the same fallback doctrine, and the same
+    /// `AssistantSource` honesty on every chunk.
+    ///
+    /// The server keeps no conversation state at all — no transcript, no prompt,
+    /// no reply is persisted or logged anywhere. The transcript lives on the
+    /// device, and each call carries as much of it as the client wants read back.
+    @available(iOS 13, *)
+    func `chat`(headers: Connect.Headers) -> any Connect.ServerOnlyAsyncStreamInterface<Breathe_V1_ChatRequest, Breathe_V1_ChatResponse>
 }
 
 /// Concrete implementation of `Breathe_V1_AssistantServiceClientInterface`.
@@ -61,10 +74,16 @@ public final class Breathe_V1_AssistantServiceClient: Breathe_V1_AssistantServic
         return self.client.serverOnlyStream(path: "/breathe.v1.AssistantService/ExplainTechnique", headers: headers)
     }
 
+    @available(iOS 13, *)
+    public func `chat`(headers: Connect.Headers = [:]) -> any Connect.ServerOnlyAsyncStreamInterface<Breathe_V1_ChatRequest, Breathe_V1_ChatResponse> {
+        return self.client.serverOnlyStream(path: "/breathe.v1.AssistantService/Chat", headers: headers)
+    }
+
     public enum Metadata {
         public enum Methods {
             public static let getRecommendation = Connect.MethodSpec(name: "GetRecommendation", service: "breathe.v1.AssistantService", type: .unary)
             public static let explainTechnique = Connect.MethodSpec(name: "ExplainTechnique", service: "breathe.v1.AssistantService", type: .serverStream)
+            public static let chat = Connect.MethodSpec(name: "Chat", service: "breathe.v1.AssistantService", type: .serverStream)
         }
     }
 }
