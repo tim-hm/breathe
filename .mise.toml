@@ -56,6 +56,14 @@ swiftformat = { version = "latest", os = ["macos"] }
 opentofu = "latest"
 
 [env]
+# The one secret this repo takes, and the only reason a dotenv file exists here
+# at all: OPENROUTER_API_KEY, the assistant's provider key. `.env` is gitignored
+# and optional — absent, the API boots with the assistant answering from its
+# rule-based fallback, which is what CI and a fresh clone get. `redact` keeps
+# the value out of `mise env` and task output; nothing else should ever print
+# it.
+_.file = { path = ".env", redact = true }
+
 # Global so every cargo invocation reads the committed .sqlx cache rather than
 # needing a live database. `generate:sqlx` overrides it, because refreshing the
 # cache is precisely the operation that must talk to a real server.
@@ -285,6 +293,25 @@ depends = ["dev:db"]
 env = { CARGO_TARGET_DIR = "{{env.CHECK_TARGET_DIR}}" }
 run = "cargo nextest run -p api --test e2e"
 
+[tasks."assistant:smoke"]
+description = "Make one real call to the model provider and print what it said"
+depends = ["dev:db"]
+# The only task in this file that spends money and the only one that leaves the
+# machine, which is why it is `#[ignore]`d out of every other suite rather than
+# guarded by a variable someone could set by accident. One call, on the cheapest
+# model in the catalogue, through the same service path an RPC takes — so what
+# it proves is that the key, the model id, the request body, and the parser all
+# still agree with a provider no test double can stand in for.
+#
+# The filter names a *category* — every `smoke_*` test — rather than one
+# function, so renaming a test cannot quietly make this task pass by running
+# nothing, and a second paid check joins by being named.
+#
+# `--no-capture` because the printed answer *is* the result. No key in the
+# environment is a skip, not a failure.
+env = { CARGO_TARGET_DIR = "{{env.CHECK_TARGET_DIR}}" }
+run = "cargo nextest run -p api --test e2e --run-ignored only -E 'test(/::smoke_/)' --no-capture"
+
 [tasks."test:swift"]
 dir = "{{config_root}}/ios"
 run = "swift test --package-path Packages/BreatheCore"
@@ -297,21 +324,41 @@ description = "Serve the marketing one-pager locally"
 run = "pnpm dlx serve --listen 18102 {{config_root}}/web"
 
 # infra: the AWS deployment, defined in infra/ and applied deliberately —
-# nothing below runs from `check` or CI, and only infra:apply touches AWS.
+# nothing below runs from `check` or CI, and only the apply tasks touch AWS.
+#
+# Every task that reaches AWS pins AWS_PROFILE, for the same reason DATABASE_URL
+# is pinned above: an ambient value inherited from another repo's shell is
+# indistinguishable from the right one until it has already done something.
+# `breathe` is the IAM user infra/bootstrap creates; `holmie` is the account
+# root, and bootstrap is the only thing that may still use it.
+
+[tasks."infra:bootstrap:init"]
+description = "Initialise the bootstrap root (state bucket + IAM user; local state)"
+dir = "{{config_root}}/infra/bootstrap"
+run = "tofu init"
+
+[tasks."infra:bootstrap:apply"]
+description = "Create the OpenTofu state bucket and the breathe-tofu IAM user (runs as account root; once)"
+dir = "{{config_root}}/infra/bootstrap"
+env = { AWS_PROFILE = "holmie" }
+run = "tofu apply"
 
 [tasks."infra:init"]
-description = "Initialise OpenTofu (downloads providers and modules; no AWS access)"
+description = "Initialise OpenTofu (downloads providers and modules; reaches the S3 backend)"
 dir = "{{config_root}}/infra"
+env = { AWS_PROFILE = "breathe" }
 run = "tofu init"
 
 [tasks."infra:plan"]
 description = "Preview infrastructure changes (needs AWS credentials, changes nothing)"
 dir = "{{config_root}}/infra"
+env = { AWS_PROFILE = "breathe" }
 run = ["tofu fmt -check -diff", "tofu validate", "tofu plan"]
 
 [tasks."infra:apply"]
 description = "Apply infrastructure changes to AWS"
 dir = "{{config_root}}/infra"
+env = { AWS_PROFILE = "breathe" }
 run = "tofu apply"
 
 [tasks.deploy]
@@ -319,7 +366,15 @@ description = "Build the release image, ship it to the box over SSH, migrate, re
 # No registry: one box makes `docker save | ssh docker load` the whole supply
 # chain. The host derives from the infra state rather than an env var, so there
 # is exactly one answer to where production is.
-run = ["docker build --platform linux/arm64 -t breathe-api:latest .", """
+env = { AWS_PROFILE = "breathe" }
+run = ["""
+  set -eu
+  # .dockerignore excludes .git, so build.rs cannot read the commit itself —
+  # without this, /about reports "unknown" and cannot say what is deployed.
+  docker build --platform linux/arm64 \
+    --build-arg GIT_COMMIT_HASH="$(git rev-parse --short HEAD)" \
+    -t breathe-api:latest .
+  """, """
   set -eu
   host="ubuntu@$(tofu -chdir=infra output -raw elastic_ip)"
   docker save breathe-api:latest | gzip | ssh "$host" 'gunzip | docker load'
@@ -342,7 +397,14 @@ dir = "{{config_root}}/ios"
 # build keeps working untethered. The Bonjour name rather than the LAN IP
 # because it survives a DHCP renewal, and derives per machine with no config:
 # whoever generates the project gets their own Mac baked in.
-run = ["xcodegen generate", 'plutil -replace BreatheAPIBaseURL -string "http://$(scutil --get LocalHostName).local:18100" Breathe/Info.plist']
+# Both apps get the same address baked in: the watch talks to the backend
+# directly rather than proxying through the phone (roadmap M9), so it needs the
+# URL just as much and from the same source.
+run = ["xcodegen generate", '''
+  url="http://$(scutil --get LocalHostName).local:18100"
+  plutil -replace BreatheAPIBaseURL -string "$url" Breathe/Info.plist
+  plutil -replace BreatheAPIBaseURL -string "$url" BreatheWatch/Info.plist
+  ''']
 
 [tasks."ios:open"]
 description = "Generate the project and open it in Xcode"
@@ -356,3 +418,12 @@ dir = "{{config_root}}/ios"
 # The generic destination builds without naming a device, so this works on any
 # machine regardless of which simulators its Xcode happens to have installed.
 run = "xcodebuild -project Breathe.xcodeproj -scheme Breathe -destination 'generic/platform=iOS Simulator' build"
+
+[tasks."ios:build:watch"]
+description = "Build the watch app for the simulator without opening Xcode"
+depends = ["ios:gen"]
+dir = "{{config_root}}/ios"
+# Separate from `ios:build` rather than folded into it: the phone scheme embeds
+# the watch app, so building it covers both, but a watch-only change wants a
+# build that fails on the wrist's compiler errors alone.
+run = "xcodebuild -project Breathe.xcodeproj -scheme BreatheWatch -destination 'generic/platform=watchOS Simulator' build"

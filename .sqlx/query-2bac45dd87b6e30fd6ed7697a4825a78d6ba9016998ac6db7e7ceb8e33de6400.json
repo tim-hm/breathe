@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO assistant_usage (user_id, usage_date, calls)\n         VALUES ($1, (now() AT TIME ZONE 'utc')::date, 1)\n         ON CONFLICT (user_id, usage_date)\n           DO UPDATE SET calls = assistant_usage.calls + 1\n           WHERE assistant_usage.calls < $2\n         RETURNING calls",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "calls",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "assistant_usage",
+            "name": "calls"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2bac45dd87b6e30fd6ed7697a4825a78d6ba9016998ac6db7e7ceb8e33de6400"
+}

@@ -2,7 +2,9 @@
 
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::sync::Arc;
 
+use api::assistant::{DisabledModelClient, ModelClient};
 use api::config::{Config, Environment};
 use api::state::AppState;
 use axum::Router;
@@ -80,8 +82,24 @@ impl TestDatabase {
     }
 
     /// The router the binary serves, over this database.
+    ///
+    /// No language model behind the seam: a test that is not about the
+    /// assistant must behave the same whether or not a key happens to be in the
+    /// environment, and a suite that could reach the network is a suite that
+    /// fails on a train. `DisabledModelClient` is not a stub for the occasion —
+    /// it is what a deployment without a key runs.
     pub fn app(&self) -> Router {
         build_app(self.pool.clone())
+    }
+
+    /// The same router with a scripted model behind the seam.
+    ///
+    /// Paired with [`Self::app`] rather than folded into one argument, for the
+    /// same reason `call_grpc_web` is paired with `call_grpc_web_with`: the
+    /// model is the one thing that varies, and twenty unrelated tests should not
+    /// carry it.
+    pub fn app_with_model(&self, assistant: Arc<dyn ModelClient>) -> Router {
+        build_app_with_model(self.pool.clone(), assistant)
     }
 }
 
@@ -90,15 +108,23 @@ impl TestDatabase {
 /// Separate from [`TestDatabase::app`] so a test can supply a pool that is
 /// deliberately broken — see `health.rs`.
 pub fn build_app(pool: PgPool) -> Router {
+    build_app_with_model(pool, Arc::new(DisabledModelClient))
+}
+
+/// [`build_app`], plus the model the assistant should call.
+pub fn build_app_with_model(pool: PgPool, assistant: Arc<dyn ModelClient>) -> Router {
     let config = Config {
         environment: Environment::Dev,
         // Read only while building the pool, which the caller has already done.
         // Nothing downstream of `AppState` looks at it.
         database_url: String::new(),
         port: 0,
+        // Never read: the model client is supplied directly, so no test can
+        // reach a provider even on a machine where the key is exported.
+        openrouter_api_key: None,
     };
 
-    api::build_app(AppState::new(pool, config)).expect("the router assembles")
+    api::build_app(AppState::new(pool, config, assistant)).expect("the router assembles")
 }
 
 fn database_url() -> String {
@@ -176,6 +202,62 @@ where
     Req: Message,
     Res: Message + Default,
 {
+    let streamed = call_grpc_web_stream_with(app, path, request, headers).await;
+
+    assert!(
+        streamed.messages.len() <= 1,
+        "a unary call answered with {} messages",
+        streamed.messages.len()
+    );
+
+    GrpcWebResponse {
+        message: streamed.messages.into_iter().next(),
+        status: streamed.status,
+        status_message: streamed.status_message,
+    }
+}
+
+/// Every message a server-streaming call produced, plus how it ended.
+///
+/// Separate from [`GrpcWebResponse`] because the thing being asserted is
+/// different: a unary call has one message or none, and a stream has an ordered
+/// list whose order is the point.
+pub struct GrpcWebStream<T> {
+    /// In the order they arrived on the wire.
+    pub messages: Vec<T>,
+    pub status: i32,
+    pub status_message: String,
+}
+
+impl<T> GrpcWebStream<T> {
+    /// The messages, asserting the stream ended cleanly.
+    pub fn into_ok(self) -> Vec<T> {
+        assert_eq!(
+            self.status, 0,
+            "grpc-status {}: {}",
+            self.status, self.status_message
+        );
+        self.messages
+    }
+}
+
+/// Calls a server-streaming method the way the iOS client does.
+///
+/// gRPC-Web sends a server stream as several length-prefixed message frames in
+/// one response body, followed by the trailer frame — so the whole stream is
+/// readable here without a listener, and the frames arrive in the order the
+/// server wrote them. That ordering is exactly what a client accumulating an
+/// explanation depends on, and it is only observable through the real framing.
+pub async fn call_grpc_web_stream_with<Req, Res>(
+    app: Router,
+    path: &str,
+    request: &Req,
+    headers: &[(&str, &str)],
+) -> GrpcWebStream<Res>
+where
+    Req: Message,
+    Res: Message + Default,
+{
     let mut builder =
         Request::post(path).header(header::CONTENT_TYPE, "application/grpc-web+proto");
     for (name, value) in headers {
@@ -214,15 +296,15 @@ where
         .await
         .expect("the response body is readable");
 
-    let message = deframe(&body, &mut trailers);
+    let messages = deframe(&body, &mut trailers);
 
     let status = trailers
         .get("grpc-status")
         .and_then(|value| value.parse().ok())
         .expect("the response carries a grpc-status, in a header or a trailer frame");
 
-    GrpcWebResponse {
-        message,
+    GrpcWebStream {
+        messages,
         status,
         status_message: trailers.get("grpc-message").cloned().unwrap_or_default(),
     }
@@ -240,13 +322,16 @@ fn frame(message: &impl Message) -> Bytes {
     Bytes::from(framed)
 }
 
-/// Walks the frames in `body`, decoding the message and folding any trailer
+/// Walks the frames in `body`, decoding every message and folding any trailer
 /// frame into `trailers`.
+///
+/// A `Vec` rather than one message because a server stream writes several into
+/// the same body; a unary call produces a list of one.
 fn deframe<Res: Message + Default>(
     body: &[u8],
     trailers: &mut HashMap<String, String>,
-) -> Option<Res> {
-    let mut message = None;
+) -> Vec<Res> {
+    let mut messages = Vec::new();
     let mut rest = body;
 
     while rest.len() >= FRAME_HEADER_LEN {
@@ -267,7 +352,7 @@ fn deframe<Res: Message + Default>(
         rest = &rest[end..];
 
         if flags & TRAILER_FLAG == 0 {
-            message = Some(Res::decode(payload).expect("the message frame decodes"));
+            messages.push(Res::decode(payload).expect("the message frame decodes"));
         } else {
             let text = std::str::from_utf8(payload).expect("trailers are UTF-8");
             for line in text.lines() {
@@ -279,5 +364,5 @@ fn deframe<Res: Message + Default>(
     }
 
     assert!(rest.is_empty(), "trailing bytes after the last frame");
-    message
+    messages
 }

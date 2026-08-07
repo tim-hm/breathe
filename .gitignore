@@ -17,9 +17,11 @@ DerivedData/
 *.xcuserstate
 xcuserdata/
 
-# Secrets. `.env` is not used by this repo (see CLAUDE.md §1.4 — environment
-# variables are for secrets and boot-time context only, and both are supplied
-# by .mise.toml locally), but an ignored path is cheaper than a leaked one.
+# Secrets. `.env` holds exactly one value locally — OPENROUTER_API_KEY, the
+# assistant's provider key, loaded by .mise.toml so every task sees it. It is
+# optional: absent, the assistant answers from its rule-based fallback and
+# everything else behaves identically, which is what CI and a fresh clone get.
+# Nothing else belongs in it (CLAUDE.md §1.4).
 .env
 .env.*
 *.pem

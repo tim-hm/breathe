@@ -5,10 +5,12 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use tonic::service::Routes;
 
+use crate::features::assistant::handlers::grpc::AssistantServiceImpl;
 use crate::features::journey::handlers::grpc::JourneyServiceImpl;
 use crate::features::profile::handlers::grpc::ProfileServiceImpl;
 use crate::features::technique::handlers::grpc::TechniqueServiceImpl;
 use crate::proto::breathe::v1::FILE_DESCRIPTOR_SET;
+use crate::proto::breathe::v1::assistant_service_server::AssistantServiceServer;
 use crate::proto::breathe::v1::journey_service_server::JourneyServiceServer;
 use crate::proto::breathe::v1::profile_service_server::ProfileServiceServer;
 use crate::proto::breathe::v1::technique_service_server::TechniqueServiceServer;
@@ -35,6 +37,9 @@ pub fn build_services(state: &Arc<AppState>) -> Result<Routes> {
             Arc::clone(state),
         )))
         .add_service(JourneyServiceServer::new(JourneyServiceImpl::new(
+            Arc::clone(state),
+        )))
+        .add_service(AssistantServiceServer::new(AssistantServiceImpl::new(
             Arc::clone(state),
         ))))
 }

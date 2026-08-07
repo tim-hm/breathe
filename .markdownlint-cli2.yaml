@@ -3,8 +3,11 @@ globs:
   - "!**/.build/**"
   - "!ios/Packages/*/.build/**"
   - "!target/**"
-  # OpenTofu's downloaded modules — third-party sources, not ours to lint.
-  - "!infra/.terraform/**"
+  # OpenTofu's downloaded modules — third-party sources, not ours to lint. Any
+  # depth, because a root module can live in a subdirectory and brings its own
+  # `.terraform/` with it; `infra/.gitignore` already ignores them all the same
+  # way, and markdownlint does not read gitignores.
+  - "!**/.terraform/**"
 
 config:
   # Table shape belongs to `vp fmt` (mise run fmt:text). Two tools with opinions

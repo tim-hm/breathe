@@ -1,10 +1,16 @@
 //! Boot-time configuration.
 //!
-//! Only two values come from the environment: `BREATHE_ENV` and `DATABASE_URL`.
-//! Everything else is *derived* from the environment name (CLAUDE.md §1.4–1.5).
-//! The reason is that every environment variable is a value that can differ
-//! between a developer's machine and a deployment without anything noticing —
-//! a derived value cannot drift, because there is only one of it.
+//! Three values come from the environment: `BREATHE_ENV`, `DATABASE_URL`, and
+//! the optional `OPENROUTER_API_KEY`. Everything else is *derived* from the
+//! environment name (CLAUDE.md §1.4–1.5). The reason is that every environment
+//! variable is a value that can differ between a developer's machine and a
+//! deployment without anything noticing — a derived value cannot drift, because
+//! there is only one of it.
+//!
+//! The third is a secret, which is the one thing the principle admits, and it
+//! is the *only* assistant value that comes from outside: which provider and
+//! which model are constants below, so a laptop and a deployment cannot end up
+//! talking to different models without anybody noticing.
 
 use anyhow::{Context, Result};
 
@@ -21,6 +27,13 @@ pub struct Config {
     pub environment: Environment,
     pub database_url: String,
     pub port: u16,
+    /// The assistant's provider key, or `None` where nobody supplied one.
+    ///
+    /// Optional on purpose: a fresh clone, a CI run, and the integration tests
+    /// all work without it, and the assistant answers from its rules instead.
+    /// The key never leaves this process — it is why the model is called from
+    /// the server rather than the app at all.
+    pub openrouter_api_key: Option<String>,
 }
 
 impl Environment {
@@ -64,6 +77,27 @@ impl Config {
 /// for why the range starts here.
 const DEFAULT_PORT: u16 = 18100;
 
+/// Where the assistant's model calls go.
+///
+/// `OpenRouter` rather than a provider directly: it fronts every model behind one
+/// OpenAI-shaped API, so trying a different model is the constant below rather
+/// than a new client. No trailing slash — the paths appended to it supply one.
+pub const OPENROUTER_BASE_URL: &str = "https://openrouter.ai/api/v1";
+
+/// The model the assistant asks.
+///
+/// A constant, not a variable, for the reason the whole module exists: a model
+/// id that could differ between a laptop and a deployment would make "the
+/// assistant sounds different in production" a thing nobody could see.
+///
+/// The leading `~` **is part of the id** — it is how `OpenRouter` names a
+/// floating alias, and this one tracks the newest Anthropic Haiku. Haiku
+/// because both RPCs are short, structured, and latency-sensitive, and because
+/// per-call cost is what makes a generous free-tier quota possible at all.
+/// Verify a replacement against `GET https://openrouter.ai/api/v1/models`,
+/// which needs no key.
+pub const OPENROUTER_MODEL_ID: &str = "~anthropic/claude-haiku-latest";
+
 pub fn load() -> Result<Config> {
     let environment = environment_from(std::env::var("BREATHE_ENV"))?;
 
@@ -75,7 +109,20 @@ pub fn load() -> Result<Config> {
         environment,
         database_url,
         port: DEFAULT_PORT,
+        openrouter_api_key: secret_from(std::env::var("OPENROUTER_API_KEY")),
     })
+}
+
+/// Reads an optional secret, treating blank as absent.
+///
+/// A variable set to the empty string is what a deployment template that forgot
+/// to fill it in produces, and it must mean the same as not setting it: an
+/// empty bearer token would otherwise reach the provider and come back as a
+/// 401 on every call for as long as nobody looked.
+fn secret_from(var: Result<String, std::env::VarError>) -> Option<String> {
+    var.ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
 }
 
 /// Interprets the raw `BREATHE_ENV` lookup. Split from `load` so the branching
@@ -113,6 +160,23 @@ mod tests {
     fn defaults_to_dev_when_unset() {
         let parsed = environment_from(Err(std::env::VarError::NotPresent));
         assert_eq!(parsed.expect("absence is not an error"), Environment::Dev);
+    }
+
+    /// A template that was never filled in sets the variable to nothing, and
+    /// that has to mean "no key" — not "send an empty bearer token", which
+    /// fails every call with a 401 nobody is watching for.
+    #[test]
+    fn a_blank_secret_is_no_secret() {
+        for blank in [String::new(), "   ".to_owned(), "\n".to_owned()] {
+            assert_eq!(secret_from(Ok(blank)), None);
+        }
+
+        assert_eq!(secret_from(Err(std::env::VarError::NotPresent)), None);
+        assert_eq!(
+            secret_from(Ok("  sk-or-v1-example  ".to_owned())),
+            Some("sk-or-v1-example".to_owned()),
+            "a key pasted with whitespace around it is still that key"
+        );
     }
 
     /// The error text derives from `Environment::ALL`, so it names every
