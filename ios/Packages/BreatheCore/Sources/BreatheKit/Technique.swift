@@ -36,7 +36,7 @@ public struct Phase: Sendable, Hashable, Codable {
     public let duration: Duration
     /// The evidence-based range this phase may be dialled within, inclusive.
     ///
-    /// Seeded per phase rather than assumed, so the Advanced dials are rendered
+    /// Seeded per phase rather than assumed, so the Customise dials are rendered
     /// from the catalogue instead of from limits this app would then have to
     /// keep in step with it. A single-point range means no dial at all.
     public let range: ClosedRange<Duration>
