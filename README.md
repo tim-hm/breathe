@@ -18,7 +18,7 @@ Full setup, including the one-time `xcode-select` step, is in [docs/contributing
 ```text
 proto/     the API contract — generates both the Rust server and the Swift client
 crates/    api (axum + tonic) and migrate (schema + seed)
-ios/       iPhone and Apple Watch apps over BreatheKit and BreatheUI
+ios/       iPhone and Apple Watch apps over OndKit and OndUI
 web/       the marketing one-pager, served beside the API
 infra/     OpenTofu and the compose stack the deployment runs
 docs/      start at docs/README.md

@@ -8,13 +8,13 @@ Current state: M1–M9 have shipped against a live backend (see [deployment.md](
 
 The product's reason to exist: tap a technique, get a full-screen guided session with animated visual, per-phase haptics, audio cues, pause/end, and a completion summary.
 
-- **Phase engine**: a pure `SessionTimeline` value type in `BreatheKit` — phase boundaries precomputed from t=0, `phase(at:)` a pure lookup. Visuals read it through `TimelineView(.animation)`; haptic/audio events come from one `@MainActor` async loop sleeping on a `ContinuousClock` until each boundary. Absolute-time scheduling, not accumulating timers: no drift, and clean under Swift 6 strict concurrency.
+- **Phase engine**: a pure `SessionTimeline` value type in `OndKit` — phase boundaries precomputed from t=0, `phase(at:)` a pure lookup. Visuals read it through `TimelineView(.animation)`; haptic/audio events come from one `@MainActor` async loop sleeping on a `ContinuousClock` until each boundary. Absolute-time scheduling, not accumulating timers: no drift, and clean under Swift 6 strict concurrency.
 - **Haptics**: `CHHapticEngine` behind a `HapticController`. Inhale = rising intensity curve over the phase; exhale = mirrored falling curve; hold-in = a firm entry transient; hold-out = a softer, duller one (the proto already insists the two holds feel different). `UIImpactFeedbackGenerator` fallback where `supportsHaptics` is false. Engine lifecycle (interruption, background) is the known pothole — test on a device early; the simulator has no haptics.
 - **Audio**: short pre-rendered cue tones via `AVAudioPlayer`, session category `.playback` with `.mixWithOthers`. Three user modes: haptics+audio, haptics only, visual only.
 - **Session length**: proto gains `recommended_cycles` on `Technique` (migration `0002` + `crates/migrate/src/seed.rs` + both codegens) — curated reference data like everything else on the message. User overrides live client-side until identity exists (M4).
 - **Accessibility & housekeeping**: Reduce Motion swaps the scaling orb for a progress ring; VoiceOver announces phase changes; the idle timer is disabled mid-session. Sessions are recorded locally from day one — M5 syncs them.
 
-Touches: `proto/breathe/v1/technique_service.proto`, `crates/api/src/features/technique/`, `crates/migrate/`, new `ios/Breathe/Features/Session/`, `BreatheKit`.
+Touches: `proto/breathe/v1/technique_service.proto`, `crates/api/src/features/technique/`, `crates/migrate/`, new `ios/Breathe/Features/Session/`, `OndKit`.
 
 ## M2 — Catalogue expansion + advanced dials
 
@@ -24,16 +24,16 @@ Seed the science-led set from the business plan (coherent breathing, extended ex
 - **Advanced dials.** `Phase` gains `min_duration_ms` / `max_duration_ms` — the evidence-based safe range, seeded per phase, so every client renders dials from data instead of hardcoding limits. User overrides stay client-side (UserDefaults) until M4 profiles exist, then sync.
 - **Breathing foundations.** The nose/belly/posture/eyes guidance from the business plan as seeded reference data: `foundation_topics` table (`slug, question, answer, sort_order`) served by a new `TechniqueService.ListFoundations` RPC (public reference data, same no-auth stance). The session UI shows suggestion-framed hints from it; M6's assistant cites the same rows.
 
-Touches: `proto/breathe/v1/technique_service.proto`, migration `0003`, `crates/migrate/src/seed.rs`, `crates/api/src/features/technique/`, `BreatheKit` (`Technique.swift` grows stages; `SessionTimeline` flattens stages × cycles into its absolute-time boundary list — open-ended stages pause the clock until the user taps).
+Touches: `proto/breathe/v1/technique_service.proto`, migration `0003`, `crates/migrate/src/seed.rs`, `crates/api/src/features/technique/`, `OndKit` (`Technique.swift` grows stages; `SessionTimeline` flattens stages × cycles into its absolute-time boundary list — open-ended stages pause the clock until the user taps).
 
 ## M3 — Adaptive theme
 
-Replace the four hardcoded `Color` literals in `ios/Packages/BreatheCore/Sources/BreatheUI/Theme.swift` with light/dark asset-catalog colors inside the BreatheUI target (`Bundle.module`), plus semantic surface/text tokens. Done now so onboarding and paywall screens are born themed.
+Replace the four hardcoded `Color` literals in `ios/Packages/OndCore/Sources/OndUI/Theme.swift` with light/dark asset-catalog colors inside the OndUI target (`Bundle.module`), plus semantic surface/text tokens. Done now so onboarding and paywall screens are born themed.
 
 ## M4 — Onboarding + identity
 
 - **Onboarding**: a friendly stepper — goals, experience level, and the reminder-intensity dial whose zero state is _never_.
-- **Identity**: the seam `architecture.md` deliberately deferred gets its design here. Anonymous UUID generated client-side, stored in the Keychain (survives reinstall), sent as a header via a Connect-Swift interceptor in `BreatheAPI/Clients.swift`. A server layer lazily upserts a `users` row and injects the id into request extensions. `TechniqueService` stays public. Sign in with Apple is deferred; the `users` table leaves an `apple_user_id` seam.
+- **Identity**: the seam `architecture.md` deliberately deferred gets its design here. Anonymous UUID generated client-side, stored in the Keychain (survives reinstall), sent as a header via a Connect-Swift interceptor in `OndAPI/Clients.swift`. A server layer lazily upserts a `users` row and injects the id into request extensions. `TechniqueService` stays public. Sign in with Apple is deferred; the `users` table leaves an `apple_user_id` seam.
 - **Proto**: new `ProfileService` (get/update goals, reminder intensity, intent note) with `crates/api/src/features/profile/` cloned from the `technique` layout; register in `grpc.rs`.
 - **Infra**: first real deployment (managed Postgres + HTTPS host) lands here — M6 TestFlight testers need a reachable backend.
 
@@ -49,7 +49,7 @@ All free by product decision; requires M4's identity header on every RPC.
 - **Opt-in social** — leaderboards return only users who set a display name via `UpdateProfile` (M4's `ProfileService` gains `display_name` and optional `birth_year_band`). Display names are user-chosen, screened against a denylist at V1, unique-suffixed on collision. No display name → invisible to others, boards still show your own rank against anonymous aggregate.
 - **Schema** — migration adds `sessions` (append-only, indexed on `(user_id, started_at)`), `bolt_scores`, and profile columns. Leaderboards are plain indexed queries at V1 scale; materialise later if they get hot.
 - **Feature crate** — `crates/api/src/features/journey/` cloned from the `technique` layout; register in `grpc.rs`.
-- **iOS** — journey tab (stats, streak, BOLT flow) in `ios/Breathe/Features/Journey/`; sync queue in `BreatheKit` draining the local session store from M1. Copy follows the framing rule: celebrate consistency, never pressure ("your streak paused", never "you failed").
+- **iOS** — journey tab (stats, streak, BOLT flow) in `ios/Breathe/Features/Journey/`; sync queue in `OndKit` draining the local session store from M1. Copy follows the framing rule: celebrate consistency, never pressure ("your streak paused", never "you failed").
 
 ## M6 — AI guided personalisation
 
@@ -80,7 +80,7 @@ App Store Server Notifications stay deferred — resubmission on every launch pl
 
 Full parity on the wrist: catalogue, guided sessions with haptics, and the journey stats view. In V1 by product decision — the wrist is where breath haptics feel most natural, and it completes the "Watch-grade craft" story.
 
-- **Target** — new watchOS SwiftUI target (`ios/BreatheWatch/`, declared in `ios/project.yml`) sharing `BreatheCore`: `SessionTimeline`, the domain models, and the sync queue are platform-neutral by construction, so the watch reuses the phone's session engine rather than reimplementing it.
+- **Target** — new watchOS SwiftUI target (`ios/OndWatch/`, declared in `ios/project.yml`) sharing `OndCore`: `SessionTimeline`, the domain models, and the sync queue are platform-neutral by construction, so the watch reuses the phone's session engine rather than reimplementing it.
 - **Haptics** — watchOS has no CoreHaptics; the vocabulary is `WKInterfaceDevice.play(WKHapticType)`. Mapping: inhale `.directionUp`, exhale `.directionDown`, both holds `.click`, session end `.success` — discrete taps at phase boundaries instead of the phone's intensity curves, driven by the same timeline loop. Run sessions inside a `WKExtendedRuntimeSession` of the mindfulness type so haptics keep firing with the wrist down and the screen dim.
 - **Identity & data** — the phone sends the anonymous ID once over WatchConnectivity (`applicationContext`); the watch stores it in its own Keychain and then talks to the backend directly with the same header. Catalogue cached on-watch; sessions recorded locally and drained through M5's batch `RecordSessions`, so offline wrist sessions sync later.
 - **Entitlement** — purchases stay on the phone; the entitlement state mirrors over WatchConnectivity. The free tier is fully functional on the watch, consistent with the product's free/paid split.

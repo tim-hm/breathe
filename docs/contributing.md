@@ -78,14 +78,14 @@ CI (`.github/workflows/checks.yml`) runs the formatting and lint subset on every
 
 ## Common tasks
 
-| Intent                         | Command                                                                               |
-| :----------------------------- | :------------------------------------------------------------------------------------ |
-| Wipe and rebuild the database  | `mise run dev:db:reset`                                                               |
-| Query the database             | `echo 'select * from techniques;' \| mise run db:psql`                                |
-| Change the technique catalogue | Edit `crates/migrate/src/seed.rs`, then `mise run migrate`                            |
-| Change the API contract        | Edit `proto/breathe/v1/…`, then `mise run generate`                                   |
-| Add a Swift file               | Create it under `ios/Breathe/` or `ios/BreatheWatch/`; `mise run ios:gen` picks it up |
-| Build the apps headlessly      | `mise run ios:build`, `mise run ios:build:watch`                                      |
+| Intent                         | Command                                                                           |
+| :----------------------------- | :-------------------------------------------------------------------------------- |
+| Wipe and rebuild the database  | `mise run dev:db:reset`                                                           |
+| Query the database             | `echo 'select * from techniques;' \| mise run db:psql`                            |
+| Change the technique catalogue | Edit `crates/migrate/src/seed.rs`, then `mise run migrate`                        |
+| Change the API contract        | Edit `proto/breathe/v1/…`, then `mise run generate`                               |
+| Add a Swift file               | Create it under `ios/Breathe/` or `ios/OndWatch/`; `mise run ios:gen` picks it up |
+| Build the apps headlessly      | `mise run ios:build`, `mise run ios:build:watch`                                  |
 
 ## Things that will bite you
 
@@ -95,6 +95,6 @@ CI (`.github/workflows/checks.yml`) runs the formatting and lint subset on every
 
 **Device builds need signing; the simulator doesn't.** `project.yml` deliberately carries no `DEVELOPMENT_TEAM`, so simulator builds work on any machine with no Apple ID. To run on a physical iPhone, set your team in Xcode's Signing & Capabilities tab — and expect the previous rule to apply: the next `mise run ios:gen` discards it. If device builds become routine, add `DEVELOPMENT_TEAM` to `project.yml`.
 
-**Regenerated Swift is committed.** After editing a `.proto`, `mise run generate:proto` rewrites files under `ios/Packages/BreatheCore/Sources/BreatheAPI/Generated/`. Commit them; the Xcode build does not run `buf`.
+**Regenerated Swift is committed.** After editing a `.proto`, `mise run generate:proto` rewrites files under `ios/Packages/OndCore/Sources/OndAPI/Generated/`. Commit them; the Xcode build does not run `buf`.
 
 **Postgres 18 moved its data directory.** The compose volume mounts `/var/lib/postgresql`, not `/var/lib/postgresql/data`. Copying a volume line from an older project makes the container refuse to start with a long, easily-misread explanation.

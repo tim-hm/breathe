@@ -17,7 +17,7 @@ Functions and modules should have one clear responsibility.
 - Functions longer than ~50 lines containing multiple distinct logical steps. `CLAUDE.md` §1.2 gives the tell: "a body needing a signpost every few lines wants a named function instead." A run of step-marker comments is the symptom; the extraction is the fix.
 - Functions with multiple side effects — one that validates, queries, records a journey entry, and logs should be orchestrated from above, not fused.
 - Functions whose name doesn't describe everything they do.
-- Swift observable models (`-Model` types in `BreatheKit`) that both fetch and transform and format for display. The model owns state and the transitions between states; formatting belongs to the view.
+- Swift observable models (`-Model` types in `OndKit`) that both fetch and transform and format for display. The model owns state and the transitions between states; formatting belongs to the view.
 
 ### Modules/Files
 
@@ -49,7 +49,7 @@ So the checks are not "is there an interface at this boundary" but:
 - **`Arc<AppState>` below the handler layer.** This is the real dependency-inversion violation in this codebase. A service taking `AppState` can reach anything, which hides its dependencies at the call site and makes it untestable in isolation. Services take `&PgPool` and other explicit dependencies.
 - **Handlers reaching past the service into a repository.** The handler's job is transport; skipping the service layer moves validation and orchestration into the transport layer where the e2e tests are the only thing that can see it.
 - **Newly introduced repository traits or `Repository` structs.** Flag as a convention violation and cite the reason above.
-- **Swift models constructing their own transport.** A `-Model` in `BreatheKit` that builds a Connect client rather than receiving a repository has hard-wired itself to the network and cannot be tested on the host — which is the whole reason models live in the package.
+- **Swift models constructing their own transport.** A `-Model` in `OndKit` that builds a Connect client rather than receiving a repository has hard-wired itself to the network and cannot be tested on the host — which is the whole reason models live in the package.
 - **Global mutable state** in either language standing in for a passed dependency.
 
 **Severity guide:**
@@ -73,7 +73,7 @@ So the checks are not "is there an interface at this boundary" but:
 **How to make findings actionable:**
 
 - Identify every instance
-- Propose the shared abstraction and where it lives, following three-tier escalation: feature-local first, app-local (`src/http/`, `BreatheKit`) only when a second feature genuinely needs it, a shared crate only when a second _target_ does — and `docs/architecture.md` says that crate should not exist yet
+- Propose the shared abstraction and where it lives, following three-tier escalation: feature-local first, app-local (`src/http/`, `OndKit`) only when a second feature genuinely needs it, a shared crate only when a second _target_ does — and `docs/architecture.md` says that crate should not exist yet
 
 **Important caveat:** `CLAUDE.md` says one duplication is acceptable, two is worth noting, three warrants a refactor. Don't flag the first.
 
@@ -104,7 +104,7 @@ Code, files, and debt markers that are no longer pulling their weight should be 
 
 ### Repo artefacts
 
-- **Committed build output:** stray files under `target/`, `.build/`, `DerivedData/`, or generated files checked in alongside source. The one legitimately committed generated tree is `BreatheAPI/Generated/`, and `mise run check:generated` owns its freshness.
+- **Committed build output:** stray files under `target/`, `.build/`, `DerivedData/`, or generated files checked in alongside source. The one legitimately committed generated tree is `OndAPI/Generated/`, and `mise run check:generated` owns its freshness.
 - **Leftover temp/backup files:** `*.bak`, `*.orig`, `*.rej`, `*~`, `.DS_Store`, `*.swp`, stray `tmp/` scratch.
 - **Loose scripts.** `CLAUDE.md` §3 states `scripts/` does not exist and should stay that way — helper tooling is a mise task. A committed shell or Python script anywhere in the tree is a finding, not a convenience.
 
@@ -173,7 +173,7 @@ The tests worth having pin a decision that is invisible in the code and expensiv
 
 - **Rust unit** — inline `#[cfg(test)] mod tests` at the bottom of the file under test.
 - **Rust integration** — `crates/api/tests/e2e/`, mirroring the feature layout.
-- **Swift** — `ios/Packages/BreatheCore/Tests/<Target>Tests/`.
+- **Swift** — `ios/Packages/OndCore/Tests/<Target>Tests/`.
 - Duplicated fixtures across test files that belong in `harness.rs`.
 
 **Severity guide:**

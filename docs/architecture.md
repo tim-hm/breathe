@@ -6,11 +6,11 @@
 ┌──────────────────────────────┐
 │  ios/  SwiftUI apps          │
 │    Breathe      (iOS)        │
-│    BreatheWatch (watchOS)    │
-│    └── BreatheCore           │  one SwiftPM package, three targets
-│        ├── BreatheKit        │  domain models + repositories
-│        │   └── BreatheAPI    │  generated protobuf + Connect client
-│        └── BreatheUI         │  design tokens
+│    OndWatch (watchOS)    │
+│    └── OndCore           │  one SwiftPM package, three targets
+│        ├── OndKit        │  domain models + repositories
+│        │   └── OndAPI    │  generated protobuf + Connect client
+│        └── OndUI         │  design tokens
 └───────────┬──────────────────┘
             │  gRPC-Web (binary protobuf over HTTP POST)
 ┌───────────▼──────────────────┐
@@ -35,18 +35,18 @@ Both apps sit on the same two products. What they share and what they deliberate
 
 ## Components
 
-| Component                          | Role                                                                                                                     |
-| :--------------------------------- | :----------------------------------------------------------------------------------------------------------------------- |
-| `proto/`                           | The API contract. The only description of the wire format.                                                               |
-| `crates/api`                       | The service. Serves gRPC-Web on `/breathe.v1.*` and JSON on `/health`, `/about`.                                         |
-| `crates/migrate`                   | Owns the schema and the seeded technique catalogue. Runs to completion and exits.                                        |
-| `…/BreatheCore/Sources/BreatheAPI` | Generated protobuf and the Connect client factory. Not a package product, so only BreatheKit can reach it.               |
-| `…/BreatheCore/Sources/BreatheKit` | Domain types, observable models, and repositories. The only Swift code that touches generated types.                     |
-| `…/BreatheCore/Sources/BreatheUI`  | Spacing and accent tokens. Domain-free.                                                                                  |
-| `ios/Breathe`                      | The iOS app: composition root plus features.                                                                             |
-| `ios/BreatheWatch`                 | The watchOS app: the same session over the same package, plus the `WatchConnectivity` link that hands it an identity.    |
-| `web/`                             | The marketing one-pager. Two static files, no build step — Caddy serves them beside the API on one hostname.             |
-| `infra/`                           | OpenTofu for the single box everything above is deployed onto, plus what runs on it. See [deployment.md](deployment.md). |
+| Component                  | Role                                                                                                                     |
+| :------------------------- | :----------------------------------------------------------------------------------------------------------------------- |
+| `proto/`                   | The API contract. The only description of the wire format.                                                               |
+| `crates/api`               | The service. Serves gRPC-Web on `/breathe.v1.*` and JSON on `/health`, `/about`.                                         |
+| `crates/migrate`           | Owns the schema and the seeded technique catalogue. Runs to completion and exits.                                        |
+| `…/OndCore/Sources/OndAPI` | Generated protobuf and the Connect client factory. Not a package product, so only OndKit can reach it.                   |
+| `…/OndCore/Sources/OndKit` | Domain types, observable models, and repositories. The only Swift code that touches generated types.                     |
+| `…/OndCore/Sources/OndUI`  | Spacing and accent tokens. Domain-free.                                                                                  |
+| `ios/Breathe`              | The iOS app: composition root plus features.                                                                             |
+| `ios/OndWatch`             | The watchOS app: the same session over the same package, plus the `WatchConnectivity` link that hands it an identity.    |
+| `web/`                     | The marketing one-pager. Two static files, no build step — Caddy serves them beside the API on one hostname.             |
+| `infra/`                   | OpenTofu for the single box everything above is deployed onto, plus what runs on it. See [deployment.md](deployment.md). |
 
 ### Backend features
 

@@ -27,8 +27,8 @@ A Cargo workspace (`crates/`) and two native SwiftUI apps (`ios/`) sharing one P
 proto/          the contract — single source of truth for both languages
 crates/api      axum (JSON) + tonic (gRPC-Web) on one port
 crates/migrate  schema migrations + the seeded technique catalogue
-ios/            two app targets — Breathe (iOS) and BreatheWatch (watchOS) —
-                over one local SwiftPM package, BreatheCore
+ios/            two app targets — Breathe (iOS) and OndWatch (watchOS) —
+                over one local SwiftPM package, OndCore
 web/            the marketing one-pager; static files, no build step
 infra/          OpenTofu for the one box the whole thing deploys onto
 ```
@@ -50,9 +50,9 @@ All breathe ports live in **18100–18199** (API 18100, Postgres 18101, `web/` p
 - **AppState** — `crates/api/src/state.rs`, shared as `Arc<AppState>`.
 - **Features** — `crates/api/src/features/<name>/` with `handlers/`, `service.rs`, `repository.rs`, `types.rs`, `errors.rs`.
 - **gRPC registration** — `crates/api/src/grpc.rs`. **HTTP routes** — `crates/api/src/http/mod.rs`. Both are single aggregation points.
-- **Generated protobuf** — Rust into `OUT_DIR` via `crates/api/build.rs`, re-exported through `crates/api/src/proto.rs`; Swift committed under `ios/Packages/BreatheCore/Sources/BreatheAPI/Generated/`.
-- **Domain models (Swift)** — the `BreatheKit` target in `ios/Packages/BreatheCore/`. Only it touches generated protobuf types; `BreatheAPI` is not a package product, so neither app target can import one.
-- **App targets (Swift)** — `ios/Breathe/` (iOS) and `ios/BreatheWatch/` (watchOS), each with its own composition root over the same three products. What they share and what they deliberately duplicate is in [docs/code-structure.md](docs/code-structure.md).
+- **Generated protobuf** — Rust into `OUT_DIR` via `crates/api/build.rs`, re-exported through `crates/api/src/proto.rs`; Swift committed under `ios/Packages/OndCore/Sources/OndAPI/Generated/`.
+- **Domain models (Swift)** — the `OndKit` target in `ios/Packages/OndCore/`. Only it touches generated protobuf types; `OndAPI` is not a package product, so neither app target can import one.
+- **App targets (Swift)** — `ios/Breathe/` (iOS) and `ios/OndWatch/` (watchOS), each with its own composition root over the same three products. What they share and what they deliberately duplicate is in [docs/code-structure.md](docs/code-structure.md).
 
 ## 3. Development
 
@@ -100,4 +100,4 @@ Philosophy and patterns in [docs/testing.md](docs/testing.md).
 
 - **Rust unit** — inline `#[cfg(test)] mod tests` at the bottom of the file under test. Runner is cargo-nextest via `mise run test:rs`, which is scoped to lib and bin targets so it needs no database.
 - **Rust integration** — `crates/api/tests/e2e/`, via `mise run test:e2e`. Drives the production router over a disposable `breathe_test_<name>` database, one per test, using real gRPC-Web framing. Never point these at the dev database; the harness makes that structurally impossible and it should stay that way.
-- **Swift** — Swift Testing, in `ios/Packages/BreatheCore/Tests/`. Runs on the host (the package declares a macOS platform for exactly this reason), so no simulator is needed.
+- **Swift** — Swift Testing, in `ios/Packages/OndCore/Tests/`. Runs on the host (the package declares a macOS platform for exactly this reason), so no simulator is needed.

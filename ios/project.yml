@@ -1,9 +1,9 @@
 # The Xcode project is generated from this file by `mise run ios:gen`; the
-# resulting Breathe.xcodeproj is gitignored. Adding a source file means adding it
-# to disk under Breathe/ — the `sources` glob below picks it up on the next
+# resulting Ond.xcodeproj is gitignored. Adding a source file means adding it
+# to disk under Ond/ — the `sources` glob below picks it up on the next
 # generate, and no one ever resolves a pbxproj conflict.
 
-name: Breathe
+name: Ond
 
 options:
   bundleIdPrefix: xyz.holmie
@@ -31,45 +31,45 @@ settings:
     DEVELOPMENT_TEAM: ${BREATHE_DEV_TEAM}
 
 packages:
-  BreatheCore:
-    path: Packages/BreatheCore
+  OndCore:
+    path: Packages/OndCore
 
 targets:
-  Breathe:
+  Ond:
     type: application
     platform: iOS
     sources:
-      - path: Breathe
+      - path: Ond
         # The StoreKit configuration is a build-time input to the *scheme*, not
         # a resource. Left in the glob, XcodeGen files an unrecognised extension
         # under Resources and it would ship inside the release bundle.
         excludes:
-          - Breathe.storekit
-      - path: Breathe/Breathe.storekit
+          - Ond.storekit
+      - path: Ond/Ond.storekit
         buildPhase: none
     dependencies:
-      # BreatheAPI is absent because it is not a product of BreatheCore at all —
+      # OndAPI is absent because it is not a product of OndCore at all —
       # the app cannot name that module even by accident. See the target notes in
-      # Packages/BreatheCore/Package.swift.
-      - package: BreatheCore
-        product: BreatheKit
-      - package: BreatheCore
-        product: BreatheUI
+      # Packages/OndCore/Package.swift.
+      - package: OndCore
+        product: OndKit
+      - package: OndCore
+        product: OndUI
       # The domain→token mappings both apps read, so a goal is the same colour
       # on the wrist as in the hand.
-      - package: BreatheCore
-        product: BreatheStyle
+      - package: OndCore
+        product: OndStyle
       # Embeds the watch app in the phone app's bundle, which is the only way
       # the pair reaches a device or App Store Connect as one submission.
       # XcodeGen reads the dependency's platform and emits the embed build
       # phase itself, so a plain target dependency is the whole declaration.
-      - target: BreatheWatch
+      - target: OndWatch
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: xyz.holmie.breathe
         GENERATE_INFOPLIST_FILE: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        # The catalogue's AccentColor mirrors Accent/Brand in BreatheUI, in both
+        # The catalogue's AccentColor mirrors Accent/Brand in OndUI, in both
         # appearances. It has to be duplicated here: the system tints its own
         # controls from an asset in the app bundle and cannot read a package's,
         # so this file is what a navigation link is drawn in and the Theme
@@ -83,14 +83,14 @@ targets:
     # Generated at `ios:gen` time, exactly like the Info.plist below, and
     # gitignored for the same reason: one editable source per dictionary.
     entitlements:
-      path: Breathe/Breathe.entitlements
+      path: Ond/Ond.entitlements
       properties:
         com.apple.developer.healthkit: true
     # An `info:` block rather than more INFOPLIST_KEY_* settings above, because
     # those only carry scalars and arrays — NSAppTransportSecurity is a dict and
     # has no build-setting form. The generated plist is gitignored.
     info:
-      path: Breathe/Info.plist
+      path: Ond/Info.plist
       properties:
         # The dev backend is plain HTTP on localhost, which App Transport
         # Security blocks by default. `NSAllowsLocalNetworking` is the narrow
@@ -117,21 +117,21 @@ targets:
         NSHealthUpdateUsageDescription: >-
           önd records each breathing session you keep in Health as Mindful Minutes.
 
-  BreatheWatch:
+  OndWatch:
     type: application
     platform: watchOS
     sources:
-      - path: BreatheWatch
+      - path: OndWatch
     dependencies:
-      # Same three products, and BreatheAPI absent for the same reason: the
+      # Same three products, and OndAPI absent for the same reason: the
       # watch is another client of the domain, not a second place generated
       # protobuf is allowed to surface.
-      - package: BreatheCore
-        product: BreatheKit
-      - package: BreatheCore
-        product: BreatheUI
-      - package: BreatheCore
-        product: BreatheStyle
+      - package: OndCore
+        product: OndKit
+      - package: OndCore
+        product: OndUI
+      - package: OndCore
+        product: OndStyle
     settings:
       base:
         # A companion watch app's bundle id must be the phone app's with one
@@ -142,11 +142,11 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: önd
     # Same generated-not-committed arrangement as the phone target's.
     entitlements:
-      path: BreatheWatch/BreatheWatch.entitlements
+      path: OndWatch/OndWatch.entitlements
       properties:
         com.apple.developer.healthkit: true
     info:
-      path: BreatheWatch/Info.plist
+      path: OndWatch/Info.plist
       properties:
         # Marks the bundle as a modern single-target watch app rather than a
         # WatchKit app plus extension, which is what lets it be built from one
@@ -182,18 +182,18 @@ targets:
           önd records each breathing session you keep in Health as Mindful Minutes.
 
 schemes:
-  Breathe:
+  Ond:
     build:
       targets:
-        Breathe: all
+        Ond: all
     # Without this, the scheme's Testables list is empty and ⌘U runs zero
     # tests. Wiring the package test target makes Xcode's Test action run the
     # same suites as `mise run test:swift`.
     test:
       config: Debug
       targets:
-        - package: BreatheCore/BreatheKitTests
-        - package: BreatheCore/BreatheUITests
+        - package: OndCore/OndKitTests
+        - package: OndCore/OndUITests
     run:
       config: Debug
       # The whole purchase flow works in the simulator against this file: local
@@ -207,7 +207,7 @@ schemes:
       # refuses them. That is the offline-first design working — the UI is
       # entitled locally regardless — and it is why the server half needs a
       # sandbox tester on a real device.
-      storeKitConfiguration: Breathe/Breathe.storekit
+      storeKitConfiguration: Ond/Ond.storekit
       # `BREATHE_API_BASE_URL` is deliberately not set here, and a physical
       # device must not rely on it either: scheme environment variables exist
       # only under Xcode's debugger, so an app opened from the home screen
@@ -216,11 +216,11 @@ schemes:
       # The variable remains an override for pointing one debug run somewhere
       # unusual.
 
-  BreatheWatch:
+  OndWatch:
     build:
       targets:
-        BreatheWatch: all
-    # No `test:` block. Every Swift suite lives in BreatheCore and runs on the
+        OndWatch: all
+    # No `test:` block. Every Swift suite lives in OndCore and runs on the
     # host through `mise run test:swift`; wiring them here as well would mean a
     # watch simulator boot for tests that need no watch.
     run:

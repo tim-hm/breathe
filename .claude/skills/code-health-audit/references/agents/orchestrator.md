@@ -37,7 +37,7 @@ If 3+ agents flag the same module or file, it is a systemic issue. Elevate it in
 
 #### Cross-language drift
 
-This repo has one contract and two implementations of it. A finding on one side of the boundary often has a silent twin on the other: an enum conversion tightened in Rust but not in `BreatheKit`, a field made optional in `proto/` that only one end treats as optional, a validation rule enforced in `service.rs` that the app's model does not know about. When you see a finding on one side, check whether the other side has the matching gap, and say so — a one-sided fix on a two-sided boundary is how the next bug gets written.
+This repo has one contract and two implementations of it. A finding on one side of the boundary often has a silent twin on the other: an enum conversion tightened in Rust but not in `OndKit`, a field made optional in `proto/` that only one end treats as optional, a validation rule enforced in `service.rs` that the app's model does not know about. When you see a finding on one side, check whether the other side has the matching gap, and say so — a one-sided fix on a two-sided boundary is how the next bug gets written.
 
 #### Contradictions
 

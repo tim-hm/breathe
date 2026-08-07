@@ -51,7 +51,7 @@
 //! ## What this rejects that you might not expect
 //!
 //! Transactions minted by Xcode's local `StoreKit` configuration file
-//! (`ios/Breathe.storekit`) are signed by a per-machine test certificate, not by
+//! (`ios/Ond/Ond.storekit`) are signed by a per-machine test certificate, not by
 //! Apple. Simulator purchases therefore verify locally, entitle the UI locally,
 //! and are refused here — which is the offline-first design working rather than
 //! failing, since nothing on screen waits on this call. Exercising the server
@@ -86,7 +86,7 @@ const BUNDLE_ID: &str = "xyz.holmie.breathe";
 ///
 /// A slice rather than a `match`, so the two ids sit next to each other where a
 /// typo is visible against its neighbour. They have to match
-/// `ios/Breathe/Breathe.storekit`, `PlusProduct` in `BreatheKit`, and App Store
+/// `ios/Ond/Ond.storekit`, `PlusProduct` in `OndKit`, and App Store
 /// Connect; there is no build-time check tying those together, and a mismatch
 /// presents as a paywall with no price and a purchase that never verifies.
 const PRODUCTS: &[(&str, SubscriptionTier)] = &[

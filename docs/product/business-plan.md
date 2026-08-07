@@ -92,12 +92,12 @@ Written as testable product rules, not aspirations:
 
 ## Risks
 
-| Risk                                                | Mitigation                                                                                                                                     |
-| :-------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------- |
-| App Review scrutiny of AI + health-adjacent content | Wellness framing, no medical claims, per-technique safety notes (already the seed-data voice); contraindications surfaced in-session           |
-| LLM cost per non-paying user                        | Zero by construction: only Coach reaches the model, enforced server-side from a verified transaction, with a daily per-caller ceiling on top   |
-| A two-technique free tier reads as mean             | The locked ones stay visible and described; the free two carry no safety caution and cover both reasons people install a breathing app         |
-| Crowded category, weak discoverability              | Distinctive coined name + keyword-carrying subtitle ([naming.md](naming.md)); haptic craft as the reviewable "wow"                             |
-| Competition mechanics undermine the calm brand      | Opt-in only, consistency-framed copy, no maximal-hold contests                                                                                 |
-| Solo-maintainer scope creep                         | Roadmap milestones are each independently shippable; the parking lot is a real fence ([roadmap.md](roadmap.md))                                |
-| Full Watch app widens V1 scope                      | The watch reuses BreatheKit's platform-neutral session engine; only the haptic mapping and UI are watch-specific ([roadmap.md](roadmap.md) M9) |
+| Risk                                                | Mitigation                                                                                                                                   |
+| :-------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------- |
+| App Review scrutiny of AI + health-adjacent content | Wellness framing, no medical claims, per-technique safety notes (already the seed-data voice); contraindications surfaced in-session         |
+| LLM cost per non-paying user                        | Zero by construction: only Coach reaches the model, enforced server-side from a verified transaction, with a daily per-caller ceiling on top |
+| A two-technique free tier reads as mean             | The locked ones stay visible and described; the free two carry no safety caution and cover both reasons people install a breathing app       |
+| Crowded category, weak discoverability              | Distinctive coined name + keyword-carrying subtitle ([naming.md](naming.md)); haptic craft as the reviewable "wow"                           |
+| Competition mechanics undermine the calm brand      | Opt-in only, consistency-framed copy, no maximal-hold contests                                                                               |
+| Solo-maintainer scope creep                         | Roadmap milestones are each independently shippable; the parking lot is a real fence ([roadmap.md](roadmap.md))                              |
+| Full Watch app widens V1 scope                      | The watch reuses OndKit's platform-neutral session engine; only the haptic mapping and UI are watch-specific ([roadmap.md](roadmap.md) M9)   |

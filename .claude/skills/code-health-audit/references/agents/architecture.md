@@ -29,13 +29,13 @@ Use finding ID prefix: **ARCH**
 
 ### Swift — the target graph
 
-`BreatheAPI` (not a product) ← `BreatheKit` (domain models, observable models, repositories) ← the app. `BreatheUI` has no dependencies at all.
+`OndAPI` (not a product) ← `OndKit` (domain models, observable models, repositories) ← the app. `OndUI` has no dependencies at all.
 
 **What to check:**
 
-- **`import BreatheAPI` outside `BreatheKit`.** The target graph makes this unnameable from the app, so a working occurrence means the graph changed — check `Package.swift` and `ios/project.yml` for a dependency edge that shouldn't exist.
-- **`BreatheUI` importing a domain type.** It exposes accents named for feeling (`settle`, `night`, `spark`, `restore`); the _feature_ maps `TechniqueGoal` onto them. A dependency here inverts the graph and makes the palette un-reusable.
-- **Observable models in the app target.** Models belong in `BreatheKit`; the app target has no test bundle, so a model living there is structurally untestable. Views stay in `ios/Breathe/Features/<Name>/`.
+- **`import OndAPI` outside `OndKit`.** The target graph makes this unnameable from the app, so a working occurrence means the graph changed — check `Package.swift` and `ios/project.yml` for a dependency edge that shouldn't exist.
+- **`OndUI` importing a domain type.** It exposes accents named for feeling (`settle`, `night`, `spark`, `restore`); the _feature_ maps `TechniqueGoal` onto them. A dependency here inverts the graph and makes the palette un-reusable.
+- **Observable models in the app target.** Models belong in `OndKit`; the app target has no test bundle, so a model living there is structurally untestable. Views stay in `ios/Breathe/Features/<Name>/`.
 - **Generated types above the repository boundary.** `docs/transport.md` states the rule for both languages: generated protobuf types stop at the repository. Above it, code works in domain types that have no unrepresentable state. A `Breathe_V1_*` type in a view, a model, or anything the app can name is a finding.
 
 **Severity guide:**
@@ -44,7 +44,7 @@ Use finding ID prefix: **ARCH**
 - `service.rs` taking `Arc<AppState>` → Warning
 - SQL outside `repository.rs` → Warning
 - Generated protobuf type escaping the repository boundary → Warning
-- `BreatheUI` depending on a domain type → Warning
+- `OndUI` depending on a domain type → Warning
 - Handler with embedded business logic (>20 lines of non-mapping code) → Suggestion
 
 ---
@@ -67,7 +67,7 @@ Use finding ID prefix: **ARCH**
 - **Filename prefixed with the feature name.** `technique/handlers/technique_grpc.rs` is noise — the module path already says it.
 - **Swift naming.** PascalCase, named for the principal type, with `-View` / `-Model` / `-Tests` suffixes. A Swift file holding several unrelated principal types is a finding.
 - **`utils/` or `helpers/` directories.** Explicitly banned as junk drawers. Also flag `utils.rs`, `helpers.rs`, `common.rs`, `misc.swift` — the same anti-pattern at file scale.
-- **Escalation without a second consumer.** The three-tier rule says code starts feature-local and moves up only when a _concrete_ second consumer exists. Flag things promoted to `src/http/`, `src/state.rs`, or `BreatheKit` speculatively. Flag the creation of a `shared` crate outright — `docs/architecture.md` says it should not exist until a second crate genuinely needs a type.
+- **Escalation without a second consumer.** The three-tier rule says code starts feature-local and moves up only when a _concrete_ second consumer exists. Flag things promoted to `src/http/`, `src/state.rs`, or `OndKit` speculatively. Flag the creation of a `shared` crate outright — `docs/architecture.md` says it should not exist until a second crate genuinely needs a type.
 - **Orphaned files:** files in `crates/api/src/` root that belong inside a feature.
 
 **Severity guide:**

@@ -263,7 +263,7 @@ description = "Assert the committed Swift protobuf matches proto/"
 # happens to be staged — and in a GitButler workspace, where the index is not
 # kept in step with the virtual branches, fails on generated files that are
 # already committed.
-run = ["mise run generate:proto", "git diff --exit-code HEAD -- ios/Packages/BreatheCore/Sources/BreatheAPI/Generated"]
+run = ["mise run generate:proto", "git diff --exit-code HEAD -- ios/Packages/OndCore/Sources/OndAPI/Generated"]
 
 [tasks."check:audit"]
 description = "Match Cargo.lock against the RustSec advisory database"
@@ -329,7 +329,7 @@ run = "cargo nextest run -p api --test e2e --run-ignored only -E 'test(/::smoke_
 
 [tasks."test:swift"]
 dir = "{{config_root}}/ios"
-run = "swift test --package-path Packages/BreatheCore"
+run = "swift test --package-path Packages/OndCore"
 
 # web
 
@@ -403,7 +403,7 @@ run = ["""
 # ios
 
 [tasks."ios:gen"]
-description = "Generate Breathe.xcodeproj from ios/project.yml"
+description = "Generate Ond.xcodeproj from ios/project.yml"
 dir = "{{config_root}}/ios"
 # The plutil step bakes this Mac's Bonjour address into the freshly generated
 # (gitignored) Info.plist. Debug builds fall back to it when the
@@ -417,14 +417,14 @@ dir = "{{config_root}}/ios"
 # URL just as much and from the same source.
 run = ["xcodegen generate", '''
   url="http://$(scutil --get LocalHostName).local:18100"
-  plutil -replace BreatheAPIBaseURL -string "$url" Breathe/Info.plist
-  plutil -replace BreatheAPIBaseURL -string "$url" BreatheWatch/Info.plist
+  plutil -replace OndAPIBaseURL -string "$url" Ond/Info.plist
+  plutil -replace OndAPIBaseURL -string "$url" OndWatch/Info.plist
   ''']
 
 [tasks."ios:open"]
 description = "Generate the project and open it in Xcode"
 depends = ["ios:gen"]
-run = "open {{config_root}}/ios/Breathe.xcodeproj"
+run = "open {{config_root}}/ios/Ond.xcodeproj"
 
 [tasks."ios:build"]
 description = "Build the app for the simulator without opening Xcode"
@@ -432,7 +432,7 @@ depends = ["ios:gen"]
 dir = "{{config_root}}/ios"
 # The generic destination builds without naming a device, so this works on any
 # machine regardless of which simulators its Xcode happens to have installed.
-run = "xcodebuild -project Breathe.xcodeproj -scheme Breathe -destination 'generic/platform=iOS Simulator' build"
+run = "xcodebuild -project Ond.xcodeproj -scheme Ond -destination 'generic/platform=iOS Simulator' build"
 
 [tasks."ios:sim"]
 description = "Build, install, and launch the app on the booted iOS simulator"
@@ -444,10 +444,10 @@ dir = "{{config_root}}/ios"
 # The product directory is asked of xcodebuild rather than assumed, because
 # DerivedData's path is a hash of the project's location.
 run = '''
-  products=$(xcodebuild -project Breathe.xcodeproj -scheme Breathe \
+  products=$(xcodebuild -project Ond.xcodeproj -scheme Ond \
     -destination 'generic/platform=iOS Simulator' -showBuildSettings 2>/dev/null \
     | awk -F' = ' '/ BUILT_PRODUCTS_DIR /{print $2; exit}')
-  xcrun simctl install booted "$products/Breathe.app"
+  xcrun simctl install booted "$products/Ond.app"
   xcrun simctl launch booted xyz.holmie.breathe
 '''
 
@@ -458,4 +458,4 @@ dir = "{{config_root}}/ios"
 # Separate from `ios:build` rather than folded into it: the phone scheme embeds
 # the watch app, so building it covers both, but a watch-only change wants a
 # build that fails on the wrist's compiler errors alone.
-run = "xcodebuild -project Breathe.xcodeproj -scheme BreatheWatch -destination 'generic/platform=watchOS Simulator' build"
+run = "xcodebuild -project Ond.xcodeproj -scheme OndWatch -destination 'generic/platform=watchOS Simulator' build"

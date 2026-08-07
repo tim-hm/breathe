@@ -49,7 +49,7 @@ JSON in production, human-readable in dev — chosen once at boot in `crates/api
 
 The principle above carries over unchanged. `os.Logger` does not: four of its properties decide whether a line survives to be read at all, and each has caught this codebase out.
 
-**One subsystem: `xyz.holmie.breathe`,** taken from a single constant in `BreatheKit` rather than a literal or a `Bundle.main.bundleIdentifier` lookup. `Bundle.main` is the _host process_, so the same `BreatheKit` file files under one subsystem when the phone loads it and another when the watch does — and `log stream --subsystem xyz.holmie.breathe` then silently omits the watch, the target whose failures are hardest to reproduce. A subsystem that varies by host is not a subsystem.
+**One subsystem: `xyz.holmie.breathe`,** taken from a single constant in `OndKit` rather than a literal or a `Bundle.main.bundleIdentifier` lookup. `Bundle.main` is the _host process_, so the same `OndKit` file files under one subsystem when the phone loads it and another when the watch does — and `log stream --subsystem xyz.holmie.breathe` then silently omits the watch, the target whose failures are hardest to reproduce. A subsystem that varies by host is not a subsystem.
 
 **A category names the channel, not the file.** Both ends of the phone↔watch handoff take `watch-link`, so correlating a dropped identity means one name rather than two. The set today:
 

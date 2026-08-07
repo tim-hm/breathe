@@ -10,11 +10,11 @@ ios/*.xcworkspace/
 # Also generated from project.yml — XcodeGen writes the target's Info.plist from
 # its `info:` block. Committing it would leave two editable sources for one Info
 # dictionary, where hand edits silently vanish on the next generate.
-ios/Breathe/Info.plist
-ios/BreatheWatch/Info.plist
+ios/Ond/Info.plist
+ios/OndWatch/Info.plist
 # Same again for the entitlements XcodeGen writes from each `entitlements:` block.
-ios/Breathe/Breathe.entitlements
-ios/BreatheWatch/BreatheWatch.entitlements
+ios/Ond/Ond.entitlements
+ios/OndWatch/OndWatch.entitlements
 ios/**/.build/
 DerivedData/
 *.xcuserstate

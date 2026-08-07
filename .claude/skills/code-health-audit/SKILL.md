@@ -15,16 +15,16 @@ Coverage spans architecture, documentation accuracy (including `CLAUDE.md`), typ
 
 Override any value by stating it in the invocation prompt (e.g., "run audit since 2026-07-01" or "audit with god file threshold 500").
 
-| Parameter | Default | Description |
-| :-- | :-- | :-- |
-| `since` | Date of most recent `docs/audits/*.md`, or 14 days ago | Review window start |
-| `god_file_threshold_rs` | 400 | Lines threshold for Rust god file detection |
-| `god_file_threshold_swift` | 300 | Lines threshold for Swift god file detection |
-| `output_dir` | `docs/audits/` | Output directory (created if missing) |
-| `exclude_paths` | `target,.git,.sqlx,node_modules,.build,DerivedData,ios/Packages/BreatheCore/Sources/BreatheAPI/Generated,ios/Breathe.xcodeproj` | Glob patterns to exclude |
-| `architecture_docs` | `docs/` | Path to architecture documentation |
+| Parameter                  | Default                                                                                                                 | Description                                  |
+| :------------------------- | :---------------------------------------------------------------------------------------------------------------------- | :------------------------------------------- |
+| `since`                    | Date of most recent `docs/audits/*.md`, or 14 days ago                                                                  | Review window start                          |
+| `god_file_threshold_rs`    | 400                                                                                                                     | Lines threshold for Rust god file detection  |
+| `god_file_threshold_swift` | 300                                                                                                                     | Lines threshold for Swift god file detection |
+| `output_dir`               | `docs/audits/`                                                                                                          | Output directory (created if missing)        |
+| `exclude_paths`            | `target,.git,.sqlx,node_modules,.build,DerivedData,ios/Packages/OndCore/Sources/OndAPI/Generated,ios/Breathe.xcodeproj` | Glob patterns to exclude                     |
+| `architecture_docs`        | `docs/`                                                                                                                 | Path to architecture documentation           |
 
-The generated Swift under `BreatheAPI/Generated/` is committed but not authored — it is excluded from every review. Its _freshness_ is checked by `mise run check:generated`, not by this audit.
+The generated Swift under `OndAPI/Generated/` is committed but not authored — it is excluded from every review. Its _freshness_ is checked by `mise run check:generated`, not by this audit.
 
 ---
 
@@ -303,10 +303,10 @@ The final document must follow this structure exactly:
 
 Ported from the `connect` repo's `cortex-code-health-audit` by Tim, 2026-08-07. The TypeScript/React review surface was replaced with Swift/SwiftUI throughout, and the auth checks were rewritten around this repo's documented "no auth" decision. Volatile facts and how to re-verify each:
 
-| Volatile fact (as of 2026-08-07)                                     | Re-verify with                                                                                    |
-| :------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------ |
-| Output dir `docs/audits/`, two-file retention                        | `ls docs/audits/`                                                                                 |
-| Convention source files read in Step 1 still exist                   | `ls CLAUDE.md docs/{code-structure,architecture,transport,observability,testing,contributing}.md` |
-| The repo is Rust + Swift only — no TypeScript app to review          | `ls web/` (static page, no build), `cat package.json`                                             |
-| Generated Swift lives under `BreatheAPI/Generated/` and is committed | [docs/transport.md](../../../docs/transport.md), "The contract is the source of truth"            |
-| `fmt:text` / `check:md` are the markdown formatter and linter        | `mise tasks`                                                                                      |
+| Volatile fact (as of 2026-08-07)                                 | Re-verify with                                                                                    |
+| :--------------------------------------------------------------- | :------------------------------------------------------------------------------------------------ |
+| Output dir `docs/audits/`, two-file retention                    | `ls docs/audits/`                                                                                 |
+| Convention source files read in Step 1 still exist               | `ls CLAUDE.md docs/{code-structure,architecture,transport,observability,testing,contributing}.md` |
+| The repo is Rust + Swift only — no TypeScript app to review      | `ls web/` (static page, no build), `cat package.json`                                             |
+| Generated Swift lives under `OndAPI/Generated/` and is committed | [docs/transport.md](../../../docs/transport.md), "The contract is the source of truth"            |
+| `fmt:text` / `check:md` are the markdown formatter and linter    | `mise tasks`                                                                                      |

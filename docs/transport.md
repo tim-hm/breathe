@@ -6,16 +6,16 @@ How a value gets from a Postgres row to a SwiftUI view, and why the pipeline is 
 
 `proto/breathe/v1/` holds the only definition of the API. Nothing else describes it — there is no OpenAPI document, no hand-written Swift model, no shared types package. Two generators read it:
 
-| Target       | Generator                                                        | Output                                                   | Committed? |
-| :----------- | :--------------------------------------------------------------- | :------------------------------------------------------- | :--------- |
-| Rust server  | `tonic-prost-build`, from `crates/api/build.rs`                  | `OUT_DIR`, re-exported via `crates/api/src/proto.rs`     | No         |
-| Swift client | `buf generate` (`protoc-gen-swift` + `protoc-gen-connect-swift`) | `ios/Packages/BreatheCore/Sources/BreatheAPI/Generated/` | Yes        |
+| Target       | Generator                                                        | Output                                               | Committed? |
+| :----------- | :--------------------------------------------------------------- | :--------------------------------------------------- | :--------- |
+| Rust server  | `tonic-prost-build`, from `crates/api/build.rs`                  | `OUT_DIR`, re-exported via `crates/api/src/proto.rs` | No         |
+| Swift client | `buf generate` (`protoc-gen-swift` + `protoc-gen-connect-swift`) | `ios/Packages/OndCore/Sources/OndAPI/Generated/`     | Yes        |
 
 The asymmetry is deliberate. Rust regenerates on every `cargo build`, so a stale artefact is impossible and committing one would only create merge noise. Xcode has no equivalent hook, and requiring `buf` to be installed before the app compiles would put a Go toolchain between a new contributor and their first build — so the Swift output is committed and refreshed by `mise run generate:proto`.
 
 ## Why gRPC-Web
 
-The server is tonic wrapped in `tonic_web::GrpcWebLayer` (`crates/api/src/lib.rs`, where the router is assembled — `main.rs` is process startup and nothing else). The client is `connect-swift` configured with `networkProtocol: .grpcWeb` (`ios/Packages/BreatheCore/Sources/BreatheAPI/Clients.swift`).
+The server is tonic wrapped in `tonic_web::GrpcWebLayer` (`crates/api/src/lib.rs`, where the router is assembled — `main.rs` is process startup and nothing else). The client is `connect-swift` configured with `networkProtocol: .grpcWeb` (`ios/Packages/OndCore/Sources/OndAPI/Clients.swift`).
 
 connect-swift speaks three protocols — Connect, gRPC, and gRPC-Web — and the server has to speak the same one:
 
@@ -67,7 +67,7 @@ The two ends are asymmetric in shape, and deliberately so:
 Every proto3 enum has an `_UNSPECIFIED = 0` member that the wire format can always produce — including from a server running a newer contract than the client. Both ends convert explicitly rather than passing the generated type inwards:
 
 - **Rust**: `crates/api/src/features/technique/service.rs` maps the database enum to the proto enum through a `match` with no catch-all, so adding a database variant without a proto variant fails to compile.
-- **Swift**: `TechniqueGoal.init?(proto:)` in `BreatheKit` returns `nil` for `.unspecified` and `.UNRECOGNIZED`, and the repository turns that into `TechniqueRepositoryError.malformedResponse`. A value the app cannot represent is a decode failure, never a silent default.
+- **Swift**: `TechniqueGoal.init?(proto:)` in `OndKit` returns `nil` for `.unspecified` and `.UNRECOGNIZED`, and the repository turns that into `TechniqueRepositoryError.malformedResponse`. A value the app cannot represent is a decode failure, never a silent default.
 
 The rule in both languages: **generated types stop at the repository boundary.** Above it, code works in domain types that have no unrepresentable state.
 

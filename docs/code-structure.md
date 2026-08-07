@@ -20,13 +20,13 @@ crates/api/src/features/technique/
 # Swift
 ios/Breathe/Features/Techniques/
   TechniqueListView.swift
-ios/Packages/BreatheCore/Sources/BreatheKit/
+ios/Packages/OndCore/Sources/OndKit/
   TechniqueListModel.swift
 ```
 
 A developer can understand — or delete — a feature by looking in one place.
 
-Swift splits one layer further than Rust: the view stays in the app feature directory, but its observable model lives in `BreatheKit`. The app target has no test bundle — package tests are the only tests that run on the host — so a model in the app target would be structurally untestable.
+Swift splits one layer further than Rust: the view stays in the app feature directory, but its observable model lives in `OndKit`. The app target has no test bundle — package tests are the only tests that run on the host — so a model in the app target would be structurally untestable.
 
 ## The layering contract
 
@@ -71,39 +71,39 @@ Every piece of code has a default home. Start at the lowest tier and escalate on
 
 1. **Feature-local** (the default home for all new code) — Rust: `crates/api/src/features/<name>/`. Swift: `ios/Breathe/Features/<Name>/`.
 2. **App-local** (a second feature in the same target needs it) — Rust: top-level modules like `src/http/`, `src/state.rs`. Swift: `ios/Breathe/` root.
-3. **Shared crate/module** (a second target needs it) — Rust: a `shared` crate, which **does not exist yet and should not be created until it does**. Swift: a target in `ios/Packages/BreatheCore` — `BreatheKit` for domain, `BreatheUI` for design.
+3. **Shared crate/module** (a second target needs it) — Rust: a `shared` crate, which **does not exist yet and should not be created until it does**. Swift: a target in `ios/Packages/OndCore` — `OndKit` for domain, `OndUI` for design.
 
 **Rule for tier 2:** if at least two features call into it _and_ its job is to wrap or mediate against an external system (the database, the network), it belongs at the top level. If it owns user-visible domain behaviour, it belongs inside a feature.
 
 ## Swift module boundaries
 
-All Swift library code lives in **one** SwiftPM package, `ios/Packages/BreatheCore`, split into targets. One package rather than three because SwiftPM cannot share a tools-version or platform list across packages — and, more importantly, because each package carries its own `Package.resolved`, so a split means several lockfiles free to pin different versions of the same dependency.
+All Swift library code lives in **one** SwiftPM package, `ios/Packages/OndCore`, split into targets. One package rather than three because SwiftPM cannot share a tools-version or platform list across packages — and, more importantly, because each package carries its own `Package.resolved`, so a split means several lockfiles free to pin different versions of the same dependency.
 
-| Target                   | Product? | Role                                                       | May depend on             |
-| :----------------------- | :------- | :--------------------------------------------------------- | :------------------------ |
-| `BreatheAPI`             | **no**   | Generated protobuf + the Connect client factory            | Connect, SwiftProtobuf    |
-| `BreatheKit`             | yes      | Domain models, observable feature models, and repositories | `BreatheAPI`              |
-| `BreatheUI`              | yes      | Design tokens and shared components                        | nothing                   |
-| `BreatheStyle`           | yes      | Mappings from a domain type onto a design token            | `BreatheKit`, `BreatheUI` |
-| `Breathe` (iOS)          | —        | Features, composition root                                 | the three products above  |
-| `BreatheWatch` (watchOS) | —        | Features, composition root, the phone link                 | the three products above  |
+| Target               | Product? | Role                                                       | May depend on            |
+| :------------------- | :------- | :--------------------------------------------------------- | :----------------------- |
+| `OndAPI`             | **no**   | Generated protobuf + the Connect client factory            | Connect, SwiftProtobuf   |
+| `OndKit`             | yes      | Domain models, observable feature models, and repositories | `OndAPI`                 |
+| `OndUI`              | yes      | Design tokens and shared components                        | nothing                  |
+| `OndStyle`           | yes      | Mappings from a domain type onto a design token            | `OndKit`, `OndUI`        |
+| `Breathe` (iOS)      | —        | Features, composition root                                 | the three products above |
+| `OndWatch` (watchOS) | —        | Features, composition root, the phone link                 | the three products above |
 
 Two invariants hold here, and the target graph enforces both:
 
-- **Neither app can import `BreatheAPI`.** It is a target, not a product, so the module is not merely undeclared in `project.yml` — it is unnameable from an app. "App code never imports a generated protobuf type" is checked by the compiler rather than remembered.
-- **`BreatheUI` knows nothing about the domain.** It has no dependencies at all. It exposes accents named for feeling (`settle`, `night`, `spark`, `restore`), and something above it maps `TechniqueGoal` onto them — a design module that imported domain types would invert the dependency and make the palette un-reusable. `BreatheStyle` is where that mapping lives, which is the point of it existing: it can name both sides precisely because nothing depends on _it_.
+- **Neither app can import `OndAPI`.** It is a target, not a product, so the module is not merely undeclared in `project.yml` — it is unnameable from an app. "App code never imports a generated protobuf type" is checked by the compiler rather than remembered.
+- **`OndUI` knows nothing about the domain.** It has no dependencies at all. It exposes accents named for feeling (`settle`, `night`, `spark`, `restore`), and something above it maps `TechniqueGoal` onto them — a design module that imported domain types would invert the dependency and make the palette un-reusable. `OndStyle` is where that mapping lives, which is the point of it existing: it can name both sides precisely because nothing depends on _it_.
 
 ### What the two apps share
 
-`BreatheWatch` is a second app over the same package. Everything platform-neutral is already in `BreatheKit` and the watch composes the same instances — the session timeline, the catalogue cache, the local session store, the sync queue. Views are never shared: a wrist is not a small phone, and `BreathRing` exists precisely because there is only room for one shape where the phone has two.
+`OndWatch` is a second app over the same package. Everything platform-neutral is already in `OndKit` and the watch composes the same instances — the session timeline, the catalogue cache, the local session store, the sync queue. Views are never shared: a wrist is not a small phone, and `BreathRing` exists precisely because there is only room for one shape where the phone has two.
 
-What falls between the two is a mapping from a domain type onto a design token. `BreatheUI` cannot hold one by the invariant above, so `BreatheStyle` does: it depends on both products, which is exactly what lets it name a `TechniqueGoal` and an accent in the same function. `GoalAccent` lives there and both apps read it, so the wrist and the hand cannot drift to different colours for the same technique.
+What falls between the two is a mapping from a domain type onto a design token. `OndUI` cannot hold one by the invariant above, so `OndStyle` does: it depends on both products, which is exactly what lets it name a `TechniqueGoal` and an accent in the same function. `GoalAccent` lives there and both apps read it, so the wrist and the hand cannot drift to different colours for the same technique.
 
-The line is between a **mapping** and a **view**. A mapping goes in `BreatheStyle`; a view stays duplicated per target, because a wrist is not a small phone and the two really do want different layouts. `SafetyNote` and `TechniqueGlyph` are the two that duplicate today — both views, and both should stay that way until their bodies stop diverging rather than because they are small. `TechniqueGlyph` is the weaker of the two: its copies differ only in a default line width, so if it diverges no further it is the next thing that belongs in `BreatheStyle`.
+The line is between a **mapping** and a **view**. A mapping goes in `OndStyle`; a view stays duplicated per target, because a wrist is not a small phone and the two really do want different layouts. `SafetyNote` and `TechniqueGlyph` are the two that duplicate today — both views, and both should stay that way until their bodies stop diverging rather than because they are small. `TechniqueGlyph` is the weaker of the two: its copies differ only in a default line width, so if it diverges no further it is the next thing that belongs in `OndStyle`.
 
-The same rule catches one pair the compiler cannot see at all. `BreatheKit/TechniqueDrawing.swift` is a coordinate-for-coordinate port of the hand-authored SVGs in `web/index.html`, and the site is the reference — so a glyph changed there is a glyph the apps keep drawing the old way, with nothing to catch it.
+The same rule catches one pair the compiler cannot see at all. `OndKit/TechniqueDrawing.swift` is a coordinate-for-coordinate port of the hand-authored SVGs in `web/index.html`, and the site is the reference — so a glyph changed there is a glyph the apps keep drawing the old way, with nothing to catch it.
 
-The link between the two apps runs one way: the phone sends the anonymous identity and the best controlled pause through `WatchConnectivity`'s `applicationContext` (`ios/Breathe/WatchLink.swift`), and the watch only listens (`ios/BreatheWatch/PhoneLink.swift`). The watch must never mint an identity of its own, so `ProvisionedUserIdentityStore` starts empty and everything above it is written to work without one — the reasoning is on that type.
+The link between the two apps runs one way: the phone sends the anonymous identity and the best controlled pause through `WatchConnectivity`'s `applicationContext` (`ios/Breathe/WatchLink.swift`), and the watch only listens (`ios/OndWatch/PhoneLink.swift`). The watch must never mint an identity of its own, so `ProvisionedUserIdentityStore` starts empty and everything above it is written to work without one — the reasoning is on that type.
 
 ## Module Size Tiers
 
@@ -120,7 +120,7 @@ Choose structure from a feature's actual complexity. Don't impose it preemptivel
 Unit tests are colocated with their source in both languages.
 
 - **Rust** — inline `#[cfg(test)] mod tests` at the bottom of the file under test.
-- **Swift** — `ios/Packages/BreatheCore/Tests/<Target>Tests/`, which is where SwiftPM requires them.
+- **Swift** — `ios/Packages/OndCore/Tests/<Target>Tests/`, which is where SwiftPM requires them.
 
 Integration tests are the exception, because they belong to no single file: `crates/api/tests/e2e/` mirrors the feature layout one level up — `technique.rs` for the feature, `health.rs` for the JSON surface, `harness.rs` for the shared machinery. Cargo treats `tests/e2e/main.rs` as one target, so all of them compile into a single binary rather than one per file.
 
