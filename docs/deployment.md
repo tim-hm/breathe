@@ -13,11 +13,13 @@ Dockerfile        one image, both workspace binaries (api + migrate)
 web/              the marketing one-pager, rsynced beside infra/box and served by Caddy
 ```
 
-The public hostname is **`cadence.holmie.xyz`**, named in `infra/box/Caddyfile`. `holmie.xyz` is registered at **Porkbun** and served by Porkbun's nameservers, so its records are edited there — nothing in `infra/` manages DNS, and the `elastic_ip` output is what the A record points at.
+The public hostname is **`ondbreathe.app`**, named twice on purpose: as the Route53 zone in `infra/main.tf` and as the site block in `infra/box/Caddyfile`. Nothing renders the Caddyfile — deploy rsyncs it as-is — so those two literals are kept in step by hand, and both files say so.
+
+DNS is applied from `infra/`, not edited at the registrar: the hosted zone and the apex `A` record land with the address they point at, so a record aimed at a released IP is not a state this repo can reach. The registrar holds one thing, the NS delegation, set once from the `name_servers` output.
 
 The instance is disposable; the things worth keeping live elsewhere:
 
-- **Postgres data** — on a separate EBS volume (`breathe-data` label, mounted at `/srv/data`), so replacing the instance replaces no data. The database password lives on that volume too (`/srv/data/breathe.env`), because Postgres keeps its own hash inside the cluster files — a fresh instance regenerating it would strand the data.
+- **Postgres data** — on a separate EBS volume (`ond-data` label, mounted at `/srv/data`), so replacing the instance replaces no data. The database password lives on that volume too (`/srv/data/ond.env`), because Postgres keeps its own hash inside the cluster files — a fresh instance regenerating it would strand the data.
 - **Backups** — nightly `pg_dump | gzip | aws s3 cp` from a cron installed by cloud-init, into the `backup_bucket` output, 30-day expiry. Credentials come from the instance profile; no keys exist on the box.
 - **TLS certificates** — in the `caddy-data` Docker volume, persisted so redeploys never touch ACME rate limits.
 
@@ -25,7 +27,7 @@ The public entrance is Caddy on 443 (80 redirects and answers ACME challenges), 
 
 ## The site
 
-`web/` is two static files — `index.html` and `style.css`, no build step and no bundler. `mise run deploy` rsyncs the directory to `/srv/breathe/web/`, which `infra/box/compose.yaml` mounts read-only into Caddy.
+`web/` is two static files — `index.html` and `style.css`, no build step and no bundler. `mise run deploy` rsyncs the directory to `/srv/ond/web/`, which `infra/box/compose.yaml` mounts read-only into Caddy.
 
 `infra/box/Caddyfile` splits the hostname by path rather than running a second one, so there is one A record and one certificate. The API side is enumerated (`/breathe.v1.*`, `/health`, `/about`) and the site is the fallback, never the other way round: matching the proto package prefix covers every service the contract will ever grow, so a static file can never shadow an RPC.
 
@@ -39,13 +41,13 @@ The container gets exactly the three variables `crates/api/src/config.rs` reads,
 | :------------------- | :------- | :------------------------------------------------------------------------------- |
 | `BREATHE_ENV`        | yes      | Literal `production` in `infra/box/compose.yaml` — JSON logs, no permissive CORS |
 | `DATABASE_URL`       | yes      | Assembled in the same file from the generated `POSTGRES_PASSWORD`                |
-| `OPENROUTER_API_KEY` | no       | `/srv/data/breathe.env`, added by hand — see below                               |
+| `OPENROUTER_API_KEY` | no       | `/srv/data/ond.env`, added by hand — see below                                   |
 
-`OPENROUTER_API_KEY` is the assistant's provider key, and the only optional one. Absent, the API boots normally and the assistant answers from its rule-based fallback; every RPC still returns a real answer, flagged so the client can say so. Add it the same way the password lives — appended to `/srv/data/breathe.env` on the data volume, which `/srv/breathe/.env` symlinks onto, so it survives replacing the instance:
+`OPENROUTER_API_KEY` is the assistant's provider key, and the only optional one. Absent, the API boots normally and the assistant answers from its rule-based fallback; every RPC still returns a real answer, flagged so the client can say so. Add it the same way the password lives — appended to `/srv/data/ond.env` on the data volume, which `/srv/ond/.env` symlinks onto, so it survives replacing the instance:
 
 ```sh
-ssh ubuntu@<elastic_ip> 'printf "OPENROUTER_API_KEY=%s\n" "<key>" | sudo tee -a /srv/data/breathe.env >/dev/null'
-ssh ubuntu@<elastic_ip> 'cd /srv/breathe && docker compose up -d api'
+ssh ubuntu@<elastic_ip> 'printf "OPENROUTER_API_KEY=%s\n" "<key>" | sudo tee -a /srv/data/ond.env >/dev/null'
+ssh ubuntu@<elastic_ip> 'cd /srv/ond && docker compose up -d api'
 ```
 
 The key never leaves the box: the model is called server-side precisely so no build of the app ever carries one. Rotating it is the same two commands with the old line removed first.
@@ -54,14 +56,16 @@ The key never leaves the box: the model is called server-side precisely so no bu
 
 Two AWS profiles, and the split is the point:
 
-| Profile   | Who                         | May run                                           |
-| :-------- | :-------------------------- | :------------------------------------------------ |
-| `holmie`  | the account root            | `infra:bootstrap:*`, once, and nothing else       |
-| `breathe` | the `breathe-tofu` IAM user | everything: `infra:plan`, `infra:apply`, `deploy` |
+| Profile  | Who                         | May run                                           |
+| :------- | :-------------------------- | :------------------------------------------------ |
+| `holmie` | the account root            | `infra:bootstrap:*`, once, and nothing else       |
+| `ond`    | the `breathe-tofu` IAM user | everything: `infra:plan`, `infra:apply`, `deploy` |
 
 The mise tasks pin `AWS_PROFILE` themselves, so neither is something to remember or export.
 
 State lives in the S3 bucket `infra/bootstrap` creates — versioned, encrypted, private, TLS-only, and `prevent_destroy`. Locking is OpenTofu's S3-native `use_lockfile`; the DynamoDB table older Terraform documentation calls for does not exist and is not needed.
+
+That bucket and the IAM user keep the names they were bootstrapped under, from before the app was called önd. Both are read only by an operator, and renaming them means standing up replacements and migrating state to change a string nobody sees — which is a worse trade than the inconsistency. The state _key_ did move (`ond/infra/terraform.tfstate`), because this deployment was provisioned from scratch under the new name.
 
 `infra/bootstrap` keeps **local** state, because it builds the bucket the other root stores state in. Losing that file is not an incident: it manages one bucket and one IAM user, both named, both re-importable in two commands.
 
@@ -74,7 +78,7 @@ State lives in the S3 bucket `infra/bootstrap` creates — versioned, encrypted,
    aws iam create-access-key --user-name breathe-tofu --profile holmie
    ```
 
-3. Put it in `~/.aws/credentials` under `[breathe]`, with a matching `[profile breathe]` (`region = eu-west-2`) in `~/.aws/config`.
+3. Put it in `~/.aws/credentials` under `[ond]`, with a matching `[profile ond]` (`region = eu-west-2`) in `~/.aws/config`.
 4. Delete the **root** access key in the IAM console. Root keys cannot be scoped, and an audit cannot tell one use of them from another — replacing them is the entire reason step 1 exists.
 
 ## First launch (deliberate, in order)
@@ -83,17 +87,17 @@ State lives in the S3 bucket `infra/bootstrap` creates — versioned, encrypted,
 2. Create `infra/terraform.tfvars` (gitignored) with both required variables: `ssh_public_key`, and `admin_cidr` as `<your-ip>/32` for a stable address or the range your ISP hands out. Neither has a default — `tofu plan` prompts for a missing one and fails outright under `-input=false` — and `infra/variables.tf` says why a default for `admin_cidr` would be the wrong thing to commit. Being stranded outside your own CIDR by a DHCP renewal is not the failure it sounds like: the instance carries an SSM role, so Session Manager reaches it without 22/tcp.
 3. `mise run infra:init` — downloads providers and modules, and reaches the S3 backend.
 4. `mise run infra:plan` — read the plan — then `mise run infra:apply`.
-5. At Porkbun, point `cadence.holmie.xyz` at the `elastic_ip` output with an `A` record. Do this before the first deploy: Caddy requests its certificate on first boot, and issuance fails (then retries with backoff) until the name resolves.
+5. Delegate the domain: set the four addresses from the `name_servers` output as `ondbreathe.app`'s nameservers at the registrar, then wait until `dig +short ondbreathe.app` answers with the `elastic_ip`. Do this before the first deploy — Caddy requests its certificate on first boot, and issuance fails (then retries with backoff) until the name resolves. The `A` record itself was applied in step 4; delegation is what makes the world able to read it.
 6. `mise run deploy` — builds the arm64 image locally, ships it over SSH (`docker save | docker load`, no registry), rsyncs `infra/box/`, runs `migrate` as a one-shot container, brings the stack up.
-7. `curl https://cadence.holmie.xyz/health` → `{"status":"ok"}`, and `/about` for the commit now serving.
+7. `curl https://ondbreathe.app/health` → `{"status":"ok"}`, and `/about` for the commit now serving.
 
 Every subsequent release is step 6 alone.
 
 ## Restore
 
 ```sh
-aws s3 cp s3://<backup_bucket>/breathe-<date>.sql.gz - | gunzip |
-  ssh ubuntu@<elastic_ip> 'docker compose -f /srv/breathe/compose.yaml exec -T db psql -U postgres breathe'
+aws s3 cp s3://<backup_bucket>/ond-<date>.sql.gz - | gunzip |
+  ssh ubuntu@<elastic_ip> 'docker compose -f /srv/ond/compose.yaml exec -T db psql -U postgres breathe'
 ```
 
 Restores into the live database; for a from-scratch rebuild, apply migrations first (`deploy` does) and restore over the empty schema.

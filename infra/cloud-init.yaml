@@ -12,16 +12,16 @@ packages:
 write_files:
   # Nightly dump straight to S3 — credentials come from the instance profile,
   # never from a key on disk. Restore procedure lives in docs/deployment.md.
-  - path: /etc/cron.d/breathe-backup
+  - path: /etc/cron.d/ond-backup
     content: |
       AWS_DEFAULT_REGION=${region}
       PATH=/usr/local/bin:/usr/bin:/bin:/snap/bin
-      17 2 * * * root docker compose -f /srv/breathe/compose.yaml exec -T db pg_dump -U postgres breathe | gzip | aws s3 cp - s3://${backup_bucket}/breathe-$(date +\%F).sql.gz
+      17 2 * * * root docker compose -f /srv/ond/compose.yaml exec -T db pg_dump -U postgres breathe | gzip | aws s3 cp - s3://${backup_bucket}/ond-$(date +\%F).sql.gz
 
 runcmd:
   - usermod -aG docker ubuntu
   # rsync target for `mise run deploy`.
-  - install -d -o ubuntu -g ubuntu /srv/breathe
+  - install -d -o ubuntu -g ubuntu /srv/ond
   # `set -e` is not the default here: without it a failed device probe carries on
   # into mkfs with an empty argument, which is exactly how this silently produced
   # a /srv/data on the root volume the first time.
@@ -35,8 +35,8 @@ runcmd:
     test -e "${data_device}"
     # blkid finds nothing only on a never-formatted volume — this can never
     # reformat data.
-    blkid "${data_device}" || mkfs.ext4 -L breathe-data "${data_device}"
-    printf 'LABEL=breathe-data /srv/data ext4 defaults,nofail 0 2\n' >> /etc/fstab
+    blkid "${data_device}" || mkfs.ext4 -L ond-data "${data_device}"
+    printf 'LABEL=ond-data /srv/data ext4 defaults,nofail 0 2\n' >> /etc/fstab
     install -d /srv/data
     # `nofail` in fstab means `mount -a` shrugs off a label udev has not published
     # yet, so settle first and assert afterwards. A silent miss here puts Postgres
@@ -50,16 +50,16 @@ runcmd:
   # Compose picks it up for interpolation.
   - |
     set -eux
-    if [ ! -f /srv/data/breathe.env ]; then
-      printf 'POSTGRES_PASSWORD=%s\n' "$(openssl rand -hex 24)" > /srv/data/breathe.env
+    if [ ! -f /srv/data/ond.env ]; then
+      printf 'POSTGRES_PASSWORD=%s\n' "$(openssl rand -hex 24)" > /srv/data/ond.env
     fi
     # Owned by ubuntu, not root: `mise run deploy` runs docker compose over SSH as
     # ubuntu, and compose reads this file itself to interpolate the password. Root
     # ownership makes that a permission error rather than a missing variable.
     # Outside the `if` so replacing the instance repairs an existing volume too.
-    chown ubuntu:ubuntu /srv/data/breathe.env
-    chmod 600 /srv/data/breathe.env
-    ln -sf /srv/data/breathe.env /srv/breathe/.env
+    chown ubuntu:ubuntu /srv/data/ond.env
+    chmod 600 /srv/data/ond.env
+    ln -sf /srv/data/ond.env /srv/ond/.env
   # Ubuntu 24.04 dropped the awscli deb; the snap is Canonical's replacement and
   # the only packaged aarch64 build. Last because it is the one step that needs
   # the network beyond the archive: a snap store hiccup must not take the data
