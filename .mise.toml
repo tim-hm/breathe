@@ -41,6 +41,8 @@ pnpm = "latest"
 "cargo:cargo-watch" = "latest"
 # Reports crate dependencies nothing imports. Backs `check:deps`.
 "cargo:cargo-machete" = "latest"
+# Matches Cargo.lock against the RustSec advisory database. Backs `check:audit`.
+"cargo:cargo-audit" = "latest"
 # Pinned to 0.9.x to match the `sqlx` crate: the CLI validates the committed
 # .sqlx offline cache, and a 0.8 CLI cannot read a 0.9 cache. Move both together.
 "cargo:sqlx-cli" = "0.9"
@@ -262,6 +264,19 @@ description = "Assert the committed Swift protobuf matches proto/"
 # kept in step with the virtual branches, fails on generated files that are
 # already committed.
 run = ["mise run generate:proto", "git diff --exit-code HEAD -- ios/Packages/BreatheCore/Sources/BreatheAPI/Generated"]
+
+[tasks."check:audit"]
+description = "Match Cargo.lock against the RustSec advisory database"
+# Deliberately outside the `check` chain and outside CI's per-push lint job.
+# Every other check is a pure function of the tree; this one changes its answer
+# when somebody else publishes an advisory, so in the gate it would eventually
+# fail a commit that touched nothing related — and what that teaches at 6pm is
+# to skip the gate. A failure that arrives on the calendar wants a run on the
+# calendar: .github/workflows/audit.yml, nightly and on any Cargo.lock change.
+#
+# It also needs the network, which `check` otherwise does not — SQLX_OFFLINE and
+# the committed .sqlx cache exist precisely so the gate runs on a plane.
+run = "cargo audit"
 
 [tasks."check:deps"]
 description = "Report crate dependencies nothing imports"

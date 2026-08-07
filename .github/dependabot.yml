@@ -1,0 +1,29 @@
+# The other half of the advisory watch. `check:audit` says a dependency is
+# vulnerable; Dependabot opens the pull request that fixes it. Weekly rather
+# than daily, and grouped, because the point is a review surface somebody keeps
+# up with — a per-crate pull request every morning is one nobody reads.
+version: 2
+
+updates:
+  # One entry covers the whole workspace: Cargo resolves every member against
+  # the single root Cargo.lock, so pointing Dependabot at "/" reaches crates/*
+  # too.
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      cargo:
+        patterns:
+          - "*"
+
+  # Actions are pinned by major tag (`actions/checkout@v4`), which silently
+  # stops receiving updates the day a v5 ships. This is what notices.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns:
+          - "*"

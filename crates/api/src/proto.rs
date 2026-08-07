@@ -13,7 +13,8 @@ pub mod breathe {
         tonic::include_proto!("breathe.v1");
 
         /// Serves the schema over gRPC reflection, which is what lets `grpcurl`
-        /// call this server without a local copy of the .proto files.
+        /// call a development server without a local copy of the .proto files.
+        /// `grpc::build_services` registers it on local environments only.
         pub const FILE_DESCRIPTOR_SET: &[u8] =
             tonic::include_file_descriptor_set!("breathe_v1_descriptor");
     }
