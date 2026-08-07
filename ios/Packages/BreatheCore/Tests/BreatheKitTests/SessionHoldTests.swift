@@ -121,12 +121,39 @@ struct SessionHoldTests {
     }
 }
 
+/// Two 30 ms breaths, so a session runs out inside a test rather than inside a
+/// technique. `cycles` is how the same fixture serves both a run that finishes
+/// and one that cannot: a thousand cycles outlives any test that ends it by hand.
+@MainActor
+func briefBreathing(cycles: Int = 1) -> Technique {
+    Technique(
+        id: "id",
+        slug: "box-breathing",
+        name: "Box Breathing",
+        summary: "",
+        goal: .calm,
+        stages: [
+            Stage(
+                phases: [
+                    Phase(kind: .inhale, duration: .milliseconds(30)),
+                    Phase(kind: .exhale, duration: .milliseconds(30)),
+                ],
+                cycles: cycles
+            ),
+        ],
+        recommendedRounds: 1
+    )
+}
+
 /// Remembers what it was asked to play, so a test can assert a beat was cued
 /// once rather than on every turn of the loop.
 @MainActor
 final class RecordingCues: SessionCueing {
     private(set) var played: [SessionTimeline.Beat] = []
     private(set) var completions = 0
+    /// Counted, not just flagged: the hardware is released from two places and
+    /// the interesting failure is both of them firing.
+    private(set) var stops = 0
 
     func prepare() {}
 
@@ -138,7 +165,9 @@ final class RecordingCues: SessionCueing {
         completions += 1
     }
 
-    func stop() {}
+    func stop() {
+        stops += 1
+    }
 }
 
 /// A session store that keeps nothing. The record under test is the one on the
@@ -159,9 +188,18 @@ struct DiscardingRecorder: SessionRecording {
 
 /// Polls `condition` until it holds, because what is being waited on is a cue
 /// loop sleeping on a clock rather than an operation with a handle to await.
+///
+/// - Parameter timeout: how long to keep asking. The default suits the
+///   millisecond fixtures these suites are built from; a caller waiting on a
+///   deliberate delay passes that delay plus slack.
 @MainActor
-func waitFor(_ description: String, until condition: @MainActor () -> Bool) async throws {
-    for _ in 0 ..< 200 {
+func waitFor(
+    _ description: String,
+    within timeout: Duration = .seconds(1),
+    until condition: @MainActor () -> Bool
+) async throws {
+    let deadline = ContinuousClock.now + timeout
+    while ContinuousClock.now < deadline {
         if condition() {
             return
         }

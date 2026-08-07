@@ -25,10 +25,7 @@ extension KeychainIdentityItem: IdentityStorage {}
 /// answers nil — the catalogue is public and sessions record locally, so the
 /// watch is fully usable meanwhile and the sync queue simply waits.
 public final class ProvisionedUserIdentityStore: UserIdentityStore {
-    private static let logger = Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "BreatheKit",
-        category: "identity"
-    )
+    private static let logger = Logger(category: "identity")
 
     /// What the store has been found to hold. Three states rather than an
     /// optional, because "nobody has looked yet" and "there is nothing there"

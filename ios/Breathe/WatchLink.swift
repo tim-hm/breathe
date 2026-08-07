@@ -16,7 +16,7 @@ import WatchConnectivity
 /// a phone sending into a watch that is off charge loses nothing.
 @MainActor
 final class WatchLink: NSObject {
-    private static let logger = Logger(subsystem: "xyz.holmie.breathe", category: "watch-link")
+    private static let logger = Logger(category: "watch-link")
 
     private let identity: any UserIdentityStore
     private let scores: any BoltScoreRecording
@@ -82,7 +82,8 @@ final class WatchLink: NSObject {
             // Nothing to retry and nothing to tell anyone: the next foreground
             // sends the same context again, and until then the watch works
             // anonymously by design.
-            Self.logger.notice("watch handoff deferred: \(error.localizedDescription)")
+            Self.logger
+                .notice("watch handoff deferred: \(error.localizedDescription, privacy: .public)")
         }
     }
 }

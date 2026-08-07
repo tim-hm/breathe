@@ -2,7 +2,7 @@ import BreatheAPI
 import Connect
 import Foundation
 
-public enum AssistantRepositoryError: Error, Equatable {
+public enum AssistantRepositoryError: LocalizedError, Equatable {
     /// The RPC itself failed — no network, server down, non-OK gRPC status.
     /// Includes `UNAUTHENTICATED`, which is what a call with no readable
     /// Keychain identity comes back as.
@@ -11,6 +11,16 @@ public enum AssistantRepositoryError: Error, Equatable {
     /// Distinct from `.transport` because retrying will not help: the client and
     /// server contracts have diverged.
     case malformedResponse(String)
+
+    /// Carries the associated message. Without this conformance
+    /// `localizedDescription` bridges to a bare `NSError`, and every log line
+    /// and failure banner reading it says "The operation couldn't be completed".
+    public var errorDescription: String? {
+        switch self {
+        case let .transport(message): "the request failed: \(message)"
+        case let .malformedResponse(message): "the response could not be read: \(message)"
+        }
+    }
 }
 
 /// Reads the assistant's guidance.
@@ -43,7 +53,7 @@ public struct AssistantRepository: AssistantReading {
 
         guard let message = response.message else {
             throw AssistantRepositoryError.transport(
-                response.error?.localizedDescription ?? "the request failed with no message"
+                response.error?.localizedDescription ?? "the server sent no message"
             )
         }
 

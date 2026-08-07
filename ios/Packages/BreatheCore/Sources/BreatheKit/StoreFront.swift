@@ -101,7 +101,7 @@ public enum PurchaseOutcome: Sendable, Equatable {
     case pending
 }
 
-public enum StoreFrontError: Error, Equatable {
+public enum StoreFrontError: LocalizedError, Equatable {
     /// The App Store has no such product. In the simulator this means the run
     /// scheme is not pointed at `Breathe.storekit`; on a device it means the
     /// product is not yet approved in App Store Connect.
@@ -111,6 +111,16 @@ public enum StoreFrontError: Error, Equatable {
     /// produced. Surfaced rather than swallowed: it should never happen, and a
     /// silent "purchase did nothing" is the worst possible way to find out.
     case unverified
+
+    /// Without this conformance `localizedDescription` bridges to a bare
+    /// `NSError`, so the log line that records a failed purchase says "The
+    /// operation couldn't be completed" and names neither case.
+    public var errorDescription: String? {
+        switch self {
+        case .productUnavailable: "the App Store has no such product"
+        case .unverified: "StoreKit would not verify the transaction"
+        }
+    }
 }
 
 /// Everything this app needs from `StoreKit`, and nothing else.

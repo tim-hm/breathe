@@ -1,7 +1,7 @@
 import BreatheAPI
 import Foundation
 
-public enum ProfileRepositoryError: Error, Equatable {
+public enum ProfileRepositoryError: LocalizedError, Equatable {
     /// The RPC failed on something a later attempt may not hit — no network, a
     /// server that is down, a status this client can only wait out. Includes
     /// `UNAUTHENTICATED`, which is what a call with no readable Keychain
@@ -19,6 +19,17 @@ public enum ProfileRepositoryError: Error, Equatable {
     /// Distinct from `.transport` because retrying will not help: the client and
     /// server contracts have diverged.
     case malformedResponse(String)
+
+    /// Carries the associated message. Without this conformance
+    /// `localizedDescription` bridges to a bare `NSError`, and every log line
+    /// and failure banner reading it says "The operation couldn't be completed".
+    public var errorDescription: String? {
+        switch self {
+        case let .transport(message): "the request failed: \(message)"
+        case let .rejected(message): "the server refused the profile: \(message)"
+        case let .malformedResponse(message): "the response could not be read: \(message)"
+        }
+    }
 }
 
 /// Carries the answers someone gave at onboarding, in both directions.
@@ -86,7 +97,7 @@ public struct ProfileRepository: ProfileSyncing {
         refused: Bool,
         _ error: (any Error)?
     ) -> ProfileRepositoryError {
-        let message = error?.localizedDescription ?? "the request failed with no message"
+        let message = error?.localizedDescription ?? "the server sent no message"
         return refused ? .rejected(message) : .transport(message)
     }
 }

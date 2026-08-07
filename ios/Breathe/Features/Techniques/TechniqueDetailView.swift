@@ -126,6 +126,11 @@ struct TechniqueDetailView: View {
                     settings.setOverrides(nil, for: technique)
                 }
                 .font(.footnote)
+                // Footnote type is a 16pt row on its own. The frame is what
+                // makes the undo for a mis-dragged dial reachable by the hand
+                // that mis-dragged it.
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
                 .disabled(settings.overrides(for: technique) == nil)
             }
             .padding(.top, Theme.Spacing.close)

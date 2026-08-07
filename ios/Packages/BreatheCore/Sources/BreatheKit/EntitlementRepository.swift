@@ -1,13 +1,22 @@
 import BreatheAPI
 import Foundation
 
-public enum EntitlementRepositoryError: Error, Equatable {
+public enum EntitlementRepositoryError: LocalizedError, Equatable {
     /// The RPC itself failed — no network, server down, non-OK gRPC status.
     /// Includes the server refusing the transaction, which is `INVALID_ARGUMENT`
     /// and is not retryable; the distinction does not matter to the one caller,
     /// because a submission that will never succeed and one that has not
     /// succeeded yet are both "not synced" and both cost the person nothing.
     case transport(String)
+
+    /// Carries the associated message. Without this conformance
+    /// `localizedDescription` bridges to a bare `NSError`, and every log line
+    /// and failure banner reading it says "The operation couldn't be completed".
+    public var errorDescription: String? {
+        switch self {
+        case let .transport(message): "the request failed: \(message)"
+        }
+    }
 }
 
 /// Carries a purchase to the server, and nothing back.
@@ -43,7 +52,7 @@ public struct EntitlementRepository: EntitlementSyncing {
 
         guard response.message != nil else {
             throw EntitlementRepositoryError.transport(
-                response.error?.localizedDescription ?? "the request failed with no message"
+                response.error?.localizedDescription ?? "the server sent no message"
             )
         }
     }

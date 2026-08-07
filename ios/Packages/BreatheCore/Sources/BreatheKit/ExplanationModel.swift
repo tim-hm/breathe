@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import os
 
 /// Accumulates a streamed explanation into text a view can render as it grows.
 ///
@@ -15,14 +16,17 @@ public final class ExplanationModel {
         case idle
         /// Asked, nothing back yet.
         case waiting
-        /// Text so far. `isComplete` is false while more is coming, which is
-        /// what a view uses to decide whether to show a cursor or a caption.
+        /// Text so far. `isComplete` is false while more is coming *and* when
+        /// the stream died part-way through, which is what stops a view
+        /// captioning half a paragraph as a finished answer.
         case reading(text: String, source: GuidanceSource, isComplete: Bool)
         /// The stream never started or died before its first chunk. Deliberately
         /// carries no message: there is nothing the reader can do about it, and
         /// a technical string in a calm screen is worse than a quiet sentence.
         case unavailable
     }
+
+    private static let logger = Logger(category: "assistant")
 
     public private(set) var state: State = .idle
 
@@ -52,6 +56,7 @@ public final class ExplanationModel {
         reader = Task { [assistant, techniqueSlug] in
             var accumulated = ""
             var source: GuidanceSource?
+            var isComplete = true
 
             do {
                 for try await chunk in assistant.explanation(of: techniqueSlug) {
@@ -60,19 +65,26 @@ public final class ExplanationModel {
                     state = .reading(text: accumulated, source: chunk.source, isComplete: false)
                 }
             } catch {
-                // Deliberately empty. A stream that broke and one that finished
-                // reach the same terminal state below, decided by whether any
-                // text arrived — branching here would put the "keep what
-                // arrived" rule in two places that can drift apart.
+                isComplete = false
+                // Cancellation is the disclosure closing under a live stream,
+                // not a failure, and nobody is left to read the log line.
+                if !(error is CancellationError) {
+                    Self.logger
+                        .notice(
+                            "the explanation stopped early: \(error.localizedDescription, privacy: .public)"
+                        )
+                }
             }
 
             // Half an explanation is still worth reading; nothing at all is the
-            // one case the view renders a placeholder for.
+            // one case the view renders a placeholder for. A stream that broke
+            // and one that finished land in the same case, so the "keep what
+            // arrived" rule is written once — only the caption differs.
             guard let source, !accumulated.isEmpty else {
                 state = .unavailable
                 return
             }
-            state = .reading(text: accumulated, source: source, isComplete: true)
+            state = .reading(text: accumulated, source: source, isComplete: isComplete)
         }
     }
 

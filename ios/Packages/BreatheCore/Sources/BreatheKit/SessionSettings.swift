@@ -199,8 +199,9 @@ public final class SessionSettings {
     /// catalogue promises to keep stable across reseeds.
     ///
     /// One blob rather than a default per technique: the whole set is read on
-    /// launch and written on any change, and a single key is one thing to
-    /// migrate when M4 moves this onto the profile.
+    /// launch and written on any change, so a key each would buy nothing but
+    /// more keys. It stays on the device — see `TechniqueOverrides` for why the
+    /// profile is not where this belongs.
     private var overridesBySlug: [String: TechniqueOverrides] {
         didSet { persistOverrides() }
     }

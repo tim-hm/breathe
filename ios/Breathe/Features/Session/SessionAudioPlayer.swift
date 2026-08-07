@@ -9,7 +9,7 @@ import os
 /// to breathe to.
 @MainActor
 final class SessionAudioPlayer {
-    private static let logger = Logger(subsystem: "xyz.holmie.breathe", category: "audio")
+    private static let logger = Logger(category: "audio")
 
     /// Synthesised once for the process rather than per session: the tones never
     /// vary, and building them is a few hundred thousand `sin` calls that would
@@ -43,7 +43,8 @@ final class SessionAudioPlayer {
             )
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
-            Self.logger.error("audio session unavailable: \(error.localizedDescription)")
+            Self.logger
+                .error("audio session unavailable: \(error.localizedDescription, privacy: .public)")
             return
         }
 
@@ -80,7 +81,10 @@ final class SessionAudioPlayer {
                 options: [.notifyOthersOnDeactivation]
             )
         } catch {
-            Self.logger.error("audio session would not deactivate: \(error.localizedDescription)")
+            Self.logger
+                .error(
+                    "audio session would not deactivate: \(error.localizedDescription, privacy: .public)"
+                )
         }
     }
 
@@ -92,7 +96,8 @@ final class SessionAudioPlayer {
             player.prepareToPlay()
             return player
         } catch {
-            Self.logger.error("cue tone would not load: \(error.localizedDescription)")
+            Self.logger
+                .error("cue tone would not load: \(error.localizedDescription, privacy: .public)")
             return nil
         }
     }

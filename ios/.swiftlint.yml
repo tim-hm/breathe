@@ -38,6 +38,18 @@ disabled_rules:
 force_unwrapping:
   severity: error
 
+custom_rules:
+  # The failure mode this catches is silent: `os.Logger` interpolates `String`
+  # as `.private`, so a line missing the annotation reads `<private>` in a
+  # sysdiagnose or a TestFlight bundle and nowhere else — which is to say, in
+  # every place it was collected for and none of the places it is written.
+  # Framework error text carries no user data; see docs/observability.md.
+  redacted_error_cause:
+    name: "Redacted error cause"
+    regex: '\\\([^)]*localizedDescription\)'
+    message: "os.Logger redacts String by default — add `, privacy: .public`"
+    severity: error
+
 # `analyzer_rules` (unused_import and friends) are deliberately absent. They only
 # run under `swiftlint analyze`, which needs a full compiler log to be built
 # first — so listing them here would look like enforcement while `check:swift`

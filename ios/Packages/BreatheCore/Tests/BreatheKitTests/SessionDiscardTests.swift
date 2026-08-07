@@ -26,33 +26,11 @@ struct SessionDiscardTests {
         }
     }
 
-    /// Milliseconds long, so a completed run still finishes well inside the
-    /// discard window — which is exactly what makes it prove the exemption.
-    private static func technique(cycles: Int = 1) -> Technique {
-        Technique(
-            id: "id",
-            slug: "box-breathing",
-            name: "Box Breathing",
-            summary: "",
-            goal: .calm,
-            stages: [
-                Stage(
-                    phases: [
-                        Phase(kind: .inhale, duration: .milliseconds(30)),
-                        Phase(kind: .exhale, duration: .milliseconds(30)),
-                    ],
-                    cycles: cycles
-                ),
-            ],
-            recommendedRounds: 1
-        )
-    }
-
     @Test("Ending inside the first seconds records nothing")
     func discardsAQuickCancel() async throws {
         let recorder = CountingRecorder()
         let model = SessionModel(
-            technique: Self.technique(cycles: 1000),
+            technique: briefBreathing(cycles: 1000),
             cues: RecordingCues(),
             recorder: recorder
         )
@@ -79,7 +57,7 @@ struct SessionDiscardTests {
     func keepsAShortCompletion() async throws {
         let recorder = CountingRecorder()
         let model = SessionModel(
-            technique: Self.technique(cycles: 2),
+            technique: briefBreathing(cycles: 2),
             cues: RecordingCues(),
             recorder: recorder
         )

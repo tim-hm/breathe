@@ -2,8 +2,13 @@ import BreatheKit
 import BreatheUI
 import SwiftUI
 
-/// The app's few dials, and the place future ones land: the subscription
-/// (M8) gets a section here rather than new chrome.
+/// The app's few dials, plus the reminder schedules and the legal links App
+/// Review expects to find outside a paywall.
+///
+/// The subscription is deliberately not among them. It is offered where the
+/// reason to buy is already on screen — a locked technique, or the assistant
+/// strip that named one — and a Settings row would be a fifth entry point with
+/// no such reason beside it.
 struct SettingsView: View {
     /// Schedules live behind a link here rather than a tab: set once, edited
     /// rarely, and the notification tray is their daily face.

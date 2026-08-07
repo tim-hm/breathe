@@ -111,8 +111,9 @@ struct BreatheApp: App {
 
     var body: some Scene {
         WindowGroup {
-            // The chrome future features land in: reminders and the
-            // subscription live under Settings (M7, M8).
+            // Four tabs and a settings sheet is the whole of the chrome.
+            // Reminders live behind a link in Settings; the subscription has no
+            // home of its own, opening from whatever was locked.
             TabView {
                 Tab("Breathe", systemImage: "smallcircle.filled.circle") {
                     HomeView(model: catalogue, sessions: sessions)

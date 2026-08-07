@@ -31,10 +31,7 @@ public protocol UserIdentityStore: Sendable {
 /// after this store was built is still picked up. Minting is made safe against a
 /// race by treating a duplicate insert as a signal to re-read.
 public final class KeychainUserIdentityStore: UserIdentityStore {
-    private static let logger = Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "BreatheKit",
-        category: "identity"
-    )
+    private static let logger = Logger(category: "identity")
 
     private let item: KeychainIdentityItem
     /// `OSAllocatedUnfairLock` rather than an actor: the caller is a synchronous

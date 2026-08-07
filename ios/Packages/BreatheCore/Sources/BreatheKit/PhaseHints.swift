@@ -28,6 +28,34 @@ public enum PhaseHints {
         return stages.map(\.hints)
     }
 
+    /// The hint for `beat` within a table from `hints(for:)` — "Left nostril" —
+    /// or nil for an unhinted phase, a technique with no table, and a beat past
+    /// the end of one. Total in `hints` as well as in `beat`, because the table
+    /// is shape-checked against the technique it was fetched for and nothing
+    /// stops a caller pairing it with a different session's beat.
+    public static func hint(for beat: SessionTimeline.Beat?, in hints: [[String?]]?) -> String? {
+        guard let beat, let hints,
+              hints.indices.contains(beat.stage),
+              hints[beat.stage].indices.contains(beat.phase)
+        else {
+            return nil
+        }
+        return hints[beat.stage][beat.phase]
+    }
+
+    /// "Breathe in, left nostril" — the phase as VoiceOver should say it.
+    ///
+    /// The hint rides along whatever the guidance level: wanting a quieter
+    /// screen is not the same as hearing nothing.
+    public static func spokenPhase(
+        for beat: SessionTimeline.Beat?,
+        in hints: [[String?]]?
+    ) -> String {
+        guard let beat else { return "" }
+        guard let hint = hint(for: beat, in: hints) else { return beat.kind.spokenInstruction }
+        return "\(beat.kind.spokenInstruction), \(hint.lowercased())"
+    }
+
     /// One stage's hints, with the phase kinds they were written against —
     /// the shape check above compares these, not just counts, so a same-length
     /// rewrite of a technique cannot inherit stale hints.

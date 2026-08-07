@@ -17,10 +17,7 @@ import os
 @MainActor
 @Observable
 public final class ProfileStore {
-    private static let logger = Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "BreatheKit",
-        category: "profile"
-    )
+    private static let logger = Logger(category: "profile")
 
     private static let profileKey = "profile.answers"
     private static let completedKey = "profile.onboardingCompleted"
@@ -123,7 +120,8 @@ public final class ProfileStore {
             let stored = try await profiles.fetch()
             return stored.hasAnswers ? stored : nil
         } catch {
-            Self.logger.notice("profile restore deferred: \(error.localizedDescription)")
+            Self.logger
+                .notice("profile restore deferred: \(error.localizedDescription, privacy: .public)")
             return nil
         }
     }
@@ -178,7 +176,8 @@ public final class ProfileStore {
             Self.logger.notice("profile refused: \(reason)")
             syncState = .rejected(reason)
         } catch {
-            Self.logger.notice("profile sync deferred: \(error.localizedDescription)")
+            Self.logger
+                .notice("profile sync deferred: \(error.localizedDescription, privacy: .public)")
         }
     }
 

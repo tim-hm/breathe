@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import os
 
 /// Drives the "where to start" strip.
 ///
@@ -22,6 +23,8 @@ public final class GuidanceModel {
         case unavailable
     }
 
+    private static let logger = Logger(category: "assistant")
+
     public private(set) var state: State = .loading
 
     private let assistant: any AssistantReading
@@ -43,12 +46,18 @@ public final class GuidanceModel {
     }
 
     private func load() async {
-        // Quietly. The failure is invisible on purpose: everything this view
-        // sits above works without it.
-        state = if let guidance = try? await assistant.recommendations() {
-            .loaded(guidance)
-        } else {
-            .unavailable
+        do {
+            state = try await .loaded(assistant.recommendations())
+        } catch {
+            // Quiet on the screen, not in the log. Everything this view sits
+            // above works without a suggestion, so there is nothing to show
+            // anyone — but "the strip is always empty" is otherwise a report
+            // with no record behind it anywhere on the device.
+            Self.logger
+                .notice(
+                    "guidance unavailable: \(error.localizedDescription, privacy: .public)"
+                )
+            state = .unavailable
         }
     }
 }
