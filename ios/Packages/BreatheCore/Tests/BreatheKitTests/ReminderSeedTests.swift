@@ -115,7 +115,11 @@ struct ReminderSeedTests {
             model.advance()
         }
         model.experienceLevel = .new
-        model.advance()
+        // Walks any step that arrives already answered — about today — through
+        // on its defaults, so this helper survives the flow gaining a question.
+        while model.step != .reminders {
+            model.advance()
+        }
         model.reminderIntensity = reminders
         model.advance()
     }

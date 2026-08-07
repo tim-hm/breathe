@@ -12,19 +12,14 @@ import Observation
 @MainActor
 @Observable
 public final class LeaderboardNameModel {
-    /// Clamped as it is typed, in Unicode scalars, because that is what the
-    /// server's validation and the column `CHECK` both count. A
-    /// grapheme-cluster count would let through a name of multi-scalar emoji
-    /// that the server then rejects.
+    /// Clamped as it is typed, in the unit `String.clamped(toScalars:)`
+    /// explains — the one the server's validation and the column `CHECK` both
+    /// count.
     public var displayName: String {
         didSet {
-            let scalars = displayName.unicodeScalars
-            if scalars.count > Profile.maxDisplayNameLength {
-                let end = scalars.index(
-                    scalars.startIndex,
-                    offsetBy: Profile.maxDisplayNameLength
-                )
-                displayName = String(scalars[..<end])
+            let clamped = displayName.clamped(toScalars: Profile.maxDisplayNameLength)
+            if clamped != displayName {
+                displayName = clamped
             }
         }
     }

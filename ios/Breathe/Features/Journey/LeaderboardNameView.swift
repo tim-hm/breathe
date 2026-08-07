@@ -49,7 +49,11 @@ struct LeaderboardNameView: View {
                     }
                 }
             } footer: {
-                Text("Optional. It only decides which decade's board you can compare within.")
+                Text(
+                    "Optional. It decides which decade's board you can compare within, "
+                        + "and lets your coach read a breath-test score against the right "
+                        + "baseline — nothing else."
+                )
             }
             .listRowBackground(Theme.Surface.raised)
         }

@@ -102,6 +102,32 @@ public enum BirthYearBand: String, Sendable, CaseIterable, Codable, Identifiable
     }
 }
 
+/// Gender, as someone chose to share it.
+///
+/// It exists so the coach can read a breath-test score against the right
+/// baseline, and for nothing else. A closed list without a self-describe
+/// field, on purpose: the one consumer is a prompt, and free text here would
+/// be a second injection surface bought for a single prose reader. Optional
+/// everywhere — nobody has to answer, and "rather not say" is absence rather
+/// than a fourth case every `switch` would have to carry.
+public enum Gender: String, Sendable, CaseIterable, Codable, Identifiable {
+    case female
+    case male
+    case nonBinary
+
+    public var id: Self {
+        self
+    }
+
+    public var title: String {
+        switch self {
+        case .female: "Female"
+        case .male: "Male"
+        case .nonBinary: "Non-binary"
+        }
+    }
+}
+
 /// What someone told the app about themselves.
 ///
 /// Answers, not derived state: streaks and totals are computed from the sessions
@@ -128,6 +154,8 @@ public struct Profile: Sendable, Equatable, Codable {
     public var displayName: String
     /// `nil` until they say, which most people never will.
     public var birthYearBand: BirthYearBand?
+    /// `nil` until they say, and staying `nil` is a full answer.
+    public var gender: Gender?
 
     /// How long a note may be, in Unicode scalars — the unit the server's
     /// validation and the database `CHECK` both count. Held here so the field
@@ -166,7 +194,8 @@ public struct Profile: Sendable, Equatable, Codable {
         reminderIntensity: ReminderIntensity,
         intentNote: String,
         displayName: String = "",
-        birthYearBand: BirthYearBand? = nil
+        birthYearBand: BirthYearBand? = nil,
+        gender: Gender? = nil
     ) {
         self.goals = goals
         self.experienceLevel = experienceLevel
@@ -174,6 +203,7 @@ public struct Profile: Sendable, Equatable, Codable {
         self.intentNote = intentNote
         self.displayName = displayName
         self.birthYearBand = birthYearBand
+        self.gender = gender
     }
 
     /// Written by hand for one reason: the synthesised decoder throws on a
@@ -196,5 +226,20 @@ public struct Profile: Sendable, Equatable, Codable {
         intentNote = try container.decodeIfPresent(String.self, forKey: .intentNote) ?? ""
         displayName = try container.decodeIfPresent(String.self, forKey: .displayName) ?? ""
         birthYearBand = try container.decodeIfPresent(BirthYearBand.self, forKey: .birthYearBand)
+        gender = try container.decodeIfPresent(Gender.self, forKey: .gender)
+    }
+}
+
+extension String {
+    /// This string cut to `limit` Unicode scalars — the unit the server's
+    /// validation and the database `CHECK` both count, and the one rule behind
+    /// every bounded field above: a grapheme-cluster count would let through
+    /// multi-scalar emoji the server then rejects. The UTF-8 length is checked
+    /// first because it is O(1) and never smaller than the scalar count, so
+    /// the common under-limit case walks nothing and returns `self` untouched.
+    func clamped(toScalars limit: Int) -> String {
+        guard utf8.count > limit, unicodeScalars.count > limit else { return self }
+        let end = unicodeScalars.index(unicodeScalars.startIndex, offsetBy: limit)
+        return String(unicodeScalars[..<end])
     }
 }
