@@ -2,40 +2,37 @@ import BreatheKit
 import BreatheUI
 import SwiftUI
 
-/// The app's chrome, and the only thing `BreatheApp` puts on screen: three roots
-/// over a shelf that pulls open.
+/// The app's chrome, and the only thing `BreatheApp` puts on screen: the roots
+/// over a shelf of words that pulls open.
 ///
 /// Hand-built rather than a `TabView`: a `Tab` always reserves the image well
 /// above its label, so a label-only tab item comes out as a word floating under
-/// the space an icon used to occupy. A `ZStack` of the three roots gives back the
-/// one thing the `TabView` was providing — every root stays in the hierarchy
-/// across a switch, so coming back to a screen lands where it was left.
+/// the space an icon used to occupy. A `ZStack` of the roots gives back the one
+/// thing the `TabView` was providing — every root stays in the hierarchy across
+/// a switch, so coming back to a screen lands where it was left.
 ///
-/// The shelf stands over the roots rather than inside their safe area.
-/// `safeAreaInset` is the obvious tool and it does not work here: a
-/// `NavigationStack` ignores an inset applied from outside it, so every root
-/// lays out as though the shelf were not there and the words land on top of
-/// whatever is at the foot of the screen. Instead the roots reserve
-/// `barHeight` beneath themselves — measured from the collapsed bar rather than
-/// written down, so the handle, the words, and their padding stay free to
-/// change without a constant to keep in step. Only the collapsed height is
-/// reserved: pulling the shelf open grows it over the content, which is what
-/// makes it read as the bar growing rather than as a screen appearing.
+/// The shelf takes its space from the roots by standing beside them in a
+/// `VStack` rather than by insetting their safe area. `safeAreaInset` is the
+/// obvious tool and it does not work here: a `NavigationStack` ignores an inset
+/// applied from outside it, so every root lays out as though the shelf were not
+/// there and the words land on top of whatever is at the foot of the screen.
+/// Standing beside them is also what makes the pull honest: the roots give up
+/// the height the shelf takes, so an open shelf covers nothing and needs no
+/// scrim to keep the content under it from taking taps meant for the words.
 ///
 /// The shelf sits on `Surface.raised`, carried past the bottom safe area to the
 /// physical edge. The plain ground would read calmer, but the roots stop dead at
 /// the shelf's top edge and with nothing marking that edge a list truncated
 /// there looks like it merely ran out of screen. One step off the ground
 /// separates the chrome from the content without drawing anything; a hairline is
-/// the harder edge of the two and would reintroduce the bar this row exists to
+/// the harder edge of the two and would reintroduce the bar this shelf exists to
 /// avoid.
 ///
-/// Everything that is not a root arrives through the shelf: pulling it open
-/// reveals `ChromeDrawer`'s secondary destinations under the words, and choosing
-/// one closes the shelf and presents that destination. The Settings sheet stays
-/// owned here for the reason it always was: no root has a Settings tab, and a
-/// sheet per screen would be three presentations of one screen that could each
-/// be open at once.
+/// Everything the chrome can put you on is one of these words, whether or not
+/// the shelf has to be open to reach it. `WordTab.secondary` is revealed by the
+/// pull and is otherwise selected, underlined, and routed exactly like the three
+/// always on show — so growing the chrome is a case, a word, and a root, never a
+/// sheet with its own way in and out.
 struct AppChrome: View {
     let catalogue: TechniqueListModel
     let sessions: any SessionRecording
@@ -47,38 +44,20 @@ struct AppChrome: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var selection: WordTab = .breathe
-    @State private var isShowingSettings = false
     @State private var isExpanded = false
-    /// The collapsed bar's height, measured rather than assumed, and reserved
-    /// under the roots so the words never cover content.
-    @State private var barHeight: CGFloat = 0
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            VStack(spacing: 0) {
-                ZStack {
-                    root(.breathe) { roots.homeRoot }
-                    root(.exercises) { roots.exercisesRoot }
-                    root(.journey) { roots.journeyRoot }
-                }
-                // An open shelf covers content that stays live underneath it,
-                // and a tap landing there would navigate away and leave the
-                // shelf hanging over an unrelated screen.
-                .accessibilityHidden(isExpanded)
-
-                Color.clear.frame(height: barHeight)
-            }
-
-            if isExpanded {
-                scrim
+        VStack(spacing: 0) {
+            ZStack {
+                root(.breathe) { roots.homeRoot }
+                root(.exercises) { roots.exercisesRoot }
+                root(.journey) { roots.journeyRoot }
+                root(.settings) { roots.settingsRoot }
             }
 
             shelf
         }
         .background(Theme.Surface.ground.ignoresSafeArea())
-        .sheet(isPresented: $isShowingSettings) {
-            roots.settingsRoot { isShowingSettings = false }
-        }
     }
 
     private var roots: AppRoots {
@@ -94,7 +73,7 @@ struct AppChrome: View {
 
     /// One root, kept in the hierarchy whether or not it is the one on screen,
     /// and taken out of the accessibility tree while it is not — without that,
-    /// VoiceOver reads three screens stacked on top of each other.
+    /// VoiceOver reads every screen stacked on top of the others.
     private func root(_ tab: WordTab, @ViewBuilder content: () -> some View) -> some View {
         content()
             .opacity(selection == tab ? 1 : 0)
@@ -102,47 +81,32 @@ struct AppChrome: View {
             .accessibilityHidden(selection != tab)
     }
 
-    /// Dims what the open shelf covers, and takes the tap that closes it — the
-    /// forgiving way out that a sheet gives for free.
-    private var scrim: some View {
-        Color.black
-            .opacity(0.12)
-            .ignoresSafeArea()
-            .onTapGesture { setExpanded(false) }
-            .transition(.opacity)
-    }
-
-    /// The handle, the words, and — once pulled open — the drawer beneath them.
     private var shelf: some View {
-        VStack(spacing: 0) {
-            bar
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { barHeight = $0 }
-
-            if isExpanded {
-                ChromeDrawer(onChoose: open)
-            }
-        }
-        .background(Theme.Surface.raised.ignoresSafeArea(edges: .bottom))
-    }
-
-    private var bar: some View {
         VStack(spacing: 0) {
             handle
 
-            HStack(spacing: 0) {
-                ForEach(WordTab.allCases) { tab in
-                    word(tab)
-                }
+            row(WordTab.primary)
+
+            if isExpanded {
+                row(WordTab.secondary)
             }
         }
+        .background(Theme.Surface.raised.ignoresSafeArea(edges: .bottom))
         .sensoryFeedback(.selection, trigger: selection)
     }
 
+    private func row(_ tabs: [WordTab]) -> some View {
+        HStack(spacing: 0) {
+            ForEach(tabs) { tab in
+                word(tab)
+            }
+        }
+    }
+
     /// The one hint that the shelf moves, and the only place it can be dragged
-    /// from. A drag anywhere else on the bar would have to share the space with
-    /// the word buttons and the drawer rows, and a 20pt pull that stays inside a
-    /// 44pt button fires the button as well — so pulling down on `settings` to
-    /// close the shelf would open Settings on the way.
+    /// from. A drag anywhere else would have to share the space with the words,
+    /// and a pull that stays inside a 44pt button fires that button too — so
+    /// pulling down on `settings` to close the shelf would select it on the way.
     ///
     /// Tap and drag are one gesture rather than a `Button` carrying a
     /// `simultaneousGesture`: both of those fire on a pull, and the tap's toggle
@@ -173,14 +137,13 @@ struct AppChrome: View {
     }
 
     /// One word, letter-spaced and lowercase, with the whole column beneath it as
-    /// its target — three words on one line are small, and a 44pt row is what
-    /// keeps them pressable.
+    /// its target — words on one line are small, and a 44pt row is what keeps
+    /// them pressable.
     private func word(_ tab: WordTab) -> some View {
         let isSelected = selection == tab
 
         return Button {
-            selection = tab
-            setExpanded(false)
+            select(tab)
         } label: {
             VStack(spacing: Theme.Spacing.tight) {
                 Text(tab.word)
@@ -203,14 +166,15 @@ struct AppChrome: View {
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
-    /// Closes the shelf before presenting, so the drawer is not still open
-    /// behind the sheet when it is dismissed.
-    private func open(_ destination: DrawerDestination) {
-        setExpanded(false)
+    /// The shelf closes behind a choice from the row that is always on show, and
+    /// stays open behind one from the row it reveals — closing there would hide
+    /// the only word carrying the selection, leaving three unmarked ones over a
+    /// screen none of them names.
+    private func select(_ tab: WordTab) {
+        selection = tab
 
-        switch destination {
-        case .settings:
-            isShowingSettings = true
+        if WordTab.primary.contains(tab) {
+            setExpanded(false)
         }
     }
 
@@ -221,14 +185,22 @@ struct AppChrome: View {
     }
 }
 
-/// The three roots the word row offers.
+/// Every place the chrome can put you, in the two rows it draws them as.
 ///
-/// Lowercase because that is how they are drawn: the word is the label, and there
-/// is no separate display form to keep in step with it.
-private enum WordTab: String, CaseIterable, Identifiable {
+/// Lowercase because that is how they are drawn: the word is the label, and
+/// there is no separate display form to keep in step with it.
+private enum WordTab: String, Identifiable {
     case breathe
     case exercises
     case journey
+    case settings
+
+    /// The words always on show.
+    static let primary: [WordTab] = [.breathe, .exercises, .journey]
+
+    /// The words the pull reveals: everything reached for rarely enough that a
+    /// permanent word would crowd the three that matter.
+    static let secondary: [WordTab] = [.settings]
 
     var id: Self {
         self
