@@ -22,6 +22,8 @@ use super::types::{
 use super::{fallback, parse, prompt, repository};
 use crate::features::entitlement::service as entitlement;
 use crate::features::entitlement::types::Tier;
+use crate::features::journey::sessions::service as journey;
+use crate::features::journey::sessions::types::PracticeSnapshot;
 use crate::features::profile::service as profile;
 use crate::features::profile::types::ProfileSnapshot;
 use crate::features::technique::service as technique;
@@ -44,16 +46,18 @@ pub async fn get_recommendation(
     model: &dyn ModelClient,
     user_id: UserId,
 ) -> Result<pb::GetRecommendationResponse, AssistantError> {
-    let (catalogue, profile, tier) = read_context(pool, user_id).await?;
+    let (catalogue, profile, practice, tier) = read_context(pool, user_id).await?;
     if catalogue.is_empty() {
         return Err(AssistantError::EmptyCatalogue);
     }
 
     let (recommendations, source) =
-        match model_recommendations(pool, model, user_id, tier, &catalogue, &profile).await {
+        match model_recommendations(pool, model, user_id, tier, &catalogue, &profile, &practice)
+            .await
+        {
             Some(recommendations) => (recommendations, pb::AssistantSource::Model),
             None => (
-                fallback::recommendations(&catalogue, &profile),
+                fallback::recommendations(&catalogue, &profile, &practice),
                 pb::AssistantSource::Fallback,
             ),
         };
@@ -64,18 +68,18 @@ pub async fn get_recommendation(
     })
 }
 
-/// The catalogue, the caller's profile, and what they are entitled to, read
-/// together.
+/// The catalogue, the caller's profile, their recent practice, and what they
+/// are entitled to, read together.
 ///
-/// Concurrently because none of the three depends on the others, and all of them
-/// happen before anything else can: serialising them would put three loopback
+/// Concurrently because none of the four depends on the others, and all of them
+/// happen before anything else can: serialising them would put four loopback
 /// round-trips in front of every call rather than one. The entitlement joins
 /// them rather than being read where it is used, for exactly that reason — it
 /// decides the model allowance, which is the last thing either RPC settles.
 async fn read_context(
     pool: &PgPool,
     user_id: UserId,
-) -> Result<(Vec<Technique>, ProfileSnapshot, Tier), AssistantError> {
+) -> Result<(Vec<Technique>, ProfileSnapshot, PracticeSnapshot, Tier), AssistantError> {
     Ok(tokio::try_join!(
         async {
             technique::catalogue(pool)
@@ -84,6 +88,11 @@ async fn read_context(
         },
         async {
             profile::snapshot(pool, user_id)
+                .await
+                .map_err(AssistantError::from)
+        },
+        async {
+            journey::practice_snapshot(pool, user_id)
                 .await
                 .map_err(AssistantError::from)
         },
@@ -108,6 +117,7 @@ async fn model_recommendations(
     tier: Tier,
     catalogue: &[Technique],
     profile: &ProfileSnapshot,
+    practice: &PracticeSnapshot,
 ) -> Option<Vec<Recommendation>> {
     if !model.is_available() || !claim_call(pool, user_id, tier).await {
         return None;
@@ -115,7 +125,7 @@ async fn model_recommendations(
 
     let request = ModelRequest {
         cacheable_prefix: prompt::catalogue_prefix(catalogue),
-        instruction: prompt::recommendation_instruction(profile),
+        instruction: prompt::recommendation_instruction(profile, practice, catalogue),
         max_tokens: RECOMMENDATION_MAX_TOKENS,
     };
 
@@ -157,7 +167,7 @@ pub async fn explain_technique(
     user_id: UserId,
     slug: &str,
 ) -> Result<ExplanationStream, AssistantError> {
-    let (catalogue, profile, tier) = read_context(pool, user_id).await?;
+    let (catalogue, profile, practice, tier) = read_context(pool, user_id).await?;
     let technique = catalogue
         .iter()
         .find(|row| row.slug == slug)
@@ -171,7 +181,9 @@ pub async fn explain_technique(
     if model.is_available() && claim_call(pool, user_id, tier).await {
         let request = ModelRequest {
             cacheable_prefix: prompt::catalogue_prefix(&catalogue),
-            instruction: prompt::explanation_instruction(technique, &profile),
+            instruction: prompt::explanation_instruction(
+                technique, &profile, &practice, &catalogue,
+            ),
             max_tokens: EXPLANATION_MAX_TOKENS,
         };
 
@@ -183,7 +195,11 @@ pub async fn explain_technique(
         }
     }
 
-    Ok(from_fallback(&fallback::explanation(technique, &profile)))
+    Ok(from_fallback(&fallback::explanation(
+        technique,
+        &profile,
+        practice.bolt.as_ref(),
+    )))
 }
 
 /// Maps the model's chunks onto the wire.

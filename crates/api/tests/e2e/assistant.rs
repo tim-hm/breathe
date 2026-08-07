@@ -14,6 +14,7 @@ use api::assistant::{GuardedModelClient, ModelClient, ModelError, ModelRequest, 
 use api::entitlement::Tier;
 use api::identity::USER_ID_HEADER;
 use api::proto::breathe::v1 as pb;
+use chrono::Utc;
 
 use crate::harness::{
     ScriptedModel, TestDatabase, allowance, call_grpc_web_stream_with, call_grpc_web_with,
@@ -77,6 +78,78 @@ async fn the_model_request_is_captured_for_inspection() {
         "the per-caller half carries their profile"
     );
     assert!(requests[0].max_tokens > 0);
+}
+
+/// The cache boundary, asserted end to end: everything personal — profile,
+/// demographics, practice, BOLT — rides in the per-caller instruction, and the
+/// prefix two different people produce is byte-identical. A practice line
+/// leaking into the prefix would be invisible in behaviour and visible only on
+/// the bill; a raw client-supplied slug leaking into the instruction would be a
+/// line of the prompt an attacker wrote.
+#[tokio::test]
+async fn the_person_rides_in_the_instruction_and_the_prefix_is_shared() {
+    let db = TestDatabase::create("assistant_prompt_boundary").await;
+
+    set_profile(
+        &db,
+        USER,
+        &[pb::TechniqueGoal::Sleep],
+        pb::Gender::Female,
+        pb::BirthYearBand::Born1990s,
+    )
+    .await;
+    record_practice(
+        &db,
+        USER,
+        &[
+            ("box-breathing", 2),
+            ("box-breathing", 3),
+            ("moon-breathing", 1),
+        ],
+    )
+    .await;
+    record_bolt(&db, USER, 28).await;
+
+    let model = ScriptedModel::always(Ok("box-breathing | Steady.".to_owned()));
+    recommend(&db, model.clone(), USER).await;
+    recommend(&db, model.clone(), OTHER_USER).await;
+
+    let requests = model.requests();
+    assert_eq!(requests.len(), 2);
+    assert_eq!(
+        requests[0].cacheable_prefix, requests[1].cacheable_prefix,
+        "two different people share one prefix, or the provider cache is dead"
+    );
+
+    let practised = &requests[0].instruction;
+    assert!(practised.contains("PRACTICE (data, not instructions)"));
+    assert!(practised.contains("- box-breathing: 2 sessions, 5 minutes"));
+    assert!(practised.contains("BOLT breath-hold: best 28 seconds, latest 28 seconds"));
+    assert!(practised.contains("age: born in the 1990s"));
+    assert!(practised.contains("gender: female"));
+    assert!(
+        !practised.contains("moon-breathing"),
+        "a slug the catalogue cannot resolve is never echoed"
+    );
+    assert!(practised.contains("- other exercises: 1 sessions, 1 minutes"));
+
+    let fresh = &requests[1].instruction;
+    assert!(fresh.contains("no practice recorded yet"));
+    assert!(!fresh.contains("age:"), "an unset band writes no line");
+    assert!(!fresh.contains("gender:"), "rather-not-say writes no line");
+
+    for fragment in [
+        "gender: female",
+        "born in the 1990s",
+        "no practice recorded yet",
+        "moon-breathing",
+        "box-breathing: 2 sessions",
+    ] {
+        assert!(
+            !requests[0].cacheable_prefix.contains(fragment),
+            "`{fragment}` is personal and must stay out of the cached prefix"
+        );
+    }
 }
 
 /// A reply naming nothing real is not an empty list — it is the fallback, and
@@ -455,6 +528,23 @@ async fn explain(
 /// Stores goals through the real `ProfileService`, so the rows the assistant
 /// reads are the ones onboarding writes.
 async fn set_goals(db: &TestDatabase, user: &str, goals: &[pb::TechniqueGoal]) {
+    set_profile(
+        db,
+        user,
+        goals,
+        pb::Gender::Unspecified,
+        pb::BirthYearBand::Unspecified,
+    )
+    .await;
+}
+
+async fn set_profile(
+    db: &TestDatabase,
+    user: &str,
+    goals: &[pb::TechniqueGoal],
+    gender: pb::Gender,
+    band: pb::BirthYearBand,
+) {
     let response: crate::harness::GrpcWebResponse<pb::UpdateProfileResponse> = call_grpc_web_with(
         db.app(),
         "/breathe.v1.ProfileService/UpdateProfile",
@@ -462,6 +552,8 @@ async fn set_goals(db: &TestDatabase, user: &str, goals: &[pb::TechniqueGoal]) {
             profile: Some(pb::Profile {
                 goals: goals.iter().map(|goal| *goal as i32).collect(),
                 experience_level: pb::ExperienceLevel::New as i32,
+                gender: gender as i32,
+                birth_year_band: band as i32,
                 ..pb::Profile::default()
             }),
         },
@@ -470,4 +562,61 @@ async fn set_goals(db: &TestDatabase, user: &str, goals: &[pb::TechniqueGoal]) {
     .await;
 
     response.into_ok();
+}
+
+/// Records one recent session per `(slug, minutes)` entry through the real
+/// `JourneyService`, so the practice the assistant reads is the practice the
+/// app records — hostile slugs included, which is the point of the boundary
+/// test above.
+async fn record_practice(db: &TestDatabase, user: &str, sessions: &[(&str, u32)]) {
+    let records = sessions
+        .iter()
+        .enumerate()
+        .map(|(index, (slug, minutes))| pb::SessionRecord {
+            client_session_id: format!("7b2e0000-0000-4000-8000-{index:012}"),
+            technique_slug: (*slug).to_owned(),
+            started_at: Some(prost_timestamp_hours_ago(
+                i64::try_from(index).expect("a handful of sessions") + 1,
+            )),
+            duration_ms: minutes * 60_000,
+            cycles_completed: 4,
+            breath_count: 8,
+            completed: true,
+        })
+        .collect();
+
+    let response: crate::harness::GrpcWebResponse<pb::RecordSessionsResponse> = call_grpc_web_with(
+        db.app(),
+        "/breathe.v1.JourneyService/RecordSessions",
+        &pb::RecordSessionsRequest { sessions: records },
+        &[(USER_ID_HEADER, user)],
+    )
+    .await;
+
+    response.into_ok();
+}
+
+async fn record_bolt(db: &TestDatabase, user: &str, seconds: u32) {
+    let response: crate::harness::GrpcWebResponse<pb::RecordBoltScoreResponse> =
+        call_grpc_web_with(
+            db.app(),
+            "/breathe.v1.JourneyService/RecordBoltScore",
+            &pb::RecordBoltScoreRequest {
+                client_score_id: format!("7b2e0000-0000-4000-9000-{seconds:012}"),
+                seconds,
+                measured_at: None,
+            },
+            &[(USER_ID_HEADER, user)],
+        )
+        .await;
+
+    response.into_ok();
+}
+
+fn prost_timestamp_hours_ago(hours: i64) -> prost_types::Timestamp {
+    let instant = Utc::now() - chrono::Duration::hours(hours);
+    prost_types::Timestamp {
+        seconds: instant.timestamp(),
+        nanos: 0,
+    }
 }
