@@ -23,6 +23,11 @@ extension Gender: RatherNotSayOption {}
 struct AboutYouStepView: View {
     @Bindable var model: OnboardingModel
 
+    /// Whether the note has the keyboard. Owned by `OnboardingView`, which
+    /// stands its floating control row down while this is true — a raised
+    /// keyboard would otherwise lift that row directly over this field.
+    @FocusState.Binding var isEditingNote: Bool
+
     var body: some View {
         OnboardingQuestion(
             title: "A bit about you",
@@ -39,9 +44,17 @@ struct AboutYouStepView: View {
             .lineLimit(3 ... 6)
             .font(.body)
             .foregroundStyle(Theme.Ink.primary)
+            .focused($isEditingNote)
             .padding(Theme.Spacing.standard)
-            .background(Theme.Surface.raised, in: card)
-            .overlay(card.stroke(Theme.Surface.line, lineWidth: 1))
+            .glassCard()
+            // The only way back out while the keyboard is up, since the step's
+            // own controls stand down for it.
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { isEditingNote = false }
+                }
+            }
 
             Text("These answers tune your coach: your decade and gender let it "
                 + "read a breath-test score against the right baseline, and the "
@@ -80,11 +93,6 @@ struct AboutYouStepView: View {
         }
         .padding(.vertical, Theme.Spacing.close)
         .padding(.horizontal, Theme.Spacing.standard)
-        .background(Theme.Surface.raised, in: card)
-        .overlay(card.stroke(Theme.Surface.line, lineWidth: 1))
-    }
-
-    private var card: RoundedRectangle {
-        RoundedRectangle(cornerRadius: Theme.Radius.card)
+        .glassCard()
     }
 }

@@ -38,6 +38,18 @@ public enum Theme {
         public static let card: CGFloat = 16
     }
 
+    /// How an accent is poured into glass.
+    ///
+    /// Its own scale rather than a reach into the opacities the opaque cards
+    /// use: glass already carries luminance of its own, so the `0.18` that
+    /// reads as a selected fill on `Surface.raised` disappears into it
+    /// entirely. These are the strengths that survive the material.
+    public enum Glass {
+        /// A selected surface's accent. Roughly two and a half times the
+        /// opaque card's tint, which is what it takes to be as legible.
+        public static let selection: Double = 0.45
+    }
+
     /// The grounds content sits on. A screen that draws its own background — the
     /// session player, which covers the system's — picks from here rather than
     /// leaving whatever the presentation happened to put behind it.
