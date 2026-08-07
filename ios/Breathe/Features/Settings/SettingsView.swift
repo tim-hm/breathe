@@ -1,14 +1,18 @@
 import BreatheKit
 import BreatheUI
+import StoreKit
 import SwiftUI
 
-/// The app's few dials, plus the reminder schedules and the legal links App
-/// Review expects to find outside a paywall.
+/// The app's few dials, plus the reminder schedules and the subscription.
 ///
-/// The subscription is deliberately not among them. It is offered where the
-/// reason to buy is already on screen — a locked exercise, or the assistant
-/// strip that named one — and a Settings row would be a fifth entry point with
-/// no such reason beside it.
+/// The subscription row is a reversal. It used to be offered only where the
+/// reason to buy was already on screen — a locked exercise, or the assistant
+/// strip that named one — on the theory that a Settings row would be an entry
+/// point with no reason beside it. Those surfaces are all conditional, and
+/// that proved the flaw: people reported finding no way to turn the coach on
+/// at all. Settings is where everybody looks for "what am I paying for", so
+/// this row now names the tier unconditionally and opens the paywall to
+/// change it.
 struct SettingsView: View {
     /// Schedules live behind a link here rather than a tab: set once, edited
     /// rarely, and the notification tray is their daily face.
@@ -21,9 +25,14 @@ struct SettingsView: View {
     var onDone: (() -> Void)?
 
     @Environment(SessionSettings.self) private var settings
+    @Environment(SubscriptionStore.self) private var plus
+
+    @State private var isShowingPaywall = false
+    @State private var isManagingSubscription = false
 
     var body: some View {
         @Bindable var settings = settings
+        @Bindable var health = LiveHealth.model
 
         NavigationStack {
             List {
@@ -83,9 +92,44 @@ struct SettingsView: View {
                     )
                 }
                 .listRowBackground(Theme.Surface.raised)
+
+                Section {
+                    Toggle("Let the coach see heart trends", isOn: $health.coachReadsHeartTrends)
+                } footer: {
+                    Text(
+                        "Coarse weekly trends from Health — resting heart rate and its "
+                            + "variability — travel with your coach requests only, and are "
+                            + "never stored. Turning this on asks for Health access."
+                    )
+                }
+                .listRowBackground(Theme.Surface.raised)
+
+                Section {
+                    Button {
+                        isShowingPaywall = true
+                    } label: {
+                        LabeledContent("Subscription") {
+                            Text(plus.tier.brandedTitle)
+                        }
+                    }
+                    // Plain, so the row reads like its neighbours: its first
+                    // job is to answer "which tier", and only then to open the
+                    // sheet for whoever asks more of it.
+                    .buttonStyle(.plain)
+
+                    if plus.tier > .free {
+                        Button("Manage subscription") {
+                            isManagingSubscription = true
+                        }
+                        .tint(Theme.Accent.brand)
+                    }
+                }
+                .listRowBackground(Theme.Surface.raised)
             }
             .scrollContentBackground(.hidden)
             .paletteGround()
+            .paywall(highlighting: offeredTier, isPresented: $isShowingPaywall)
+            .manageSubscriptionsSheet(isPresented: $isManagingSubscription)
             .navigationTitle("Settings")
             .toolbar {
                 if let onDone {
@@ -95,6 +139,16 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    /// The rung above the current one, which is what the paywall should lead
+    /// with — the sheet is a ladder, and the interesting question from here is
+    /// always the next step up. Derived from the ladder rather than written out
+    /// beside it, like every other tier comparison. A subscriber on the top
+    /// rung has nothing above, so their sheet opens on what they already hold,
+    /// which reads as confirmation.
+    private var offeredTier: SubscriptionTier {
+        SubscriptionTier.purchasable.first { $0 > plus.tier } ?? plus.tier
     }
 
     /// "2 active" beside the link — enough to know the feature is in use
