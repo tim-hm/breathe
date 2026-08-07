@@ -17,7 +17,9 @@ const USER: &str = "3f2b1c4d-0000-4000-8000-000000000001";
 /// The round trip the onboarding screen performs: answers in, the same answers
 /// back out on the next launch. Every field is set to something other than its
 /// proto zero value, because a server that dropped the write entirely would
-/// return a profile of zeros that reads as plausible.
+/// return a profile of zeros that reads as plausible — and then every answer
+/// is taken back at once, because withdrawal is the other half of the same
+/// wholesale-replace contract.
 #[tokio::test]
 async fn onboarding_answers_survive_a_second_call() {
     let db = TestDatabase::create("profile_round_trip").await;
@@ -32,6 +34,7 @@ async fn onboarding_answers_survive_a_second_call() {
         intent_note: "  I want to stop clenching my jaw  ".to_owned(),
         display_name: "  Tim  ".to_owned(),
         birth_year_band: pb::BirthYearBand::Born1980s as i32,
+        gender: pb::Gender::NonBinary as i32,
     };
 
     let updated = update(&db, USER, Some(submitted)).await.into_ok();
@@ -50,9 +53,19 @@ async fn onboarding_answers_survive_a_second_call() {
         stored.display_name, "Tim",
         "the name is trimmed before it is stored"
     );
+    assert_eq!(stored.gender, pb::Gender::NonBinary as i32);
 
     let fetched = get(&db, USER).await.into_ok();
     assert_eq!(fetched.profile, Some(stored));
+
+    // The withdrawal half of the wholesale-replace contract, for every answer
+    // at once: resubmitting an empty profile clears each one, so an omitted
+    // field can never keep an answer the person took back.
+    update(&db, USER, Some(pb::Profile::default()))
+        .await
+        .into_ok();
+    let withdrawn = get(&db, USER).await.into_ok().profile.expect("a profile");
+    assert_eq!(withdrawn, pb::Profile::default());
 }
 
 /// The default has to survive the whole path — an empty message in, silence out.
@@ -78,6 +91,11 @@ async fn an_unanswered_profile_reads_back_as_never() {
     assert!(
         profile.display_name.is_empty(),
         "nobody is on a leaderboard until they choose a name"
+    );
+    assert_eq!(
+        profile.gender,
+        pb::Gender::Unspecified as i32,
+        "rather-not-say is the state every profile starts in"
     );
 }
 
@@ -111,9 +129,7 @@ async fn the_first_rpc_creates_the_row_and_later_ones_reuse_it() {
             goals: vec![pb::TechniqueGoal::Calm as i32],
             experience_level: pb::ExperienceLevel::New as i32,
             reminder_intensity: pb::ReminderIntensity::Daily as i32,
-            intent_note: String::new(),
-            display_name: String::new(),
-            birth_year_band: pb::BirthYearBand::Unspecified as i32,
+            ..pb::Profile::default()
         }),
     )
     .await
@@ -194,8 +210,7 @@ async fn profiles_are_scoped_to_the_calling_identity() {
             experience_level: pb::ExperienceLevel::Regular as i32,
             reminder_intensity: pb::ReminderIntensity::Daily as i32,
             intent_note: "mine".to_owned(),
-            display_name: String::new(),
-            birth_year_band: pb::BirthYearBand::Unspecified as i32,
+            ..pb::Profile::default()
         }),
     )
     .await
@@ -224,11 +239,7 @@ async fn an_unrepresentable_answer_is_rejected_with_its_reason() {
         USER,
         Some(pb::Profile {
             goals: vec![pb::TechniqueGoal::Unspecified as i32],
-            experience_level: pb::ExperienceLevel::Unspecified as i32,
-            reminder_intensity: pb::ReminderIntensity::Never as i32,
-            intent_note: String::new(),
-            display_name: String::new(),
-            birth_year_band: pb::BirthYearBand::Unspecified as i32,
+            ..pb::Profile::default()
         }),
     )
     .await;

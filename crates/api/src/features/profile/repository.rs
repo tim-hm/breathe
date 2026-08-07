@@ -6,7 +6,9 @@
 use sqlx::PgPool;
 
 use super::errors::ProfileError;
-use super::types::{BirthYearBand, ExperienceLevel, MAX_DISPLAY_NAME_CHARS, ReminderIntensity};
+use super::types::{
+    BirthYearBand, ExperienceLevel, Gender, MAX_DISPLAY_NAME_CHARS, ReminderIntensity,
+};
 use crate::features::technique::types::TechniqueGoal;
 use crate::identity::UserId;
 
@@ -24,6 +26,8 @@ pub struct ProfileRow {
     /// suffix somebody else's identical name forced.
     pub display_name: Option<String>,
     pub birth_year_band: Option<BirthYearBand>,
+    /// `None` is "rather not say", which is also the state every row starts in.
+    pub gender: Option<Gender>,
 }
 
 /// The separator between a taken name and the number that disambiguates it.
@@ -54,7 +58,8 @@ pub async fn find_profile(pool: &PgPool, user_id: UserId) -> Result<ProfileRow, 
             reminder_intensity AS "reminder_intensity: ReminderIntensity",
             intent_note,
             display_name,
-            birth_year_band AS "birth_year_band?: BirthYearBand"
+            birth_year_band AS "birth_year_band?: BirthYearBand",
+            gender AS "gender?: Gender"
          FROM users
          WHERE id = $1"#,
         user_id.0
@@ -137,6 +142,7 @@ async fn write_profile(
                 intent_note = $5,
                 display_name = $6,
                 birth_year_band = $7,
+                gender = $8,
                 updated_at = now()
           WHERE id = $1",
         user_id.0,
@@ -145,7 +151,8 @@ async fn write_profile(
         profile.reminder_intensity as _,
         profile.intent_note,
         display_name,
-        profile.birth_year_band as _
+        profile.birth_year_band as _,
+        profile.gender as _
     )
     .execute(pool)
     .await?
