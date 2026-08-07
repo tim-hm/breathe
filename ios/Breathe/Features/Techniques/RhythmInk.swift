@@ -60,10 +60,10 @@ enum RhythmInk: CaseIterable {
         }
     }
 
-    /// The inks `rhythm` actually uses, in reading order. A key naming a colour
-    /// the chart never draws is worse than no key.
-    static func present(in rhythm: BreathRhythm) -> [RhythmInk] {
-        let used = Set(rhythm.segments.map { RhythmInk($0.kind) })
+    /// The inks these loops actually use, in reading order. A key naming a
+    /// colour the chart never draws is worse than no key.
+    static func present(in loops: [BreathLoop]) -> [RhythmInk] {
+        let used = Set(loops.flatMap { $0.arcs.map { RhythmInk($0.kind) } })
         return allCases.filter(used.contains)
     }
 }

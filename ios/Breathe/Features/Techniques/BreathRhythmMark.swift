@@ -3,12 +3,12 @@ import BreatheStyle
 import BreatheUI
 import SwiftUI
 
-/// An exercise's rhythm at row size: the same curve the detail screen draws,
+/// An exercise's rhythm at row size: the same loop the detail screen draws,
 /// reduced to the line and its wash.
 ///
-/// A miniature rather than a second drawing. What it drops — the stage
-/// dividers, the repeat counts, the nostril hints, the key — is everything that
-/// needs reading; what it keeps is the shape and the two halves of the breath,
+/// A miniature rather than a second drawing. What it drops — the repeat counts,
+/// the nostril hints, the starting dot, the key — is everything that needs
+/// reading; what it keeps is the silhouette and the two halves of the breath,
 /// which are what tell one exercise from another at a glance down a list.
 ///
 /// It draws the curated exercise, not a dialled one: a row is a portrait of
@@ -18,35 +18,35 @@ struct BreathRhythmMark: View {
     let technique: Technique
 
     private static let lineWidth: CGFloat = 1.6
+    static let side: CGFloat = 38
 
     var body: some View {
-        let rhythm = BreathRhythm(technique: technique)
         let accent = technique.goal.accent
+        let size = CGSize(width: Self.side, height: Self.side)
+        let inset = Self.lineWidth / 2
 
-        GeometryReader { geometry in
-            let size = geometry.size
+        HStack(spacing: Theme.Spacing.tight) {
+            ForEach(Array(technique.loops.enumerated()), id: \.offset) { _, loop in
+                ZStack {
+                    RhythmGeometry.outline(of: loop, in: size, inset: inset)
+                        .fill(
+                            LinearGradient(
+                                colors: [accent.opacity(0.18), accent.opacity(0.03)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
 
-            RhythmGeometry.area(rhythm, in: size, inset: Self.lineWidth)
-                .fill(
-                    LinearGradient(
-                        colors: [accent.opacity(0.18), accent.opacity(0.02)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-
-            ForEach(RhythmInk.allCases, id: \.self) { ink in
-                RhythmGeometry.line(rhythm, in: size, inset: Self.lineWidth) { segment in
-                    RhythmInk(segment.kind) == ink
+                    ForEach(Array(loop.arcs.enumerated()), id: \.offset) { _, arc in
+                        RhythmGeometry
+                            .line(of: loop, from: arc.start, to: arc.end, in: size, inset: inset)
+                            .stroke(
+                                RhythmInk(arc.kind).colour(on: accent),
+                                style: StrokeStyle(lineWidth: Self.lineWidth, lineCap: .round)
+                            )
+                    }
                 }
-                .stroke(
-                    ink.colour(on: accent),
-                    style: StrokeStyle(
-                        lineWidth: Self.lineWidth,
-                        lineCap: .round,
-                        lineJoin: .round
-                    )
-                )
+                .frame(width: Self.side, height: Self.side)
             }
         }
         // Undashed even where the chart dashes: a 4pt dash at this size is a
