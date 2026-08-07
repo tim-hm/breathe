@@ -6,7 +6,7 @@ import SwiftUI
 /// Review expects to find outside a paywall.
 ///
 /// The subscription is deliberately not among them. It is offered where the
-/// reason to buy is already on screen — a locked technique, or the assistant
+/// reason to buy is already on screen — a locked exercise, or the assistant
 /// strip that named one — and a Settings row would be a fifth entry point with
 /// no such reason beside it.
 struct SettingsView: View {
@@ -14,6 +14,11 @@ struct SettingsView: View {
     /// rarely, and the notification tray is their daily face.
     let schedules: ScheduleStore
     let catalogue: TechniqueListModel
+
+    /// Dismisses the screen. Non-nil only where Settings arrived as a sheet
+    /// rather than as a tab root, which is the only presentation that needs a
+    /// way out of its own.
+    var onDone: (() -> Void)?
 
     @Environment(SessionSettings.self) private var settings
 
@@ -40,7 +45,7 @@ struct SettingsView: View {
                         }
                     }
                 } footer: {
-                    Text("A standing time for a technique — box breathing every "
+                    Text("A standing time for an exercise — box breathing every "
                         + "weekday at 8, say. iOS asks for notification "
                         + "permission when you set your first one.")
                 }
@@ -82,6 +87,13 @@ struct SettingsView: View {
             .scrollContentBackground(.hidden)
             .paletteGround()
             .navigationTitle("Settings")
+            .toolbar {
+                if let onDone {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done", action: onDone)
+                    }
+                }
+            }
         }
     }
 

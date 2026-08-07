@@ -434,6 +434,23 @@ dir = "{{config_root}}/ios"
 # machine regardless of which simulators its Xcode happens to have installed.
 run = "xcodebuild -project Breathe.xcodeproj -scheme Breathe -destination 'generic/platform=iOS Simulator' build"
 
+[tasks."ios:sim"]
+description = "Build, install, and launch the app on the booted iOS simulator"
+depends = ["ios:build"]
+dir = "{{config_root}}/ios"
+# `booted` rather than a named device, for the same reason `ios:build` uses a
+# generic destination: whichever simulator is already open is the one being
+# looked at, and naming one here would tie the task to the machine that wrote it.
+# The product directory is asked of xcodebuild rather than assumed, because
+# DerivedData's path is a hash of the project's location.
+run = '''
+  products=$(xcodebuild -project Breathe.xcodeproj -scheme Breathe \
+    -destination 'generic/platform=iOS Simulator' -showBuildSettings 2>/dev/null \
+    | awk -F' = ' '/ BUILT_PRODUCTS_DIR /{print $2; exit}')
+  xcrun simctl install booted "$products/Breathe.app"
+  xcrun simctl launch booted xyz.holmie.breathe
+'''
+
 [tasks."ios:build:watch"]
 description = "Build the watch app for the simulator without opening Xcode"
 depends = ["ios:gen"]

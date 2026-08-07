@@ -221,7 +221,7 @@ private extension SubscriptionTier {
             []
         case .plus:
             [
-                "Every technique in the catalogue",
+                "Every exercise in the catalogue",
                 "Sleep, focus, and energy protocols",
                 "The Wim Hof-style rounds",
             ]
@@ -229,7 +229,7 @@ private extension SubscriptionTier {
             [
                 "Everything in Plus",
                 "Where to start, written for you",
-                "Why any technique works, at your level",
+                "Why any exercise works, at your level",
             ]
         }
     }

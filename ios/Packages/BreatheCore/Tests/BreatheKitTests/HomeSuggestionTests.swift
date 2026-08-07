@@ -77,6 +77,22 @@ struct HomeSuggestionTests {
         #expect(HomeSuggestion.technique(for: .sleep, techniques: [], history: []) == nil)
     }
 
+    /// The wheel, the techniques list's sections, and anything else built from
+    /// a catalogue read this one order. A catalogue that came back sorted
+    /// differently must not move sleep out from under a thumb that has learned
+    /// where it is.
+    @Test("Present goals come back in the enum's order, not the catalogue's")
+    func presentGoalsFollowTheEnum() {
+        let shuffled = [
+            technique(slug: "478", goal: .sleep),
+            technique(slug: "bellows", goal: .energy),
+            technique(slug: "box", goal: .calm),
+        ]
+
+        #expect(TechniqueGoal.present(in: shuffled) == [.calm, .sleep, .energy])
+        #expect(TechniqueGoal.present(in: []).isEmpty)
+    }
+
     @Test(
         "Each stretch of the day points the wheel at its own goal",
         arguments: [

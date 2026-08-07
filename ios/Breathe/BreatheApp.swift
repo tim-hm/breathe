@@ -35,6 +35,12 @@ struct BreatheApp: App {
     /// every one of them.
     @State private var plus: SubscriptionStore
 
+    /// Which exercises' cautions have been put away. In the environment beside
+    /// `settings` for the same reason: the card that writes it and the detail
+    /// screen that reads it are one view apart, but the store has to outlive
+    /// every push and pop between them.
+    @State private var safetyNotes = SafetyNoteStore()
+
     /// Holds the onboarding answers and knows whether they have been given.
     @State private var profiles: ProfileStore
 
@@ -111,28 +117,17 @@ struct BreatheApp: App {
 
     var body: some Scene {
         WindowGroup {
-            // Four tabs and a settings sheet is the whole of the chrome.
-            // Reminders live behind a link in Settings; the subscription has no
-            // home of its own, opening from whatever was locked.
-            TabView {
-                Tab("Breathe", systemImage: "smallcircle.filled.circle") {
-                    HomeView(model: catalogue, sessions: sessions)
-                }
-                Tab("Techniques", systemImage: "square.grid.2x2") {
-                    TechniqueListView(model: catalogue, sessions: sessions)
-                }
-                Tab("Journey", systemImage: "clock.arrow.circlepath") {
-                    JourneyView(model: journey, profiles: profiles, catalogue: catalogue)
-                }
-                Tab("The basics", systemImage: "book") {
-                    NavigationStack {
-                        FoundationsView(model: foundations)
-                    }
-                }
-                Tab("Settings", systemImage: "gearshape") {
-                    SettingsView(schedules: schedules, catalogue: catalogue)
-                }
-            }
+            // The whole of the chrome is `AppChrome`'s. Reminders live behind a
+            // link in Settings; the subscription has no home of its own,
+            // opening from whatever was locked.
+            AppChrome(
+                catalogue: catalogue,
+                sessions: sessions,
+                journey: journey,
+                profiles: profiles,
+                foundations: foundations,
+                schedules: schedules
+            )
             .tint(Theme.Accent.brand)
             // The palette resolves per appearance through the asset catalogue,
             // so one override here re-themes every screen; nil follows the
@@ -140,6 +135,7 @@ struct BreatheApp: App {
             .preferredColorScheme(settings.appearance.colorScheme)
             .environment(settings)
             .environment(plus)
+            .environment(safetyNotes)
             .fullScreenCover(isPresented: $isOnboarding) {
                 OnboardingView(
                     model: OnboardingModel(

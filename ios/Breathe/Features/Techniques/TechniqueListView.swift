@@ -2,19 +2,22 @@ import BreatheKit
 import BreatheUI
 import SwiftUI
 
-/// The whole catalogue, grouped by what each technique is for.
+/// The whole catalogue, grouped by what each exercise is for.
 ///
-/// Its own tab rather than part of home: someone who wants to breathe says so
-/// on the wheel, and someone who wants to read about nine techniques has come
+/// Its own root rather than part of home: someone who wants to breathe says so
+/// on the wheel, and someone who wants to read about nine exercises has come
 /// here deliberately. The model arrives shared with home — two views onto one
 /// load.
 struct TechniqueListView: View {
     let model: TechniqueListModel
     let sessions: any SessionRecording
 
+    /// Opens Settings, which lives behind the gear in this screen's toolbar.
+    let showSettings: () -> Void
+
     @Environment(SubscriptionStore.self) private var plus
 
-    /// The locked technique somebody tapped, which is both the paywall's trigger
+    /// The locked exercise somebody tapped, which is both the paywall's trigger
     /// and the reason it is being shown. `Technique` is `Identifiable`, so this
     /// is the whole of the presentation state.
     @State private var locked: Technique?
@@ -23,12 +26,17 @@ struct TechniqueListView: View {
         NavigationStack {
             content
                 .paletteGround()
-                .navigationTitle("Techniques")
+                .navigationTitle("Exercises")
                 .navigationDestination(for: Technique.self) { technique in
                     TechniqueDetailView(technique: technique, sessions: sessions)
                 }
                 .sheet(item: $locked) { technique in
                     PaywallView(highlighting: technique.requires)
+                }
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        SettingsGearButton(action: showSettings)
+                    }
                 }
         }
         // Home usually starts the shared load first, but this tab must not
@@ -48,7 +56,7 @@ struct TechniqueListView: View {
             ContentUnavailableView {
                 Label("The catalogue is empty", systemImage: "wind")
             } description: {
-                Text("The server answered, but with no techniques in it.")
+                Text("The server answered, but with no exercises in it.")
             } actions: {
                 Button("Try again") {
                     Task { await model.load() }
@@ -62,7 +70,7 @@ struct TechniqueListView: View {
                 // be told what to do is told first.
                 SuggestedForYouView(techniques: techniques)
 
-                ForEach(goals(in: techniques), id: \.self) { goal in
+                ForEach(TechniqueGoal.present(in: techniques), id: \.self) { goal in
                     Section {
                         ForEach(techniques.filter { $0.goal == goal }) { technique in
                             row(for: technique)
@@ -90,7 +98,7 @@ struct TechniqueListView: View {
         }
     }
 
-    /// A locked technique is a row like any other that opens the paywall
+    /// A locked exercise is a row like any other that opens the paywall
     /// instead of the detail screen.
     ///
     /// Listed rather than hidden, and drawn at full strength rather than dimmed:
@@ -98,6 +106,9 @@ struct TechniqueListView: View {
     /// they would be getting. Dimming reads as a punishment for not having paid;
     /// a lock beside a name and a summary reads as an invitation, which is what
     /// this is.
+    ///
+    /// A locked exercise never reaches `SessionModel.starting`, but that gate is
+    /// the one that actually holds — this only decides which sheet opens.
     @ViewBuilder
     private func row(for technique: Technique) -> some View {
         if technique.isUnlocked(for: plus.tier) {
@@ -115,15 +126,6 @@ struct TechniqueListView: View {
             // start competing with the unlocked rows above it.
             .buttonStyle(.plain)
             .listRowBackground(Color.clear)
-        }
-    }
-
-    /// The goals present in the catalogue, in the fixed calm-first order of
-    /// the enum — stable across loads, so sections never reshuffle under a
-    /// person who has learned where sleep lives.
-    private func goals(in techniques: [Technique]) -> [TechniqueGoal] {
-        TechniqueGoal.allCases.filter { goal in
-            techniques.contains { $0.goal == goal }
         }
     }
 }
@@ -161,8 +163,8 @@ private struct TechniqueRow: View {
 
             Spacer(minLength: 0)
 
-            TechniqueGlyph(technique: technique)
-                .frame(width: 64, height: 34)
+            BreathRhythmMark(technique: technique)
+                .frame(width: 88, height: 40)
         }
         .padding(.vertical, Theme.Spacing.close)
     }

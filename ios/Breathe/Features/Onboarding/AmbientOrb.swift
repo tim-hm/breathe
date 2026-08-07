@@ -15,6 +15,15 @@ struct AmbientOrb: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// The one thing in the app that reads the appearance directly rather than
+    /// through a token, and the reason is that alpha is not a colour: the same
+    /// opacity that reads as a lit glow over the near-black ground washes
+    /// towards the paper over the white one, worst on the warm accents. The
+    /// palette carries a value per appearance and cannot carry an alpha, so the
+    /// core's own alphas are what have to know. Dark keeps exactly the numbers
+    /// it shipped with.
+    @Environment(\.colorScheme) private var colorScheme
+
     /// One breath, in seconds.
     private static let cycle = 3.0
 
@@ -23,7 +32,7 @@ struct AmbientOrb: View {
         // refresh: nothing about the colours depends on the time, and the only
         // thing that does is the one number the three scales share.
         let core = RadialGradient(
-            colors: [accent.opacity(0.7), accent.opacity(0.15)],
+            colors: [accent.opacity(coreAlpha.centre), accent.opacity(coreAlpha.edge)],
             center: .center,
             startRadius: 4,
             endRadius: 82
@@ -57,6 +66,11 @@ struct AmbientOrb: View {
         .animation(.easeInOut(duration: 0.5), value: accent)
         // Ambience, not information: nothing here is worth a VoiceOver stop.
         .accessibilityHidden(true)
+    }
+
+    /// What the core's radial gradient runs between, at each end.
+    private var coreAlpha: (centre: Double, edge: Double) {
+        colorScheme == .dark ? (centre: 0.7, edge: 0.15) : (centre: 0.95, edge: 0.45)
     }
 
     /// How full the lungs are, 0...1, on a cosine so the turn at full and at

@@ -2,11 +2,11 @@ import BreatheKit
 import BreatheUI
 import SwiftUI
 
-/// One schedule's details: the technique, the time, the days.
+/// One schedule's details: the exercise, the time, the days.
 ///
 /// The same sheet adds and edits — a nil `schedule` starts a draft with
-/// sensible defaults (8 am, weekdays, the catalogue's first technique) so the
-/// fastest path from "Add" to a working reminder is picking a technique and
+/// sensible defaults (8 am, weekdays, the catalogue's first exercise) so the
+/// fastest path from "Add" to a working reminder is picking an exercise and
 /// tapping Save.
 struct ScheduleEditorView: View {
     /// nil when adding.
@@ -94,7 +94,7 @@ struct ScheduleEditorView: View {
     private var techniquePicker: some View {
         switch catalogue.state {
         case let .loaded(techniques) where !techniques.isEmpty:
-            Picker("Technique", selection: $techniqueSlug) {
+            Picker("Exercise", selection: $techniqueSlug) {
                 ForEach(techniques) { technique in
                     Text(technique.name).tag(String?.some(technique.slug))
                 }
@@ -107,7 +107,7 @@ struct ScheduleEditorView: View {
                 }
             }
         default:
-            LabeledContent("Technique") {
+            LabeledContent("Exercise") {
                 Text("Waiting for the catalogue…")
                     .foregroundStyle(Theme.Ink.tertiary)
             }

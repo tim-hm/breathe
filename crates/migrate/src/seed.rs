@@ -158,7 +158,7 @@ const TECHNIQUES: &[TechniqueSeed] = &[
         name: "Coherent Breathing",
         summary: "One long breath in, one just as long out — about five and a half breaths a \
                   minute. No holds and nothing to count: at this pace heart rate and breath fall \
-                  into step on their own, which is the whole of the technique.",
+                  into step on their own, which is the whole of the exercise.",
         safety_note: "",
         goal: TechniqueGoal::Calm,
         stages: &[stage(
@@ -222,7 +222,7 @@ const TECHNIQUES: &[TechniqueSeed] = &[
         slug: "physiological-sigh",
         name: "Physiological Sigh",
         summary: "A full inhale, a second short sip of air on top, then a long slow exhale. \
-                  One or two rounds is the whole technique — it works in seconds, not minutes.",
+                  One or two rounds is the whole exercise — it works in seconds, not minutes.",
         safety_note: "",
         goal: TechniqueGoal::Reset,
         stages: &[stage(
@@ -309,7 +309,7 @@ const TECHNIQUES: &[TechniqueSeed] = &[
         slug: "long-box-breathing",
         name: "Long Box Breathing",
         summary: "Box breathing with longer sides — six counts each, or eight once six feels \
-                  easy. The hold is what makes it a focus technique rather than a calming one: \
+                  easy. The hold is what makes it a focus exercise rather than a calming one: \
                   there is enough to keep track of that there is no room left to drift.",
         safety_note: "",
         goal: TechniqueGoal::Focus,
@@ -421,7 +421,7 @@ const FOUNDATIONS: &[FoundationSeed] = &[
         answer: "Sit for anything alerting, lie down for anything meant to end in sleep. Upright \
                  with a tall, easy back and your feet on the floor keeps you from drifting off \
                  halfway; on your back the belly moves more freely and nothing has to hold you \
-                 up. Fast-breathing techniques are seated or lying down every time, never in \
+                 up. Fast-breathing exercises are seated or lying down every time, never in \
                  water and never while driving — that one is not a suggestion.",
     },
     FoundationSeed {

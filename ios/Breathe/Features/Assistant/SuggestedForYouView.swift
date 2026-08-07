@@ -7,8 +7,8 @@ import SwiftUI
 /// A `Section`, so it belongs to the list it leads rather than floating above
 /// it, and so it disappears cleanly when there is nothing to say. There is no
 /// error state and no retry button: the catalogue underneath works perfectly
-/// well without a suggestion, and a person who opened this tab to read about
-/// nine techniques should not be handed a failure about a tenth thing they did
+/// well without a suggestion, and a person who opened this root to read about
+/// nine exercises should not be handed a failure about a tenth thing they did
 /// not ask for.
 struct SuggestedForYouView: View {
     /// The catalogue the guidance's slugs resolve against. Passed in rather

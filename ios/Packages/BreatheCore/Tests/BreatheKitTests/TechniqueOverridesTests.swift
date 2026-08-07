@@ -100,6 +100,27 @@ struct TechniqueOverridesTests {
         #expect(Self.technique.resolving(stale) == Self.technique.curatedOverrides)
     }
 
+    /// Every Begin in the app dials before it gates, so a dialled copy that let
+    /// `requires` fall back to its `.free` default opened the whole catalogue to
+    /// anybody who reached a locked technique from the wheel or the dials — with
+    /// the list still drawing the lock beside it.
+    @Test("Dialling a locked technique leaves it locked")
+    func keepsTheTierItRequires() {
+        let locked = Technique(
+            id: Self.technique.id,
+            slug: Self.technique.slug,
+            name: Self.technique.name,
+            summary: "",
+            goal: .sleep,
+            stages: Self.technique.stages,
+            recommendedRounds: 1,
+            requires: .plus
+        )
+
+        #expect(locked.dialled(with: nil).isUnlocked(for: .free) == false)
+        #expect(locked.dialled(with: locked.curatedOverrides).requires == .plus)
+    }
+
     @Test("The curated overrides describe the technique as seeded")
     func curatedOverridesRoundTrip() {
         let curated = Self.technique.curatedOverrides

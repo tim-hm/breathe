@@ -14,8 +14,18 @@ struct JourneyView: View {
     let model: JourneyModel
     let profiles: ProfileStore
     /// For resolving a record's slug to its display name. A session can outlive
-    /// its technique; the slug then stands in rather than hiding the row.
+    /// the exercise it recorded; the slug then stands in rather than hiding the
+    /// row.
     let catalogue: TechniqueListModel
+
+    /// The basics, pushed from the card below the totals. They live on this
+    /// screen rather than under the catalogue because they are about the person
+    /// rather than about any one exercise — belly or chest, sitting or lying —
+    /// and nobody browsing for something to breathe was ever looking for them.
+    let foundations: FoundationsModel
+
+    /// Opens Settings, which lives behind the gear in this screen's toolbar.
+    let showSettings: () -> Void
 
     /// The row awaiting the person's confirmation before it goes — deletion
     /// takes the stats with it, so it is asked about, not swiped away.
@@ -27,6 +37,7 @@ struct JourneyView: View {
                 VStack(alignment: .leading, spacing: Theme.Spacing.loose) {
                     StreakCard(stats: model.stats)
                     totals
+                    basicsCard
                     boltCard
                     leaderboardCard
                     history
@@ -35,6 +46,11 @@ struct JourneyView: View {
             }
             .paletteGround()
             .navigationTitle("Journey")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    SettingsGearButton(action: showSettings)
+                }
+            }
         }
         // Local read first, so the screen is complete before anything touches
         // the network; the sync then runs behind what is already drawn.
@@ -49,6 +65,19 @@ struct JourneyView: View {
             StatTile(value: model.stats.sessions, label: "sessions")
             StatTile(value: model.stats.minutes, label: "minutes")
             StatTile(value: model.stats.breaths, label: "breaths")
+        }
+    }
+
+    /// The basics, directly under the totals: high enough to be seen without a
+    /// scroll, low enough that the streak still opens the screen. The two cards
+    /// below it are things you do again and again; this one is read once and
+    /// referred back to, which is why it does not lead.
+    private var basicsCard: some View {
+        JourneyCard(
+            title: "The basics",
+            caption: "Belly or chest, nose or mouth, sitting or lying down."
+        ) {
+            FoundationsView(model: foundations)
         }
     }
 

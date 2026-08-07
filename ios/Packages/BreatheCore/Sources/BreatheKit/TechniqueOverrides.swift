@@ -93,7 +93,12 @@ public extension Technique {
             goal: goal,
             stages: stages,
             recommendedRounds: TechniqueOverrides.roundRange.clamping(overrides.rounds),
-            safetyNote: safetyNote
+            safetyNote: safetyNote,
+            // Carried explicitly because `requires` defaults to `.free`: a
+            // dialled copy that dropped it was unlocked, and every Begin in the
+            // app dials before it gates, so the subscription lock opened for
+            // anyone who reached a locked technique from the wheel or the dials.
+            requires: requires
         )
     }
 

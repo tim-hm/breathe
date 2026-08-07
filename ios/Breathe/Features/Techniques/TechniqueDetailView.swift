@@ -3,7 +3,7 @@ import BreatheStyle
 import BreatheUI
 import SwiftUI
 
-/// What a technique is, what it asks of you, how long you want to do it for,
+/// What an exercise is, what it asks of you, how long you want to do it for,
 /// and the way in.
 struct TechniqueDetailView: View {
     let technique: Technique
@@ -27,7 +27,7 @@ struct TechniqueDetailView: View {
             VStack(alignment: .leading, spacing: Theme.Spacing.loose) {
                 header
                 BreathRhythmChart(technique: dialled)
-                SafetyNote(technique: technique)
+                SafetyNoteCard(technique: technique)
                 WhyThisWorksView(techniqueSlug: technique.slug)
                 sessionShape(of: dialled)
                 lengthControl(of: dialled)
@@ -274,12 +274,4 @@ struct TechniqueDetailView: View {
     private func inWords(_ duration: Duration) -> String {
         duration.formatted(.units(allowed: [.minutes, .seconds], width: .abbreviated))
     }
-}
-
-/// Wraps the model so `fullScreenCover(item:)` has something `Identifiable` to
-/// present. The identity is the presentation's, not the session's — a new tap on
-/// Begin is a new session, and this is what makes that unambiguous.
-private struct StartedSession: Identifiable {
-    let id = UUID()
-    let model: SessionModel
 }
