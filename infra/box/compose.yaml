@@ -58,6 +58,10 @@ services:
       - tools
     command: migrate
     environment:
+      # Set for the same reason the api service sets it: migrate chooses its log
+      # format from this, and every deploy runs it. Unset, the one record of
+      # whether the schema applied arrives as prose beside everything else's JSON.
+      BREATHE_ENV: production
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@db:5432/breathe?sslmode=disable
     depends_on:
       db:
