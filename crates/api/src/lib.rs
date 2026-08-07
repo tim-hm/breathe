@@ -1,4 +1,4 @@
-//! The breathe API.
+//! The önd API.
 //!
 //! Serves gRPC-Web (the domain API, consumed by the iOS client) and a small JSON
 //! surface (`/health`, `/about`) from one router on one port.

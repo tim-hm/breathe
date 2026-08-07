@@ -35,7 +35,7 @@ grpcurl -plaintext localhost:18100 ond.v1.TechniqueService/ListTechniques
 Then the app:
 
 ```bash
-mise run ios:open     # generates Breathe.xcodeproj and opens it
+mise run ios:open     # generates Ond.xcodeproj and opens it
 ```
 
 Pick any iPhone simulator and press ⌘R. You should see nine techniques, served from your local Postgres.
@@ -48,9 +48,9 @@ Pick any iPhone simulator and press ⌘R. You should see nine techniques, served
 | PostgreSQL | 18101 | `mise run db:psql` to query it            |
 | `web/`     | 18102 | `mise run web:serve`, static preview only |
 
-**breathe owns 18100–18199.** Every port this repo uses comes from that block, and nothing else on the machine should claim it — one range means one thing to remember and one thing to check.
+**önd owns 18100–18199.** Every port this repo uses comes from that block, and nothing else on the machine should claim it — one range means one thing to remember and one thing to check.
 
-The block is chosen to clear the sibling `connect` repo, which reserves 15432, 15433, 17233, 17474, 17687, 18080–18092, and 19000. That matters more than it sounds: connect's Tilt binds `127.0.0.1:15432`, which beats a container's `*:15432` binding for anything resolving `localhost`, so a breathe process pointed at 15432 would silently read and write connect's database. If you add a service, take the next free number in 18100–18199.
+The block is chosen to clear the sibling `connect` repo, which reserves 15432, 15433, 17233, 17474, 17687, 18080–18092, and 19000. That matters more than it sounds: connect's Tilt binds `127.0.0.1:15432`, which beats a container's `*:15432` binding for anything resolving `localhost`, so an önd process pointed at 15432 would silently read and write connect's database. If you add a service, take the next free number in 18100–18199.
 
 ## The gate
 
@@ -78,20 +78,20 @@ CI (`.github/workflows/checks.yml`) runs the formatting and lint subset on every
 
 ## Common tasks
 
-| Intent                         | Command                                                                           |
-| :----------------------------- | :-------------------------------------------------------------------------------- |
-| Wipe and rebuild the database  | `mise run dev:db:reset`                                                           |
-| Query the database             | `echo 'select * from techniques;' \| mise run db:psql`                            |
-| Change the technique catalogue | Edit `crates/migrate/src/seed.rs`, then `mise run migrate`                        |
-| Change the API contract        | Edit `proto/ond/v1/…`, then `mise run generate`                                   |
-| Add a Swift file               | Create it under `ios/Breathe/` or `ios/OndWatch/`; `mise run ios:gen` picks it up |
-| Build the apps headlessly      | `mise run ios:build`, `mise run ios:build:watch`                                  |
+| Intent                         | Command                                                                       |
+| :----------------------------- | :---------------------------------------------------------------------------- |
+| Wipe and rebuild the database  | `mise run dev:db:reset`                                                       |
+| Query the database             | `echo 'select * from techniques;' \| mise run db:psql`                        |
+| Change the technique catalogue | Edit `crates/migrate/src/seed.rs`, then `mise run migrate`                    |
+| Change the API contract        | Edit `proto/ond/v1/…`, then `mise run generate`                               |
+| Add a Swift file               | Create it under `ios/Ond/` or `ios/OndWatch/`; `mise run ios:gen` picks it up |
+| Build the apps headlessly      | `mise run ios:build`, `mise run ios:build:watch`                              |
 
 ## Things that will bite you
 
 **A stale `DATABASE_URL` in your shell.** If you have used the `connect` repo in the same terminal, `DATABASE_URL` is exported and points at its database. Running `cargo run -p migrate` directly then targets the wrong cluster; sqlx aborts before applying anything, but the error is confusing. Always go through `mise run`, which supplies its own.
 
-**The Xcode project is generated.** `ios/Breathe.xcodeproj` is gitignored and rebuilt from `ios/project.yml`. Changing build settings in Xcode's UI works until the next `mise run ios:gen` throws it away — make the change in `project.yml` instead.
+**The Xcode project is generated.** `ios/Ond.xcodeproj` is gitignored and rebuilt from `ios/project.yml`. Changing build settings in Xcode's UI works until the next `mise run ios:gen` throws it away — make the change in `project.yml` instead.
 
 **Device builds need signing; the simulator doesn't.** `project.yml` deliberately carries no `DEVELOPMENT_TEAM`, so simulator builds work on any machine with no Apple ID. To run on a physical iPhone, set your team in Xcode's Signing & Capabilities tab — and expect the previous rule to apply: the next `mise run ios:gen` discards it. If device builds become routine, add `DEVELOPMENT_TEAM` to `project.yml`.
 

@@ -35,7 +35,7 @@ Use finding ID prefix: **ARCH**
 
 - **`import OndAPI` outside `OndKit`.** The target graph makes this unnameable from the app, so a working occurrence means the graph changed — check `Package.swift` and `ios/project.yml` for a dependency edge that shouldn't exist.
 - **`OndUI` importing a domain type.** It exposes accents named for feeling (`settle`, `night`, `spark`, `restore`); the _feature_ maps `TechniqueGoal` onto them. A dependency here inverts the graph and makes the palette un-reusable.
-- **Observable models in the app target.** Models belong in `OndKit`; the app target has no test bundle, so a model living there is structurally untestable. Views stay in `ios/Breathe/Features/<Name>/`.
+- **Observable models in the app target.** Models belong in `OndKit`; the app target has no test bundle, so a model living there is structurally untestable. Views stay in `ios/Ond/Features/<Name>/`.
 - **Generated types above the repository boundary.** `docs/transport.md` states the rule for both languages: generated protobuf types stop at the repository. Above it, code works in domain types that have no unrepresentable state. A `Ond_V1_*` type in a view, a model, or anything the app can name is a finding.
 
 **Severity guide:**

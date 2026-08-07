@@ -129,7 +129,7 @@ impl Config {
     }
 }
 
-/// breathe owns 18100–18199; this is the first of them. See docs/contributing.md
+/// önd owns 18100–18199; this is the first of them. See docs/contributing.md
 /// for why the range starts here.
 const DEFAULT_PORT: u16 = 18100;
 

@@ -18,7 +18,7 @@ crates/api/src/features/technique/
   service.rs   repository.rs   types.rs   errors.rs
 
 # Swift
-ios/Breathe/Features/Techniques/
+ios/Ond/Features/Techniques/
   TechniqueListView.swift
 ios/Packages/OndCore/Sources/OndKit/
   TechniqueListModel.swift
@@ -69,8 +69,8 @@ Swift diverges from Rust here, and deliberately: the language convention is one 
 
 Every piece of code has a default home. Start at the lowest tier and escalate only when a **concrete** second consumer exists — never speculatively.
 
-1. **Feature-local** (the default home for all new code) — Rust: `crates/api/src/features/<name>/`. Swift: `ios/Breathe/Features/<Name>/`.
-2. **App-local** (a second feature in the same target needs it) — Rust: top-level modules like `src/http/`, `src/state.rs`. Swift: `ios/Breathe/` root.
+1. **Feature-local** (the default home for all new code) — Rust: `crates/api/src/features/<name>/`. Swift: `ios/Ond/Features/<Name>/`.
+2. **App-local** (a second feature in the same target needs it) — Rust: top-level modules like `src/http/`, `src/state.rs`. Swift: `ios/Ond/` root.
 3. **Shared crate/module** (a second target needs it) — Rust: a `shared` crate, which **does not exist yet and should not be created until it does**. Swift: a target in `ios/Packages/OndCore` — `OndKit` for domain, `OndUI` for design.
 
 **Rule for tier 2:** if at least two features call into it _and_ its job is to wrap or mediate against an external system (the database, the network), it belongs at the top level. If it owns user-visible domain behaviour, it belongs inside a feature.
@@ -85,7 +85,7 @@ All Swift library code lives in **one** SwiftPM package, `ios/Packages/OndCore`,
 | `OndKit`             | yes      | Domain models, observable feature models, and repositories | `OndAPI`                 |
 | `OndUI`              | yes      | Design tokens and shared components                        | nothing                  |
 | `OndStyle`           | yes      | Mappings from a domain type onto a design token            | `OndKit`, `OndUI`        |
-| `Breathe` (iOS)      | —        | Features, composition root                                 | the three products above |
+| `Ond` (iOS)          | —        | Features, composition root                                 | the three products above |
 | `OndWatch` (watchOS) | —        | Features, composition root, the phone link                 | the three products above |
 
 Two invariants hold here, and the target graph enforces both:
@@ -103,7 +103,7 @@ The line is between a **mapping** and a **view**. A mapping goes in `OndStyle`; 
 
 The same rule catches one pair the compiler cannot see at all. `OndKit/TechniqueDrawing.swift` is a coordinate-for-coordinate port of the hand-authored SVGs in `web/index.html`, and the site is the reference — so a glyph changed there is a glyph the apps keep drawing the old way, with nothing to catch it.
 
-The link between the two apps runs one way: the phone sends the anonymous identity and the best controlled pause through `WatchConnectivity`'s `applicationContext` (`ios/Breathe/WatchLink.swift`), and the watch only listens (`ios/OndWatch/PhoneLink.swift`). The watch must never mint an identity of its own, so `ProvisionedUserIdentityStore` starts empty and everything above it is written to work without one — the reasoning is on that type.
+The link between the two apps runs one way: the phone sends the anonymous identity and the best controlled pause through `WatchConnectivity`'s `applicationContext` (`ios/Ond/WatchLink.swift`), and the watch only listens (`ios/OndWatch/PhoneLink.swift`). The watch must never mint an identity of its own, so `ProvisionedUserIdentityStore` starts empty and everything above it is written to work without one — the reasoning is on that type.
 
 ## Module Size Tiers
 

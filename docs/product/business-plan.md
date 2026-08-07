@@ -1,6 +1,6 @@
 # Business plan
 
-The product definition: what we are building, for whom, why it wins, and how it pays for itself. The build order lives in [roadmap.md](roadmap.md); the market-facing name is an open decision tracked in [naming.md](naming.md) — "Breathe" is the internal working name throughout.
+The product definition: what we are building, for whom, why it wins, and how it pays for itself. The build order lives in [roadmap.md](roadmap.md); the name is **önd**, listed on the App Store as "ond breath" — [naming.md](naming.md) records how it was chosen and what is still open.
 
 ## Vision
 

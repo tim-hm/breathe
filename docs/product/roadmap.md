@@ -14,7 +14,7 @@ The product's reason to exist: tap a technique, get a full-screen guided session
 - **Session length**: proto gains `recommended_cycles` on `Technique` (migration `0002` + `crates/migrate/src/seed.rs` + both codegens) — curated reference data like everything else on the message. User overrides live client-side until identity exists (M4).
 - **Accessibility & housekeeping**: Reduce Motion swaps the scaling orb for a progress ring; VoiceOver announces phase changes; the idle timer is disabled mid-session. Sessions are recorded locally from day one — M5 syncs them.
 
-Touches: `proto/ond/v1/technique_service.proto`, `crates/api/src/features/technique/`, `crates/migrate/`, new `ios/Breathe/Features/Session/`, `OndKit`.
+Touches: `proto/ond/v1/technique_service.proto`, `crates/api/src/features/technique/`, `crates/migrate/`, new `ios/Ond/Features/Session/`, `OndKit`.
 
 ## M2 — Catalogue expansion + advanced dials
 
@@ -49,7 +49,7 @@ All free by product decision; requires M4's identity header on every RPC.
 - **Opt-in social** — leaderboards return only users who set a display name via `UpdateProfile` (M4's `ProfileService` gains `display_name` and optional `birth_year_band`). Display names are user-chosen, screened against a denylist at V1, unique-suffixed on collision. No display name → invisible to others, boards still show your own rank against anonymous aggregate.
 - **Schema** — migration adds `sessions` (append-only, indexed on `(user_id, started_at)`), `bolt_scores`, and profile columns. Leaderboards are plain indexed queries at V1 scale; materialise later if they get hot.
 - **Feature crate** — `crates/api/src/features/journey/` cloned from the `technique` layout; register in `grpc.rs`.
-- **iOS** — journey tab (stats, streak, BOLT flow) in `ios/Breathe/Features/Journey/`; sync queue in `OndKit` draining the local session store from M1. Copy follows the framing rule: celebrate consistency, never pressure ("your streak paused", never "you failed").
+- **iOS** — journey tab (stats, streak, BOLT flow) in `ios/Ond/Features/Journey/`; sync queue in `OndKit` draining the local session store from M1. Copy follows the framing rule: celebrate consistency, never pressure ("your streak paused", never "you failed").
 
 ## M6 — AI guided personalisation
 

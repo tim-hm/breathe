@@ -115,7 +115,7 @@ mod tests {
 
     #[test]
     fn quotes_a_plain_identifier() {
-        assert_eq!(quote_identifier("breathe"), "\"breathe\"");
+        assert_eq!(quote_identifier("ond"), "\"ond\"");
     }
 
     /// Doubling is what stops an embedded `"` from closing the identifier early

@@ -9,7 +9,7 @@ services:
     # beats a container's `*:15432` binding for `localhost`, so pointing there
     # would silently reach that cluster instead.
     #
-    # Every breathe port lives in 18100–18199, a block connect uses none of. One
+    # Every önd port lives in 18100–18199, a block connect uses none of. One
     # range means one thing to remember and one thing to check.
     ports:
       - "18101:5432"

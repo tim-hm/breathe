@@ -5,7 +5,7 @@
 ```text
 ┌──────────────────────────────┐
 │  ios/  SwiftUI apps          │
-│    Breathe      (iOS)        │
+│    Ond          (iOS)        │
 │    OndWatch (watchOS)    │
 │    └── OndCore           │  one SwiftPM package, three targets
 │        ├── OndKit        │  domain models + repositories
@@ -43,7 +43,7 @@ Both apps sit on the same two products. What they share and what they deliberate
 | `…/OndCore/Sources/OndAPI` | Generated protobuf and the Connect client factory. Not a package product, so only OndKit can reach it.                   |
 | `…/OndCore/Sources/OndKit` | Domain types, observable models, and repositories. The only Swift code that touches generated types.                     |
 | `…/OndCore/Sources/OndUI`  | Spacing and accent tokens. Domain-free.                                                                                  |
-| `ios/Breathe`              | The iOS app: composition root plus features.                                                                             |
+| `ios/Ond`                  | The iOS app: composition root plus features.                                                                             |
 | `ios/OndWatch`             | The watchOS app: the same session over the same package, plus the `WatchConnectivity` link that hands it an identity.    |
 | `web/`                     | The marketing one-pager. Two static files, no build step — Caddy serves them beside the API on one hostname.             |
 | `infra/`                   | OpenTofu for the single box everything above is deployed onto, plus what runs on it. See [deployment.md](deployment.md). |

@@ -7,7 +7,7 @@ struct SessionStoreTests {
     /// A directory of this suite's own, so a run never reads what a previous one
     /// or the host's real app support directory left behind.
     private func temporaryDirectory() -> URL {
-        URL.temporaryDirectory.appending(path: "breathe-session-store-\(UUID().uuidString)")
+        URL.temporaryDirectory.appending(path: "ond-session-store-\(UUID().uuidString)")
     }
 
     private func record(

@@ -1,4 +1,4 @@
-//! Process entry point for the breathe API.
+//! Process entry point for the önd API.
 //!
 //! Boot order is: configuration, telemetry, database pool, router, serve. The
 //! router itself is `api::build_app` so that the integration tests exercise the
@@ -26,7 +26,7 @@ async fn main() -> Result<()> {
         commit = http::BUILD_INFO.commit,
         built_at = http::BUILD_INFO.built_at,
         environment = ?config.environment,
-        "starting breathe api",
+        "starting ond api",
     );
 
     let pool = PgPoolOptions::new()

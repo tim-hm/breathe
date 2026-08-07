@@ -85,7 +85,7 @@ Roll up file-level data to module/package level:
 - `crates/api/src/` (outside `features/`) — app-local infrastructure: `lib.rs`, `state.rs`, `grpc.rs`, `http/`, `config.rs`, `obs.rs`
 - `crates/migrate/` — schema and seed
 - `ios/Packages/OndCore/Sources/*/` — each Swift target (`OndKit`, `OndUI`) is a module
-- `ios/Breathe/Features/*/` — each app feature is a module
+- `ios/Ond/Features/*/` — each app feature is a module
 - `proto/` — treat as a single module
 - `docs/`, `infra/`, `.github/` — treat each as a single module
 

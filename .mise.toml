@@ -70,7 +70,7 @@ _.file = { path = ".env", redact = true }
 # needing a live database. `generate:sqlx` overrides it, because refreshing the
 # cache is precisely the operation that must talk to a real server.
 SQLX_OFFLINE = "true"
-# Port rationale lives in compose.yaml. In short: breathe owns 18100–18199, and
+# Port rationale lives in compose.yaml. In short: önd owns 18100–18199, and
 # a shell that has visited the sibling `connect` repo exports a DATABASE_URL
 # pointing at *its* cluster — so every task here supplies its own rather than
 # inheriting whatever the shell happens to hold.

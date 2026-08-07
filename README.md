@@ -1,4 +1,4 @@
-# breathe
+# önd
 
 A minimalist iOS app for breathing techniques — to calm down, get to sleep, find energy, or reset after a spike.
 
