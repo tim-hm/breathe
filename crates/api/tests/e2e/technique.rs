@@ -1,11 +1,11 @@
 //! `ListTechniques` and `ListFoundations`, over the wire the iOS client uses.
 
-use api::proto::breathe::v1 as pb;
+use api::proto::ond::v1 as pb;
 
 use crate::harness::{TestDatabase, call_grpc_web};
 
-const LIST_TECHNIQUES: &str = "/breathe.v1.TechniqueService/ListTechniques";
-const LIST_FOUNDATIONS: &str = "/breathe.v1.TechniqueService/ListFoundations";
+const LIST_TECHNIQUES: &str = "/ond.v1.TechniqueService/ListTechniques";
+const LIST_FOUNDATIONS: &str = "/ond.v1.TechniqueService/ListFoundations";
 
 /// The bootstrap's acceptance criterion, minus the simulator: seeded rows in
 /// Postgres reach a client as decoded protobuf, through the same router and the

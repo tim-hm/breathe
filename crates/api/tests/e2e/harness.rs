@@ -24,7 +24,7 @@ use tower::ServiceExt;
 /// structurally impossible rather than merely discouraged: the name is derived
 /// from `DATABASE_URL` by *replacing* its database, so the configured
 /// connection string can never be used as-is. These tests drop wholesale.
-const TEST_DATABASE_PREFIX: &str = "breathe_test_";
+const TEST_DATABASE_PREFIX: &str = "ond_test_";
 
 /// Postgres truncates identifiers past this and would silently collide two
 /// tests whose names share a long prefix.
@@ -36,7 +36,7 @@ pub struct TestDatabase {
 }
 
 impl TestDatabase {
-    /// Creates `breathe_test_<test_name>`, migrated and seeded.
+    /// Creates `ond_test_<test_name>`, migrated and seeded.
     ///
     /// The name is deterministic rather than random, and creation drops any
     /// previous instance: a test that fails leaves its database behind for

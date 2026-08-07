@@ -16,7 +16,7 @@ write_files:
     content: |
       AWS_DEFAULT_REGION=${region}
       PATH=/usr/local/bin:/usr/bin:/bin:/snap/bin
-      17 2 * * * root docker compose -f /srv/ond/compose.yaml exec -T db pg_dump -U postgres breathe | gzip | aws s3 cp - s3://${backup_bucket}/ond-$(date +\%F).sql.gz
+      17 2 * * * root docker compose -f /srv/ond/compose.yaml exec -T db pg_dump -U postgres ond | gzip | aws s3 cp - s3://${backup_bucket}/ond-$(date +\%F).sql.gz
 
 runcmd:
   - usermod -aG docker ubuntu

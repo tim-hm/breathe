@@ -160,7 +160,7 @@ This is an app people use with their eyes closed, in the dark, while regulating 
 
 ### Colour and Contrast
 
-- Information carried by colour alone. `BreatheUI` exposes accents named for feeling (`settle`, `night`, `spark`, `restore`) and features map goals onto them — if the accent is the only thing distinguishing two goals, that distinction does not exist for a colour-blind user. It needs a label or a shape too.
+- Information carried by colour alone. `OndUI` exposes accents named for feeling (`settle`, `night`, `spark`, `restore`) and features map goals onto them — if the accent is the only thing distinguishing two goals, that distinction does not exist for a colour-blind user. It needs a label or a shape too.
 - Text on accent backgrounds meeting WCAG AA (4.5:1 normal, 3:1 large). The dark palette is where this usually fails.
 - `.accessibilityDifferentiateWithoutColor` unhandled where colour is doing semantic work.
 

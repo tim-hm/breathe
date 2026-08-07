@@ -12,7 +12,7 @@ use super::super::wire::{counted, timestamp_from_proto};
 use super::repository;
 use super::types::BoltSnapshot;
 use crate::identity::UserId;
-use crate::proto::breathe::v1 as pb;
+use crate::proto::ond::v1 as pb;
 
 /// Matches the `CHECK` on `bolt_scores.seconds`.
 const MAX_BOLT_SECONDS: u32 = 600;

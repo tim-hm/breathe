@@ -5,8 +5,8 @@ use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
 use crate::features::technique::service;
-use crate::proto::breathe::v1::technique_service_server::TechniqueService;
-use crate::proto::breathe::v1::{
+use crate::proto::ond::v1::technique_service_server::TechniqueService;
+use crate::proto::ond::v1::{
     ListFoundationsRequest, ListFoundationsResponse, ListTechniquesRequest, ListTechniquesResponse,
 };
 use crate::state::AppState;

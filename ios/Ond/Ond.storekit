@@ -1,0 +1,79 @@
+{
+  "identifier" : "3B9C1D2E",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+
+  ],
+  "settings" : {
+    "_applicationInternalID" : "",
+    "_developerTeamID" : "",
+    "_lastSynchronizedDate" : 0
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21571893",
+      "localizations" : [
+
+      ],
+      "name" : "Plus",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "0.99",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "6472019384",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Every technique in the catalogue — sleep, focus and energy protocols, and the Wim Hof-style rounds.",
+              "displayName" : "önd Plus",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "xyz.holmie.ond.plus.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "önd Plus (monthly)",
+          "subscriptionGroupID" : "21571893",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "4.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6472019385",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Everything in Plus, and an assistant that reads your practice: where to start, and why any technique works, written for you.",
+              "displayName" : "önd Coach",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "xyz.holmie.ond.coach.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "önd Coach (monthly)",
+          "subscriptionGroupID" : "21571893",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

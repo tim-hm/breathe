@@ -2,7 +2,7 @@
 //! name.
 
 use api::identity::USER_ID_HEADER;
-use api::proto::breathe::v1 as pb;
+use api::proto::ond::v1 as pb;
 
 use super::{
     ADA, BEA, CAL, GET_LEADERBOARD, board, bolt_score, days_ago, hours_ago, minutes_session, name,

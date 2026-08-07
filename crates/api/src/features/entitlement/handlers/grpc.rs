@@ -6,8 +6,8 @@ use tonic::{Request, Response, Status};
 
 use crate::features::entitlement::service;
 use crate::identity;
-use crate::proto::breathe::v1::entitlement_service_server::EntitlementService;
-use crate::proto::breathe::v1::{
+use crate::proto::ond::v1::entitlement_service_server::EntitlementService;
+use crate::proto::ond::v1::{
     GetEntitlementRequest, GetEntitlementResponse, SubmitAppStoreTransactionRequest,
     SubmitAppStoreTransactionResponse,
 };

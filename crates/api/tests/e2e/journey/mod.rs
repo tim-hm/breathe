@@ -8,7 +8,7 @@
 //! to drift.
 
 use api::identity::USER_ID_HEADER;
-use api::proto::breathe::v1 as pb;
+use api::proto::ond::v1 as pb;
 use chrono::{DateTime, Duration, Utc};
 
 use crate::harness::{GrpcWebResponse, TestDatabase, call_grpc_web_with};
@@ -18,12 +18,12 @@ mod leaderboard;
 mod sessions;
 mod snapshot;
 
-const RECORD_SESSIONS: &str = "/breathe.v1.JourneyService/RecordSessions";
-const DELETE_SESSIONS: &str = "/breathe.v1.JourneyService/DeleteSessions";
-const GET_JOURNEY: &str = "/breathe.v1.JourneyService/GetJourney";
-const RECORD_BOLT_SCORE: &str = "/breathe.v1.JourneyService/RecordBoltScore";
-const GET_LEADERBOARD: &str = "/breathe.v1.JourneyService/GetLeaderboard";
-const UPDATE_PROFILE: &str = "/breathe.v1.ProfileService/UpdateProfile";
+const RECORD_SESSIONS: &str = "/ond.v1.JourneyService/RecordSessions";
+const DELETE_SESSIONS: &str = "/ond.v1.JourneyService/DeleteSessions";
+const GET_JOURNEY: &str = "/ond.v1.JourneyService/GetJourney";
+const RECORD_BOLT_SCORE: &str = "/ond.v1.JourneyService/RecordBoltScore";
+const GET_LEADERBOARD: &str = "/ond.v1.JourneyService/GetLeaderboard";
+const UPDATE_PROFILE: &str = "/ond.v1.ProfileService/UpdateProfile";
 
 /// Stable identities, so a failing test leaves rows someone can go and look at.
 const ADA: &str = "6a1f0000-0000-4000-8000-000000000001";

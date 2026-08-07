@@ -10,12 +10,12 @@ use crate::features::entitlement::handlers::grpc::EntitlementServiceImpl;
 use crate::features::journey::handlers::grpc::JourneyServiceImpl;
 use crate::features::profile::handlers::grpc::ProfileServiceImpl;
 use crate::features::technique::handlers::grpc::TechniqueServiceImpl;
-use crate::proto::breathe::v1::FILE_DESCRIPTOR_SET;
-use crate::proto::breathe::v1::assistant_service_server::AssistantServiceServer;
-use crate::proto::breathe::v1::entitlement_service_server::EntitlementServiceServer;
-use crate::proto::breathe::v1::journey_service_server::JourneyServiceServer;
-use crate::proto::breathe::v1::profile_service_server::ProfileServiceServer;
-use crate::proto::breathe::v1::technique_service_server::TechniqueServiceServer;
+use crate::proto::ond::v1::FILE_DESCRIPTOR_SET;
+use crate::proto::ond::v1::assistant_service_server::AssistantServiceServer;
+use crate::proto::ond::v1::entitlement_service_server::EntitlementServiceServer;
+use crate::proto::ond::v1::journey_service_server::JourneyServiceServer;
+use crate::proto::ond::v1::profile_service_server::ProfileServiceServer;
+use crate::proto::ond::v1::technique_service_server::TechniqueServiceServer;
 use crate::state::AppState;
 
 /// The largest request body any service will decode.
@@ -38,7 +38,7 @@ const MAX_REQUEST_BYTES: usize = 256 * 1024;
 /// entitlement surface — to anyone who asks. Wanting it against the deployed box
 /// is the argument for the separate port `docs/observability.md` reserves for
 /// metrics, not for registering it here. `infra/box/Caddyfile` declines to proxy
-/// the path as well, because an unset `BREATHE_ENV` falls back to `Dev` and this
+/// the path as well, because an unset `OND_ENV` falls back to `Dev` and this
 /// gate therefore fails open.
 ///
 /// There is deliberately no `tonic-health` service. Liveness is answered by the
@@ -98,7 +98,7 @@ mod tests {
     /// name derived from the same source as the registration could not fail.
     const REFLECTION_PATH: &str = "/grpc.reflection.v1.ServerReflection/ServerReflectionInfo";
 
-    const DATABASE_URL: &str = "postgres://postgres@localhost:18101/breathe";
+    const DATABASE_URL: &str = "postgres://postgres@localhost:18101/ond";
 
     /// A state with no database behind it. `connect_lazy` parses the URL and
     /// connects on first use, and registration touches neither — nor does it

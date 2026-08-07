@@ -15,7 +15,7 @@ use super::types::{
 use crate::features::technique::service::goal_to_proto;
 use crate::features::technique::types::TechniqueGoal;
 use crate::identity::UserId;
-use crate::proto::breathe::v1 as pb;
+use crate::proto::ond::v1 as pb;
 
 /// Matches the `CHECK` on `users.intent_note`. Duplicated here so an over-long
 /// note comes back as `INVALID_ARGUMENT` naming the field, rather than as the
@@ -43,6 +43,11 @@ const DENIED_DISPLAY_NAME_FRAGMENTS: &[&str] = &[
     "moderator",
     "official",
     "support",
+    // Both spellings of the new name, and the old one it was renamed from: a
+    // display name impersonating the team is no less confusing for naming a
+    // brand the app used to answer to.
+    "ond team",
+    "önd team",
     "breathe team",
     "staff",
     "fuck",

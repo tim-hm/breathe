@@ -11,7 +11,7 @@ use api::journey::{
     BoltSnapshot, MAX_SNAPSHOT_TECHNIQUES, PRACTICE_WINDOW_DAYS, PracticeSnapshot,
     practice_snapshot,
 };
-use api::proto::breathe::v1 as pb;
+use api::proto::ond::v1 as pb;
 use chrono::{DateTime, Utc};
 
 use super::{ADA, BEA, bolt_with, days_ago, minutes_session, record};

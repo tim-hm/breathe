@@ -70,11 +70,11 @@ _.file = { path = ".env", redact = true }
 # needing a live database. `generate:sqlx` overrides it, because refreshing the
 # cache is precisely the operation that must talk to a real server.
 SQLX_OFFLINE = "true"
-# Port rationale lives in compose.yaml. In short: breathe owns 18100–18199, and
+# Port rationale lives in compose.yaml. In short: önd owns 18100–18199, and
 # a shell that has visited the sibling `connect` repo exports a DATABASE_URL
 # pointing at *its* cluster — so every task here supplies its own rather than
 # inheriting whatever the shell happens to hold.
-DATABASE_URL = "postgres://postgres:postgres@localhost:18101/breathe?sslmode=disable"
+DATABASE_URL = "postgres://postgres:postgres@localhost:18101/ond?sslmode=disable"
 
 # Every non-`dev` cargo invocation builds here instead of ./target. The reason is
 # the cargo *file lock*, not artifact invalidation: `clippy` and `build` write
@@ -112,7 +112,7 @@ run = "cargo run -p migrate"
 
 [tasks."db:psql"]
 description = "Query the local database (SQL on stdin)"
-run = "docker compose exec -T db psql -U postgres -d breathe"
+run = "docker compose exec -T db psql -U postgres -d ond"
 
 [tasks."build:release"]
 description = "Build the API release binary (what a deployment ships)"
@@ -263,7 +263,7 @@ description = "Assert the committed Swift protobuf matches proto/"
 # happens to be staged — and in a GitButler workspace, where the index is not
 # kept in step with the virtual branches, fails on generated files that are
 # already committed.
-run = ["mise run generate:proto", "git diff --exit-code HEAD -- ios/Packages/BreatheCore/Sources/BreatheAPI/Generated"]
+run = ["mise run generate:proto", "git diff --exit-code HEAD -- ios/Packages/OndCore/Sources/OndAPI/Generated"]
 
 [tasks."check:audit"]
 description = "Match Cargo.lock against the RustSec advisory database"
@@ -302,7 +302,7 @@ run = "cargo nextest run --workspace --lib --bins"
 [tasks."test:e2e"]
 description = "Integration tests: the real router over a disposable database"
 depends = ["dev:db"]
-# Each test creates and migrates its own `breathe_test_<name>` database, so they
+# Each test creates and migrates its own `ond_test_<name>` database, so they
 # neither share state nor touch the development one. nextest runs each test in
 # its own process, which is what makes per-test databases the natural unit.
 env = { CARGO_TARGET_DIR = "{{env.CHECK_TARGET_DIR}}" }
@@ -329,7 +329,7 @@ run = "cargo nextest run -p api --test e2e --run-ignored only -E 'test(/::smoke_
 
 [tasks."test:swift"]
 dir = "{{config_root}}/ios"
-run = "swift test --package-path Packages/BreatheCore"
+run = "swift test --package-path Packages/OndCore"
 
 # web
 
@@ -403,11 +403,11 @@ run = ["""
 # ios
 
 [tasks."ios:gen"]
-description = "Generate Breathe.xcodeproj from ios/project.yml"
+description = "Generate Ond.xcodeproj from ios/project.yml"
 dir = "{{config_root}}/ios"
 # The plutil step bakes this Mac's Bonjour address into the freshly generated
 # (gitignored) Info.plist. Debug builds fall back to it when the
-# BREATHE_API_BASE_URL environment variable is absent — which is every launch
+# OND_API_BASE_URL environment variable is absent — which is every launch
 # from the home screen, where no debugger means no environment — so a device
 # build keeps working untethered. The Bonjour name rather than the LAN IP
 # because it survives a DHCP renewal, and derives per machine with no config:
@@ -417,14 +417,14 @@ dir = "{{config_root}}/ios"
 # URL just as much and from the same source.
 run = ["xcodegen generate", '''
   url="http://$(scutil --get LocalHostName).local:18100"
-  plutil -replace BreatheAPIBaseURL -string "$url" Breathe/Info.plist
-  plutil -replace BreatheAPIBaseURL -string "$url" BreatheWatch/Info.plist
+  plutil -replace OndAPIBaseURL -string "$url" Ond/Info.plist
+  plutil -replace OndAPIBaseURL -string "$url" OndWatch/Info.plist
   ''']
 
 [tasks."ios:open"]
 description = "Generate the project and open it in Xcode"
 depends = ["ios:gen"]
-run = "open {{config_root}}/ios/Breathe.xcodeproj"
+run = "open {{config_root}}/ios/Ond.xcodeproj"
 
 [tasks."ios:build"]
 description = "Build the app for the simulator without opening Xcode"
@@ -432,7 +432,7 @@ depends = ["ios:gen"]
 dir = "{{config_root}}/ios"
 # The generic destination builds without naming a device, so this works on any
 # machine regardless of which simulators its Xcode happens to have installed.
-run = "xcodebuild -project Breathe.xcodeproj -scheme Breathe -destination 'generic/platform=iOS Simulator' build"
+run = "xcodebuild -project Ond.xcodeproj -scheme Ond -destination 'generic/platform=iOS Simulator' build"
 
 [tasks."ios:sim"]
 description = "Build, install, and launch the app on the booted iOS simulator"
@@ -444,11 +444,11 @@ dir = "{{config_root}}/ios"
 # The product directory is asked of xcodebuild rather than assumed, because
 # DerivedData's path is a hash of the project's location.
 run = '''
-  products=$(xcodebuild -project Breathe.xcodeproj -scheme Breathe \
+  products=$(xcodebuild -project Ond.xcodeproj -scheme Ond \
     -destination 'generic/platform=iOS Simulator' -showBuildSettings 2>/dev/null \
     | awk -F' = ' '/ BUILT_PRODUCTS_DIR /{print $2; exit}')
-  xcrun simctl install booted "$products/Breathe.app"
-  xcrun simctl launch booted xyz.holmie.breathe
+  xcrun simctl install booted "$products/Ond.app"
+  xcrun simctl launch booted xyz.holmie.ond
 '''
 
 [tasks."ios:build:watch"]
@@ -458,4 +458,4 @@ dir = "{{config_root}}/ios"
 # Separate from `ios:build` rather than folded into it: the phone scheme embeds
 # the watch app, so building it covers both, but a watch-only change wants a
 # build that fails on the wrist's compiler errors alone.
-run = "xcodebuild -project Breathe.xcodeproj -scheme BreatheWatch -destination 'generic/platform=watchOS Simulator' build"
+run = "xcodebuild -project Ond.xcodeproj -scheme OndWatch -destination 'generic/platform=watchOS Simulator' build"

@@ -27,7 +27,7 @@ export default {
       // as drift.
       ".sqlx/**",
       // Xcode writes these, and rewrites them whenever a catalogue changes —
-      // the app's, and BreatheUI's palette.
+      // the app's, and OndUI's palette.
       "ios/**/*.xcassets/**",
     ],
   },

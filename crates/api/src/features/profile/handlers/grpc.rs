@@ -6,8 +6,8 @@ use tonic::{Request, Response, Status};
 
 use crate::features::profile::service;
 use crate::identity;
-use crate::proto::breathe::v1::profile_service_server::ProfileService;
-use crate::proto::breathe::v1::{
+use crate::proto::ond::v1::profile_service_server::ProfileService;
+use crate::proto::ond::v1::{
     GetProfileRequest, GetProfileResponse, UpdateProfileRequest, UpdateProfileResponse,
 };
 use crate::state::AppState;

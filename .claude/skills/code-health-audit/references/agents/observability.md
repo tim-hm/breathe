@@ -107,7 +107,7 @@ Logs must never contain secrets, and this repo has two specific exposures worth 
 
 - **`OPENROUTER_API_KEY`.** The only secret the backend reads. Check that it never reaches a log, an error message, or a `Debug` derive on a struct that holds it. A `#[derive(Debug)]` on a config struct containing the key will print it the first time anyone logs that struct.
 - **`DATABASE_URL`.** Carries credentials. Logging a connection string on a failed connect is the classic way this leaks — check `crates/migrate/src/main.rs` and any pool construction.
-- **The user id.** `breathe-user-id` is an anonymous UUID rather than a name or an email, so it is fine to log and useful for correlation. Do not flag it as PII; do flag it appearing in a place that is shared or exported.
+- **The user id.** `ond-user-id` is an anonymous UUID rather than a name or an email, so it is fine to log and useful for correlation. Do not flag it as PII; do flag it appearing in a place that is shared or exported.
 - **Prompt and completion text.** The assistant handles free text a person wrote about how they feel. Logging a prompt or a completion body — even at `debug` — puts that text in the log aggregator. Flag any body-level logging of model input or output; log token counts, durations, and outcomes instead.
 - **sqlx errors reaching the client.** The inverse of the log-before-converting rule: the detail belongs in the log and must not be forwarded in the `tonic::Status` message, because it can carry table and column names.
 
@@ -124,9 +124,9 @@ Logs must never contain secrets, and this repo has two specific exposures worth 
 
 **What to check:**
 
-- **Level configuration.** `RUST_LOG` overrides the filter; the default is `api=info,tower_http=info,warn`, chosen at boot in `crates/api/src/obs.rs` from `BREATHE_ENV`. Flag ad-hoc level gating anywhere else — a hand-rolled `if verbose` is a second configuration surface for something already configured.
+- **Level configuration.** `RUST_LOG` overrides the filter; the default is `api=info,tower_http=info,warn`, chosen at boot in `crates/api/src/obs.rs` from `OND_ENV`. Flag ad-hoc level gating anywhere else — a hand-rolled `if verbose` is a second configuration surface for something already configured.
 - **Format selection.** JSON in production, human-readable in dev, decided once in `obs.rs`. Flag any second place that formats log output.
-- **New environment variables.** `CLAUDE.md` §1.4 caps the backend at three: `BREATHE_ENV`, `DATABASE_URL`, and the optional `OPENROUTER_API_KEY`. A fourth read anywhere — including one that only affects logging — is a convention violation, because it is a value that can differ between a laptop and a deployment without anything noticing.
+- **New environment variables.** `CLAUDE.md` §1.4 caps the backend at three: `OND_ENV`, `DATABASE_URL`, and the optional `OPENROUTER_API_KEY`. A fourth read anywhere — including one that only affects logging — is a convention violation, because it is a value that can differ between a laptop and a deployment without anything noticing.
 - **Metrics and tracing export.** `docs/observability.md` says neither exists yet, and that when metrics arrive they must be served on a **separate port** from the public listener so the scrape target is never exposed. If an exporter has appeared on the main listener, that is the finding.
 
 **Severity guide:**
@@ -141,7 +141,7 @@ Logs must never contain secrets, and this repo has two specific exposures worth 
 
 `docs/observability.md` covers the backend only, so the app's conventions are set by existing usage rather than by a document. That gap is itself worth reporting once if the Swift logging surface has grown — but review the code against what is already there:
 
-- **`os.Logger`, one subsystem.** Every logger is constructed with subsystem `xyz.holmie.breathe` and a category naming the area (`wheel`, `audio`, `haptics`, `watch-link`). Flag a divergent subsystem string, a missing category, or a category that duplicates an existing one under a different name.
+- **`os.Logger`, one subsystem.** Every logger is constructed with subsystem `xyz.holmie.ond` and a category naming the area (`wheel`, `audio`, `haptics`, `watch-link`). Flag a divergent subsystem string, a missing category, or a category that duplicates an existing one under a different name.
 - **`print()` instead of a logger.** `print` output does not reach the unified log and vanishes outside a debugger session. Flag every occurrence in non-test code.
 - **Privacy annotations.** `os_log` redacts interpolated dynamic strings by default and shows them as `<private>`. That is the right default for anything a person typed, and the wrong one for a technique slug or an error code you will need in a bug report — those want `privacy: .public`. Flag values marked `.public` that carry user-authored text, and diagnostic values left redacted where the log is then useless.
 - **The boundary principle applies here too.** A repository that logs a decode failure _and_ throws leaves the model's catch block logging it again.

@@ -55,7 +55,7 @@ git diff --name-status $(git log --since="{since}" --no-merges --format="%H" | t
 ```bash
 git log --oneline --since="{since}" --no-merges -- \
   "Cargo.toml" "crates/*/Cargo.toml" "Cargo.lock" \
-  "ios/Packages/BreatheCore/Package.swift" "**/Package.resolved" \
+  "ios/Packages/OndCore/Package.swift" "**/Package.resolved" \
   ".mise.toml"
 ```
 
@@ -75,7 +75,7 @@ For each file that appears in the numstat output:
 4. Rank files by heat score descending
 5. Flag the top 20% as **hot**
 
-Exclude files matching the configured `exclude_paths` patterns. In particular, exclude the committed generated Swift under `ios/Packages/BreatheCore/Sources/BreatheAPI/Generated/` — it is machine output whose churn tracks `proto/` edits, and leaving it in swamps the top of the heat map with files nobody wrote. Note the corresponding `proto/` change instead.
+Exclude files matching the configured `exclude_paths` patterns. In particular, exclude the committed generated Swift under `ios/Packages/OndCore/Sources/OndAPI/Generated/` — it is machine output whose churn tracks `proto/` edits, and leaving it in swamps the top of the heat map with files nobody wrote. Note the corresponding `proto/` change instead.
 
 ### 4. Compute Module Heat Map
 
@@ -84,14 +84,14 @@ Roll up file-level data to module/package level:
 - `crates/api/src/features/*/` — each feature is a sub-module of `api`
 - `crates/api/src/` (outside `features/`) — app-local infrastructure: `lib.rs`, `state.rs`, `grpc.rs`, `http/`, `config.rs`, `obs.rs`
 - `crates/migrate/` — schema and seed
-- `ios/Packages/BreatheCore/Sources/*/` — each Swift target (`BreatheKit`, `BreatheUI`) is a module
-- `ios/Breathe/Features/*/` — each app feature is a module
+- `ios/Packages/OndCore/Sources/*/` — each Swift target (`OndKit`, `OndUI`) is a module
+- `ios/Ond/Features/*/` — each app feature is a module
 - `proto/` — treat as a single module
 - `docs/`, `infra/`, `.github/` — treat each as a single module
 
 Sum the churn and commit counts for all files within each module. Flag modules with the highest aggregate churn.
 
-A feature that moved in both languages at once (`crates/api/src/features/journey/` and `ios/Packages/BreatheCore/Sources/BreatheKit/Journey*.swift`) is worth calling out explicitly — cross-language churn on one feature usually means a contract change, and contract changes are where the two ends drift.
+A feature that moved in both languages at once (`crates/api/src/features/journey/` and `ios/Packages/OndCore/Sources/OndKit/Journey*.swift`) is worth calling out explicitly — cross-language churn on one feature usually means a contract change, and contract changes are where the two ends drift.
 
 ### 5. Identify Large Diffs
 

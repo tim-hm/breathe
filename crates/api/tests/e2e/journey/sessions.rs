@@ -3,7 +3,7 @@
 //! Almost everything here is about arithmetic that no compiler checks: a streak
 //! is a fold over calendar days in a time zone the server does not store.
 
-use api::proto::breathe::v1 as pb;
+use api::proto::ond::v1 as pb;
 use chrono::{DateTime, Duration, TimeZone, Utc};
 
 use super::{

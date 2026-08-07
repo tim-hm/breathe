@@ -51,7 +51,7 @@
 //! ## What this rejects that you might not expect
 //!
 //! Transactions minted by Xcode's local `StoreKit` configuration file
-//! (`ios/Breathe.storekit`) are signed by a per-machine test certificate, not by
+//! (`ios/Ond/Ond.storekit`) are signed by a per-machine test certificate, not by
 //! Apple. Simulator purchases therefore verify locally, entitle the UI locally,
 //! and are refused here — which is the offline-first design working rather than
 //! failing, since nothing on screen waits on this call. Exercising the server
@@ -73,7 +73,7 @@ use crate::features::entitlement::types::SubscriptionTier;
 /// against Apple's root but names another app is a genuine receipt for somebody
 /// else's product, which is exactly the token a determined caller would reach
 /// for. It has to match `PRODUCT_BUNDLE_IDENTIFIER` in `ios/project.yml`.
-const BUNDLE_ID: &str = "xyz.holmie.breathe";
+const BUNDLE_ID: &str = "xyz.holmie.ond";
 
 /// Everything this app sells, and what each one buys.
 ///
@@ -86,12 +86,12 @@ const BUNDLE_ID: &str = "xyz.holmie.breathe";
 ///
 /// A slice rather than a `match`, so the two ids sit next to each other where a
 /// typo is visible against its neighbour. They have to match
-/// `ios/Breathe/Breathe.storekit`, `PlusProduct` in `BreatheKit`, and App Store
+/// `ios/Ond/Ond.storekit`, `PlusProduct` in `OndKit`, and App Store
 /// Connect; there is no build-time check tying those together, and a mismatch
 /// presents as a paywall with no price and a purchase that never verifies.
 const PRODUCTS: &[(&str, SubscriptionTier)] = &[
-    ("xyz.holmie.breathe.plus.monthly", SubscriptionTier::Plus),
-    ("xyz.holmie.breathe.coach.monthly", SubscriptionTier::Coach),
+    ("xyz.holmie.ond.plus.monthly", SubscriptionTier::Plus),
+    ("xyz.holmie.ond.coach.monthly", SubscriptionTier::Coach),
 ];
 
 /// The only algorithm Apple signs transactions with.
@@ -367,8 +367,8 @@ mod tests {
     #[test]
     fn a_transaction_for_another_product_is_not_ours() {
         for product_id in [
-            "xyz.holmie.breathe.something.else",
-            "xyz.holmie.breathe.plus.yearly",
+            "xyz.holmie.ond.something.else",
+            "xyz.holmie.ond.plus.yearly",
         ] {
             let error = TransactionPayload {
                 product_id: product_id.to_owned(),

@@ -30,7 +30,7 @@ use crate::features::profile::types::ProfileSnapshot;
 use crate::features::technique::service as technique;
 use crate::features::technique::types::{Technique, resolve};
 use crate::identity::UserId;
-use crate::proto::breathe::v1 as pb;
+use crate::proto::ond::v1 as pb;
 
 /// What the `ExplainTechnique` handler returns to tonic.
 pub type ExplanationStream =

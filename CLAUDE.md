@@ -15,8 +15,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
    - Use an active voice. Use camel case for abbreviations in identifiers and type names: `Did`, not `DID`; `TechniqueId`, not `TechniqueID`. Prose keeps the natural form — "the technique's ID".
    - Assume the reader has a working knowledge of the codebase.
 3. **Ergonomics and DX**: Prioritise intuitive API design and developer experience.
-4. **Minimal Environment Footprint**: Environment variables are for secrets and essential boot-time context only. The backend reads exactly three — `BREATHE_ENV`, `DATABASE_URL`, and the optional `OPENROUTER_API_KEY` (a secret, which is what the principle admits; absent, the assistant answers from its rule-based fallback). Everything else is derived in `crates/api/src/config.rs` — including which provider and which model the assistant calls, because a model id that could differ between a laptop and a deployment is exactly the drift this rule exists to prevent. Every new variable is a value that can differ between the two without anything noticing.
-5. **Derivation by Convention**: Ports, log format, and CORS policy derive from `BREATHE_ENV`. Prefer deriving over configuring.
+4. **Minimal Environment Footprint**: Environment variables are for secrets and essential boot-time context only. The backend reads exactly three — `OND_ENV`, `DATABASE_URL`, and the optional `OPENROUTER_API_KEY` (a secret, which is what the principle admits; absent, the assistant answers from its rule-based fallback). Everything else is derived in `crates/api/src/config.rs` — including which provider and which model the assistant calls, because a model id that could differ between a laptop and a deployment is exactly the drift this rule exists to prevent. Every new variable is a value that can differ between the two without anything noticing.
+5. **Derivation by Convention**: Ports, log format, and CORS policy derive from `OND_ENV`. Prefer deriving over configuring.
 6. **Code Structure**: Follow [docs/code-structure.md](docs/code-structure.md) — feature-first (not layer-first), three-tier escalation, and the naming conventions defined there.
 
 ## 2. Architecture
@@ -27,13 +27,13 @@ A Cargo workspace (`crates/`) and two native SwiftUI apps (`ios/`) sharing one P
 proto/          the contract — single source of truth for both languages
 crates/api      axum (JSON) + tonic (gRPC-Web) on one port
 crates/migrate  schema migrations + the seeded technique catalogue
-ios/            two app targets — Breathe (iOS) and BreatheWatch (watchOS) —
-                over one local SwiftPM package, BreatheCore
+ios/            two app targets — Ond (iOS) and OndWatch (watchOS) —
+                over one local SwiftPM package, OndCore
 web/            the marketing one-pager; static files, no build step
 infra/          OpenTofu for the one box the whole thing deploys onto
 ```
 
-All breathe ports live in **18100–18199** (API 18100, Postgres 18101, `web/` preview 18102). See [docs/contributing.md](docs/contributing.md) for why the block starts there.
+All önd ports live in **18100–18199** (API 18100, Postgres 18101, `web/` preview 18102). See [docs/contributing.md](docs/contributing.md) for why the block starts there.
 
 | Pattern        | One-liner                                                                              | Details                                          |
 | :------------- | :------------------------------------------------------------------------------------- | :----------------------------------------------- |
@@ -50,9 +50,9 @@ All breathe ports live in **18100–18199** (API 18100, Postgres 18101, `web/` p
 - **AppState** — `crates/api/src/state.rs`, shared as `Arc<AppState>`.
 - **Features** — `crates/api/src/features/<name>/` with `handlers/`, `service.rs`, `repository.rs`, `types.rs`, `errors.rs`.
 - **gRPC registration** — `crates/api/src/grpc.rs`. **HTTP routes** — `crates/api/src/http/mod.rs`. Both are single aggregation points.
-- **Generated protobuf** — Rust into `OUT_DIR` via `crates/api/build.rs`, re-exported through `crates/api/src/proto.rs`; Swift committed under `ios/Packages/BreatheCore/Sources/BreatheAPI/Generated/`.
-- **Domain models (Swift)** — the `BreatheKit` target in `ios/Packages/BreatheCore/`. Only it touches generated protobuf types; `BreatheAPI` is not a package product, so neither app target can import one.
-- **App targets (Swift)** — `ios/Breathe/` (iOS) and `ios/BreatheWatch/` (watchOS), each with its own composition root over the same three products. What they share and what they deliberately duplicate is in [docs/code-structure.md](docs/code-structure.md).
+- **Generated protobuf** — Rust into `OUT_DIR` via `crates/api/build.rs`, re-exported through `crates/api/src/proto.rs`; Swift committed under `ios/Packages/OndCore/Sources/OndAPI/Generated/`.
+- **Domain models (Swift)** — the `OndKit` target in `ios/Packages/OndCore/`. Only it touches generated protobuf types; `OndAPI` is not a package product, so neither app target can import one.
+- **App targets (Swift)** — `ios/Ond/` (iOS) and `ios/OndWatch/` (watchOS), each with its own composition root over the same three products. What they share and what they deliberately duplicate is in [docs/code-structure.md](docs/code-structure.md).
 
 ## 3. Development
 
@@ -99,5 +99,5 @@ Keep the subject under ~72 characters. The body is for _why_: the constraint tha
 Philosophy and patterns in [docs/testing.md](docs/testing.md).
 
 - **Rust unit** — inline `#[cfg(test)] mod tests` at the bottom of the file under test. Runner is cargo-nextest via `mise run test:rs`, which is scoped to lib and bin targets so it needs no database.
-- **Rust integration** — `crates/api/tests/e2e/`, via `mise run test:e2e`. Drives the production router over a disposable `breathe_test_<name>` database, one per test, using real gRPC-Web framing. Never point these at the dev database; the harness makes that structurally impossible and it should stay that way.
-- **Swift** — Swift Testing, in `ios/Packages/BreatheCore/Tests/`. Runs on the host (the package declares a macOS platform for exactly this reason), so no simulator is needed.
+- **Rust integration** — `crates/api/tests/e2e/`, via `mise run test:e2e`. Drives the production router over a disposable `ond_test_<name>` database, one per test, using real gRPC-Web framing. Never point these at the dev database; the harness makes that structurally impossible and it should stay that way.
+- **Swift** — Swift Testing, in `ios/Packages/OndCore/Tests/`. Runs on the host (the package declares a macOS platform for exactly this reason), so no simulator is needed.

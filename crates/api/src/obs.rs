@@ -81,7 +81,7 @@ pub fn trace_layer() -> TraceLayer<
 /// The span every request runs inside, and the reason the `errors.rs`
 /// conversions need no context of their own.
 ///
-/// `path` is the gRPC method for an RPC (`/breathe.v1.TechniqueService/…`) and
+/// `path` is the gRPC method for an RPC (`/ond.v1.TechniqueService/…`) and
 /// the route for the JSON surface, so one field answers "which operation" for
 /// both protocols. `user_id` is declared empty here and filled in by
 /// [`record_user_id`] once `identity::resolve` knows who is calling.
@@ -240,7 +240,7 @@ mod tests {
                 },
             ));
 
-        let request = Request::post("/breathe.v1.JourneyService/RecordSessions")
+        let request = Request::post("/ond.v1.JourneyService/RecordSessions")
             .body(Body::empty())
             .unwrap();
 
@@ -260,7 +260,7 @@ mod tests {
 
         assert!(logged.contains("method=POST"), "{logged}");
         assert!(
-            logged.contains("path=/breathe.v1.JourneyService/RecordSessions"),
+            logged.contains("path=/ond.v1.JourneyService/RecordSessions"),
             "{logged}"
         );
         assert!(logged.contains(&user_id.to_string()), "{logged}");

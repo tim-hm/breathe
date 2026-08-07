@@ -21,7 +21,7 @@ IDs, keys, and domain-specific values should carry their meaning in the type, no
 
 ### Swift
 
-- Model properties and initialiser parameters typed `String` or `UUID` where the domain has a specific concept. Check `BreatheKit`'s domain models — a `TechniqueId` type used in some places and a raw `String` in others is worse than either alone.
+- Model properties and initialiser parameters typed `String` or `UUID` where the domain has a specific concept. Check `OndKit`'s domain models — a `TechniqueId` type used in some places and a raw `String` in others is worse than either alone.
 - Where a Rust newtype exists and the Swift side uses a primitive for the same concept, say so: the contract is one thing described twice, and the weaker description is where the bug lands.
 
 **Severity guide:**
@@ -55,7 +55,7 @@ Swift has no equivalent workspace lint file, so these checks carry the weight:
 - **`fatalError` / `preconditionFailure` in non-test code.** A crash is not error handling. The exception is a genuinely unreachable branch, which should say so.
 - **`Any` / `AnyObject` / `[String: Any]`.** Each is a missing concrete type. Flag unless at a serialisation boundary with a comment explaining why.
 - **`@unchecked Sendable`.** An assertion the compiler cannot verify. It needs a comment proving the invariant, or it is a data race waiting for a scheduler change.
-- **Missing explicit signatures on public API.** `CLAUDE.md` §1.1 requires explicit types on function signatures. Public functions and initialisers in `BreatheKit` / `BreatheUI` relying on inference are findings; locals inside a body are not.
+- **Missing explicit signatures on public API.** `CLAUDE.md` §1.1 requires explicit types on function signatures. Public functions and initialisers in `OndKit` / `OndUI` relying on inference are findings; locals inside a body are not.
 - **`?? default` swallowing a domain failure.** A nil-coalescing operator that turns a missing required value into a plausible-looking one is the Swift form of silent error swallowing. Distinguish it from a genuine default (an optional preference with a sensible fallback), which is fine.
 
 **Severity guide:**
@@ -79,9 +79,9 @@ The type system should prevent invalid states from being expressible.
 **What to check:**
 
 - **Optional fields that are conditionally required.** A struct where `status` being one variant makes another field mandatory. This should be an enum with associated values (Swift) or a data-carrying enum (Rust), not a struct of optionals. The stage/phase model is the pattern to compare against: an open-ended retention and a fixed cycle are different shapes, and the types should say so.
-- **Boolean flags forming an implicit state machine.** `isLoading` / `isError` / `hasData` on an observable model can express combinations that mean nothing. A single `enum LoadState { idle, loading, loaded(T), failed(Error) }` cannot. Check every `-Model` in `BreatheKit` for this.
+- **Boolean flags forming an implicit state machine.** `isLoading` / `isError` / `hasData` on an observable model can express combinations that mean nothing. A single `enum LoadState { idle, loading, loaded(T), failed(Error) }` cannot. Check every `-Model` in `OndKit` for this.
 - **Parallel collections that must stay index-aligned.** Two arrays where element _i_ of one describes element _i_ of the other.
-- **Proto zero values escaping as domain values.** Every proto3 enum has an `_UNSPECIFIED = 0` the wire can always produce. `docs/transport.md` fixes the handling: Rust maps explicitly, and Swift's `init?(proto:)` returns `nil` for `.unspecified` and `.UNRECOGNIZED`, which the repository turns into `malformedResponse`. A conversion that maps `.unspecified` onto a real domain case — or defaults it — puts a value in front of a user that the server never sent. Check every generated-enum conversion in `BreatheKit`.
+- **Proto zero values escaping as domain values.** Every proto3 enum has an `_UNSPECIFIED = 0` the wire can always produce. `docs/transport.md` fixes the handling: Rust maps explicitly, and Swift's `init?(proto:)` returns `nil` for `.unspecified` and `.UNRECOGNIZED`, which the repository turns into `malformedResponse`. A conversion that maps `.unspecified` onto a real domain case — or defaults it — puts a value in front of a user that the server never sent. Check every generated-enum conversion in `OndKit`.
 - **Loosely typed configuration.** `HashMap<String, String>` or `[String: Any]` where a struct with named fields would be checked. `crates/api/src/config.rs` derives configuration by convention specifically so this doesn't accumulate.
 
 **Severity guide:**

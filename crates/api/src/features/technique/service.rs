@@ -10,7 +10,7 @@ use sqlx::PgPool;
 use super::errors::TechniqueError;
 use super::repository::{self, PhaseRow, StageRow};
 use super::types::{PhaseKind, Technique, TechniqueGoal};
-use crate::proto::breathe::v1 as pb;
+use crate::proto::ond::v1 as pb;
 
 /// The whole catalogue, assembled: every technique with its stages and phases,
 /// in curated presentation order.

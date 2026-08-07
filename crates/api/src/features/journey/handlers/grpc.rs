@@ -6,8 +6,8 @@ use tonic::{Request, Response, Status};
 
 use crate::features::journey::{bolt, leaderboard, sessions};
 use crate::identity;
-use crate::proto::breathe::v1::journey_service_server::JourneyService;
-use crate::proto::breathe::v1::{
+use crate::proto::ond::v1::journey_service_server::JourneyService;
+use crate::proto::ond::v1::{
     DeleteSessionsRequest, DeleteSessionsResponse, GetJourneyRequest, GetJourneyResponse,
     GetLeaderboardRequest, GetLeaderboardResponse, RecordBoltScoreRequest, RecordBoltScoreResponse,
     RecordSessionsRequest, RecordSessionsResponse,

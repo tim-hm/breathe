@@ -34,7 +34,7 @@ pub enum EntitlementError {
     /// The transaction is bound to another identity and may not move to this one
     /// yet.
     ///
-    /// A signed transaction names an Apple account and no breathe identity, so
+    /// A signed transaction names an Apple account and no önd identity, so
     /// without this a token copied off a device entitles every UUID that submits
     /// it. Told to the caller plainly: the honest case is a reinstall, and the
     /// person needs to know the purchase is held rather than broken.

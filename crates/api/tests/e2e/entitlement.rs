@@ -17,7 +17,7 @@ use api::entitlement::{
     SubscriptionTier, Tier, TransactionVerifier, VerificationError, VerifiedTransaction,
 };
 use api::identity::USER_ID_HEADER;
-use api::proto::breathe::v1 as pb;
+use api::proto::ond::v1 as pb;
 use axum::Router;
 use chrono::{Duration, Utc};
 
@@ -26,9 +26,9 @@ use crate::harness::{
     subscribe,
 };
 
-const SUBMIT: &str = "/breathe.v1.EntitlementService/SubmitAppStoreTransaction";
-const GET: &str = "/breathe.v1.EntitlementService/GetEntitlement";
-const GET_RECOMMENDATION: &str = "/breathe.v1.AssistantService/GetRecommendation";
+const SUBMIT: &str = "/ond.v1.EntitlementService/SubmitAppStoreTransaction";
+const GET: &str = "/ond.v1.EntitlementService/GetEntitlement";
+const GET_RECOMMENDATION: &str = "/ond.v1.AssistantService/GetRecommendation";
 
 const USER: &str = "e07171e0-0000-4000-8000-000000000001";
 const OTHER_USER: &str = "e07171e0-0000-4000-8000-000000000002";

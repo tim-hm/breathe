@@ -9,11 +9,11 @@ use std::path::PathBuf;
 
 const PROTO_ROOT: &str = "../../proto";
 const SERVICE_PROTOS: &[&str] = &[
-    "../../proto/breathe/v1/assistant_service.proto",
-    "../../proto/breathe/v1/entitlement_service.proto",
-    "../../proto/breathe/v1/journey_service.proto",
-    "../../proto/breathe/v1/profile_service.proto",
-    "../../proto/breathe/v1/technique_service.proto",
+    "../../proto/ond/v1/assistant_service.proto",
+    "../../proto/ond/v1/entitlement_service.proto",
+    "../../proto/ond/v1/journey_service.proto",
+    "../../proto/ond/v1/profile_service.proto",
+    "../../proto/ond/v1/technique_service.proto",
 ];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -23,7 +23,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Emitted so tonic-reflection can serve the schema, which is what makes
         // `grpcurl` work against a running server without a local copy of the
         // .proto files.
-        .file_descriptor_set_path(out_dir.join("breathe_v1_descriptor.bin"))
+        .file_descriptor_set_path(out_dir.join("ond_v1_descriptor.bin"))
         .compile_protos(SERVICE_PROTOS, &[PROTO_ROOT])?;
 
     // The whole directory, not just the files above: adding a .proto must

@@ -12,7 +12,7 @@ use super::repository::{self, EntitlementRow, TransactionHolder};
 use super::types::{Entitlement, Tier};
 use super::verifier::{TransactionVerifier, VerifiedTransaction};
 use crate::identity::UserId;
-use crate::proto::breathe::v1 as pb;
+use crate::proto::ond::v1 as pb;
 
 /// The largest token this server will look at.
 ///
@@ -67,7 +67,7 @@ pub async fn submit_transaction(
 
 /// Grants the purchase, having first established that this caller may hold it.
 ///
-/// A signed transaction names an Apple account, not a breathe identity, and
+/// A signed transaction names an Apple account, not an önd identity, and
 /// nothing in it says who may submit it — so a token copied off a device
 /// entitles whoever sends it unless the server binds it. The binding is made on
 /// first claim and enforced by

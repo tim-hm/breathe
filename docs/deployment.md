@@ -29,7 +29,7 @@ The public entrance is Caddy on 443 (80 redirects and answers ACME challenges), 
 
 `web/` is two static files — `index.html` and `style.css`, no build step and no bundler. `mise run deploy` rsyncs the directory to `/srv/ond/web/`, which `infra/box/compose.yaml` mounts read-only into Caddy.
 
-`infra/box/Caddyfile` splits the hostname by path rather than running a second one, so there is one A record and one certificate. The API side is enumerated (`/breathe.v1.*`, `/health`, `/about`) and the site is the fallback, never the other way round: matching the proto package prefix covers every service the contract will ever grow, so a static file can never shadow an RPC.
+`infra/box/Caddyfile` splits the hostname by path rather than running a second one, so there is one A record and one certificate. The API side is enumerated (`/ond.v1.*`, `/health`, `/about`) and the site is the fallback, never the other way round: matching the proto package prefix covers every service the contract will ever grow, so a static file can never shadow an RPC.
 
 The one-pager's technique glyphs are the reference for the apps' own drawings, with nothing checking the two agree — see [code-structure.md](code-structure.md) before editing them.
 
@@ -39,7 +39,7 @@ The container gets exactly the three variables `crates/api/src/config.rs` reads,
 
 | Variable             | Required | Where it comes from                                                              |
 | :------------------- | :------- | :------------------------------------------------------------------------------- |
-| `BREATHE_ENV`        | yes      | Literal `production` in `infra/box/compose.yaml` — JSON logs, no permissive CORS |
+| `OND_ENV`            | yes      | Literal `production` in `infra/box/compose.yaml` — JSON logs, no permissive CORS |
 | `DATABASE_URL`       | yes      | Assembled in the same file from the generated `POSTGRES_PASSWORD`                |
 | `OPENROUTER_API_KEY` | no       | `/srv/data/ond.env`, added by hand — see below                                   |
 
@@ -97,7 +97,7 @@ Every subsequent release is step 6 alone.
 
 ```sh
 aws s3 cp s3://<backup_bucket>/ond-<date>.sql.gz - | gunzip |
-  ssh ubuntu@<elastic_ip> 'docker compose -f /srv/ond/compose.yaml exec -T db psql -U postgres breathe'
+  ssh ubuntu@<elastic_ip> 'docker compose -f /srv/ond/compose.yaml exec -T db psql -U postgres ond'
 ```
 
 Restores into the live database; for a from-scratch rebuild, apply migrations first (`deploy` does) and restore over the empty schema.
