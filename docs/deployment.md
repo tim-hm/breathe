@@ -56,26 +56,26 @@ The key never leaves the box: the model is called server-side precisely so no bu
 
 Two AWS profiles, and the split is the point:
 
-| Profile  | Who                         | May run                                           |
-| :------- | :-------------------------- | :------------------------------------------------ |
-| `holmie` | the account root            | `infra:bootstrap:*`, once, and nothing else       |
-| `ond`    | the `breathe-tofu` IAM user | everything: `infra:plan`, `infra:apply`, `deploy` |
+| Profile  | Who                     | May run                                           |
+| :------- | :---------------------- | :------------------------------------------------ |
+| `holmie` | the account root        | `infra:bootstrap:*`, once, and nothing else       |
+| `ond`    | the `ond-tofu` IAM user | everything: `infra:plan`, `infra:apply`, `deploy` |
 
 The mise tasks pin `AWS_PROFILE` themselves, so neither is something to remember or export.
 
 State lives in the S3 bucket `infra/bootstrap` creates — versioned, encrypted, private, TLS-only, and `prevent_destroy`. Locking is OpenTofu's S3-native `use_lockfile`; the DynamoDB table older Terraform documentation calls for does not exist and is not needed.
 
-That bucket and the IAM user keep the names they were bootstrapped under, from before the app was called önd. Both are read only by an operator, and renaming them means standing up replacements and migrating state to change a string nobody sees — which is a worse trade than the inconsistency. The state _key_ did move (`ond/infra/terraform.tfstate`), because this deployment was provisioned from scratch under the new name.
+The bucket is `ond-tfstate-136339248297` and the user is `ond-tofu` — both renamed from `breathe-*` after the app became önd, so nothing in the account still answers to the old name. The bucket name is written in two places that nothing reconciles: `state_bucket` in `infra/bootstrap/variables.tf`, which creates it, and the `backend "s3"` block in `infra/versions.tf`, which reads it. Renaming it again means creating the new bucket from bootstrap first, then `tofu -chdir=infra init -migrate-state`; editing the backend literal on its own points it at a bucket that does not exist and strands every resource.
 
 `infra/bootstrap` keeps **local** state, because it builds the bucket the other root stores state in. Losing that file is not an incident: it manages one bucket and one IAM user, both named, both re-importable in two commands.
 
 ## Bootstrap (once per AWS account)
 
-1. `mise run infra:bootstrap:init`, then `mise run infra:bootstrap:apply` — creates the state bucket and the `breathe-tofu` IAM user. This is the only step that runs as the account root.
+1. `mise run infra:bootstrap:init`, then `mise run infra:bootstrap:apply` — creates the state bucket and the `ond-tofu` IAM user. This is the only step that runs as the account root.
 2. Mint the user's credential. Tofu deliberately does not, because the provider would write the secret into a state file in plaintext:
 
    ```sh
-   aws iam create-access-key --user-name breathe-tofu --profile holmie
+   aws iam create-access-key --user-name ond-tofu --profile holmie
    ```
 
 3. Put it in `~/.aws/credentials` under `[ond]`, with a matching `[profile ond]` (`region = eu-west-2`) in `~/.aws/config`.

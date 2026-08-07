@@ -19,14 +19,11 @@ terraform {
   # `use_lockfile` is OpenTofu's S3-native locking. The DynamoDB table the old
   # Terraform docs call for is not needed and is not created.
   #
-  # The bucket keeps the name it was bootstrapped under. Renaming it would mean
-  # creating a second bucket and migrating state into it, to change a string
-  # only an operator ever reads — and the bucket carries `prevent_destroy`
-  # precisely because state is the one thing here that is not reproducible. The
-  # key does change: this deployment is provisioned from scratch under the new
-  # name, and a fresh key is what makes that a clean slate rather than an edit.
+  # `bucket` must match `state_bucket` in infra/bootstrap/variables.tf verbatim;
+  # nothing reconciles the two literals. Renaming it is a state migration, not
+  # an edit to this string — the procedure is in docs/deployment.md.
   backend "s3" {
-    bucket       = "breathe-tfstate-136339248297"
+    bucket       = "ond-tfstate-136339248297"
     key          = "ond/infra/terraform.tfstate"
     region       = "eu-west-2"
     use_lockfile = true

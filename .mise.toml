@@ -353,7 +353,7 @@ dir = "{{config_root}}/infra/bootstrap"
 run = "tofu init"
 
 [tasks."infra:bootstrap:apply"]
-description = "Create the OpenTofu state bucket and the breathe-tofu IAM user (runs as account root; once)"
+description = "Create the OpenTofu state bucket and the ond-tofu IAM user (runs as account root; once)"
 dir = "{{config_root}}/infra/bootstrap"
 env = { AWS_PROFILE = "holmie" }
 run = "tofu apply"
