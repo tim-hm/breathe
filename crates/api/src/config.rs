@@ -12,7 +12,11 @@
 //! which model are constants below, so a laptop and a deployment cannot end up
 //! talking to different models without anybody noticing.
 
+use std::fmt;
+use std::str::FromStr;
+
 use anyhow::{Context, Result};
+use sqlx::postgres::PgConnectOptions;
 
 /// Which deployment this process is. Chosen from `BREATHE_ENV`; everything
 /// environment-dependent is a `match` on this rather than another variable.
@@ -22,7 +26,7 @@ pub enum Environment {
     Production,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Config {
     pub environment: Environment,
     pub database_url: String,
@@ -34,6 +38,53 @@ pub struct Config {
     /// The key never leaves this process — it is why the model is called from
     /// the server rather than the app at all.
     pub openrouter_api_key: Option<String>,
+}
+
+/// Hand-written because the derive published both credentials.
+///
+/// `database_url` carries the Postgres password inline in the deployed compose
+/// file and `openrouter_api_key` is the provider key, and `AppState` holds the
+/// whole struct — so one `tracing::error!(?config, …)` or one
+/// `.context(format!("{config:?}"))` would have put both in the production JSON
+/// stream permanently, with nothing failing to compile. The field doc above
+/// claims the key never leaves this process; this impl is what makes it true.
+impl fmt::Debug for Config {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Config")
+            .field("environment", &self.environment)
+            .field("database_url", &redacted(&self.database_url))
+            .field("port", &self.port)
+            .field(
+                "openrouter_api_key",
+                &self.openrouter_api_key.as_ref().map(|_| REDACTED),
+            )
+            .finish()
+    }
+}
+
+const REDACTED: &str = "<redacted>";
+
+/// Where the pool points, with the credentials taken out.
+///
+/// Parsed rather than cut down with string surgery: the parser is the thing
+/// that knows which part is the password, and a hand-written cut would
+/// eventually meet a URL shaped differently from the one it was written
+/// against. Note that sqlx's own `to_url_lossy` is not the shortcut it looks
+/// like — it writes the password back in. An unparseable value redacts whole,
+/// because a `Debug` impl has nowhere to report a failure and guessing is
+/// exactly how a password reaches a log.
+fn redacted(database_url: &str) -> String {
+    PgConnectOptions::from_str(database_url).map_or_else(
+        |_| REDACTED.to_owned(),
+        |options| {
+            format!(
+                "{}:{}/{}",
+                options.get_host(),
+                options.get_port(),
+                options.get_database().unwrap_or_default()
+            )
+        },
+    )
 }
 
 impl Environment {
@@ -182,6 +233,26 @@ mod tests {
             secret_from(Ok("  sk-or-v1-example  ".to_owned())),
             Some("sk-or-v1-example".to_owned()),
             "a key pasted with whitespace around it is still that key"
+        );
+    }
+
+    /// The check that survives the next editor: whatever else the impl prints,
+    /// neither credential may appear. Re-deriving `Debug` fails this.
+    #[test]
+    fn debug_redacts_both_credentials() {
+        let config = Config {
+            environment: Environment::Production,
+            database_url: "postgres://postgres:hunter2@db:5432/breathe?sslmode=disable".to_owned(),
+            port: DEFAULT_PORT,
+            openrouter_api_key: Some("sk-or-v1-example".to_owned()),
+        };
+
+        let rendered = format!("{config:?}");
+        assert!(!rendered.contains("hunter2"), "{rendered}");
+        assert!(!rendered.contains("sk-or-v1-example"), "{rendered}");
+        assert!(
+            rendered.contains("db:5432/breathe"),
+            "the host and database name are the part worth keeping: {rendered}"
         );
     }
 
