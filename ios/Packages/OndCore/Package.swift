@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 import PackageDescription
 
 // One package, four targets — not four packages. SwiftPM offers no way to
@@ -16,10 +16,17 @@ let package = Package(
     // Connect, leaving a booted simulator as the only way to run a unit test —
     // which is not a dependency a decoding test should have.
     //
-    // watchOS 11 is the floor that pairs with iOS 18 — the watch app ships
+    // watchOS 26 is the floor that pairs with iOS 26 — the watch app ships
     // alongside the phone app, so the two move together rather than the wrist
-    // dragging a lower floor into the shared targets.
-    platforms: [.iOS(.v18), .macOS(.v14), .watchOS(.v11)],
+    // dragging a lower floor into the shared targets. The floor sits at 26
+    // because the phone's chrome is built on Liquid Glass — the minimising tab
+    // bar — and an unreleased app has no installed base to strand by asking for
+    // it unconditionally.
+    //
+    // The tools-version above is 6.2 for this line alone: `.v26` was not a
+    // `SupportedPlatform` case before it, and the string form would trade a
+    // checked constant for a literal nothing validates.
+    platforms: [.iOS(.v26), .macOS(.v14), .watchOS(.v26)],
     products: [
         .library(name: "OndKit", targets: ["OndKit"]),
         .library(name: "OndUI", targets: ["OndUI"]),

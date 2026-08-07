@@ -8,8 +8,8 @@ name: Ond
 options:
   bundleIdPrefix: xyz.holmie
   deploymentTarget:
-    iOS: "18.0"
-    watchOS: "11.0"
+    iOS: "26.0"
+    watchOS: "26.0"
   # Mirrors the on-disk folder structure in Xcode's navigator, so Features/
   # reads the same in the IDE as it does in the repo.
   createIntermediateGroups: true

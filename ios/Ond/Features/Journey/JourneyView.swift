@@ -43,6 +43,17 @@ struct JourneyView: View {
             }
             .paletteGround()
             .navigationTitle("Journey")
+            // The gear lives here because a tab bar is for content sections and
+            // this is the screen about the person the settings belong to.
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        SettingsView(catalogue: catalogue)
+                    } label: {
+                        Label("Settings", systemImage: "gearshape")
+                    }
+                }
+            }
         }
         // Local read first, so the screen is complete before anything touches
         // the network; the sync then runs behind what is already drawn.

@@ -8,8 +8,8 @@ import SwiftUI
 /// No bubbles, no avatars, no timestamps: the person's questions sit small and
 /// quiet, the coach's answers read as body text, and the whole screen keeps
 /// the calm register of the exercise pages the coach talks about. Reached only
-/// from the Exercises tab's coach line, and only by Coach holders — the tier
-/// gate lives at that entry, not here.
+/// through `CoachRootView`, which is where the tier gate lives — this screen
+/// assumes it is being read by somebody who holds Coach.
 ///
 /// Phone-only by design. The watch deliberately has no chat surface: text
 /// entry is hostile on the wrist, and dictating a coaching question into a
@@ -34,8 +34,6 @@ struct CoachChatView: View {
             composer
         }
         .paletteGround()
-        .navigationTitle("Coach")
-        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 speakBackToggle

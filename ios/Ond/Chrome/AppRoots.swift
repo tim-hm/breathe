@@ -17,14 +17,20 @@ struct AppRoots {
     let journey: JourneyModel
     let profiles: ProfileStore
     let foundations: FoundationsModel
-    let schedules: ScheduleStore
+
+    /// Lent by the chrome — see `AppChrome` for why it holds the aim.
+    let goal: Binding<TechniqueGoal?>
 
     var homeRoot: some View {
-        HomeView(model: catalogue, sessions: sessions)
+        HomeView(model: catalogue, sessions: sessions, goal: goal)
     }
 
     var exercisesRoot: some View {
         TechniqueListView(model: catalogue, sessions: sessions)
+    }
+
+    var coachRoot: some View {
+        CoachRootView()
     }
 
     var journeyRoot: some View {
@@ -34,11 +40,5 @@ struct AppRoots {
             catalogue: catalogue,
             foundations: foundations
         )
-    }
-
-    /// Settings, with no `onDone`: it is a root behind a word like any other,
-    /// not a sheet that has to offer its own way out.
-    var settingsRoot: some View {
-        SettingsView(schedules: schedules, catalogue: catalogue)
     }
 }
