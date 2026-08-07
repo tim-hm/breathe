@@ -76,7 +76,7 @@ struct TechniqueSeed {
     /// per technique, and one for everything that is a single cycle repeated —
     /// rounds only earn their name in a staged protocol.
     recommended_rounds: i32,
-    /// Whether this one is behind Breathe Plus.
+    /// Whether this one is behind önd Plus.
     ///
     /// Stated per technique with no default behind it, because the column has
     /// none: a new technique cannot be added without someone deciding, which is

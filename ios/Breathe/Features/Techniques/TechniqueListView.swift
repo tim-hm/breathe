@@ -179,7 +179,7 @@ private struct TechniqueRow: View {
                             // lock is the app offering something, not the app
                             // telling somebody off.
                             .foregroundStyle(Theme.Accent.brand)
-                            .accessibilityLabel("Included with Breathe Plus")
+                            .accessibilityLabel("Included with önd Plus")
                     }
                 }
 

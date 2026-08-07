@@ -34,13 +34,13 @@
           "localizations" : [
             {
               "description" : "Every technique in the catalogue — sleep, focus and energy protocols, and the Wim Hof-style rounds.",
-              "displayName" : "Breathe Plus",
+              "displayName" : "önd Plus",
               "locale" : "en_US"
             }
           ],
           "productID" : "xyz.holmie.breathe.plus.monthly",
           "recurringSubscriptionPeriod" : "P1M",
-          "referenceName" : "Breathe Plus (monthly)",
+          "referenceName" : "önd Plus (monthly)",
           "subscriptionGroupID" : "21571893",
           "type" : "RecurringSubscription"
         },
@@ -59,13 +59,13 @@
           "localizations" : [
             {
               "description" : "Everything in Plus, and an assistant that reads your practice: where to start, and why any technique works, written for you.",
-              "displayName" : "Breathe Coach",
+              "displayName" : "önd Coach",
               "locale" : "en_US"
             }
           ],
           "productID" : "xyz.holmie.breathe.coach.monthly",
           "recurringSubscriptionPeriod" : "P1M",
-          "referenceName" : "Breathe Coach (monthly)",
+          "referenceName" : "önd Coach (monthly)",
           "subscriptionGroupID" : "21571893",
           "type" : "RecurringSubscription"
         }

@@ -62,7 +62,7 @@ struct OrbBeginButton: View {
         .buttonStyle(OrbPress())
         .accessibilityLabel("Begin \(technique.name)")
         .accessibilityHint(
-            isLocked ? "Shows what Breathe Plus includes" : "Starts the session"
+            isLocked ? "Shows what önd Plus includes" : "Starts the session"
         )
     }
 }

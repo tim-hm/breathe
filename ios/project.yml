@@ -76,7 +76,7 @@ targets:
         # constant is what views ask for.
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
-        INFOPLIST_KEY_CFBundleDisplayName: Breathe
+        INFOPLIST_KEY_CFBundleDisplayName: önd
         # Portrait only. A breathing session is held still in one hand; a
         # rotation mid-cycle interrupts the one thing the app is for.
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
@@ -107,15 +107,15 @@ targets:
         # can be denied with no prompt at all — a silent transport error that
         # looks exactly like the server being down.
         NSLocalNetworkUsageDescription: >-
-          During development, Breathe connects to the development server on your local network to load the technique catalogue.
+          During development, önd connects to the development server on your local network to load the technique catalogue.
         # Both Health strings are shown in the system's authorization sheet,
         # and App Review rejects vague ones. The share string ships ahead of
         # the read feature it describes: the key must be in the bundle before
         # the first read request, and a missing key is a crash, not a refusal.
         NSHealthShareUsageDescription: >-
-          Breathe reads your resting heart rate and heart-rate variability trends, and shares them with your coach only when you choose to, so its guidance can reflect how your body is responding.
+          önd reads your resting heart rate and heart-rate variability trends, and shares them with your coach only when you choose to, so its guidance can reflect how your body is responding.
         NSHealthUpdateUsageDescription: >-
-          Breathe records each breathing session you keep in Health as Mindful Minutes.
+          önd records each breathing session you keep in Health as Mindful Minutes.
 
   BreatheWatch:
     type: application
@@ -139,7 +139,7 @@ targets:
         # rejects the bundle outright if it does not hold.
         PRODUCT_BUNDLE_IDENTIFIER: xyz.holmie.breathe.watchkitapp
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: Breathe
+        INFOPLIST_KEY_CFBundleDisplayName: önd
     # Same generated-not-committed arrangement as the phone target's.
     entitlements:
       path: BreatheWatch/BreatheWatch.entitlements
@@ -174,12 +174,12 @@ targets:
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         NSLocalNetworkUsageDescription: >-
-          During development, Breathe connects to the development server on your local network to load the technique catalogue.
+          During development, önd connects to the development server on your local network to load the technique catalogue.
         # Same two Health strings as the phone target, same App Review stakes.
         NSHealthShareUsageDescription: >-
-          Breathe reads your resting heart rate and heart-rate variability trends, and shares them with your coach only when you choose to, so its guidance can reflect how your body is responding.
+          önd reads your resting heart rate and heart-rate variability trends, and shares them with your coach only when you choose to, so its guidance can reflect how your body is responding.
         NSHealthUpdateUsageDescription: >-
-          Breathe records each breathing session you keep in Health as Mindful Minutes.
+          önd records each breathing session you keep in Health as Mindful Minutes.
 
 schemes:
   Breathe:

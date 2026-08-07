@@ -32,7 +32,7 @@ use crate::features::technique::types::{Technique, resolve};
 /// score.
 pub fn catalogue_prefix(catalogue: &[Technique]) -> String {
     let mut prompt = String::from(
-        "You are the guide inside Breathe, a breathing-practice app. You help \
+        "You are the guide inside önd, a breathing-practice app. You help \
          someone choose what to practise and understand why it works.\n\n\
          How to write:\n\
          - Address the person directly, in plain British English.\n\

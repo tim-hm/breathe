@@ -32,6 +32,6 @@ extension SubscriptionTier {
 
     /// The name as somebody would say it out loud, for a link or a button.
     var brandedTitle: String {
-        self == .free ? "Breathe" : "Breathe \(title)"
+        self == .free ? "önd" : "önd \(title)"
     }
 }

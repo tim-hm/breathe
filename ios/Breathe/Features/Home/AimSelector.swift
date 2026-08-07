@@ -238,7 +238,7 @@ struct AimSelector: View {
     /// names a punishment, and this glyph is the app offering something.
     private func label(for aim: TechniqueGoal) -> String {
         locked.contains(aim)
-            ? "\(aim.intentObject), included with Breathe Plus"
+            ? "\(aim.intentObject), included with önd Plus"
             : aim.intentObject
     }
 

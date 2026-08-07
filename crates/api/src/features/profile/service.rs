@@ -43,6 +43,11 @@ const DENIED_DISPLAY_NAME_FRAGMENTS: &[&str] = &[
     "moderator",
     "official",
     "support",
+    // Both spellings of the new name, and the old one it was renamed from: a
+    // display name impersonating the team is no less confusing for naming a
+    // brand the app used to answer to.
+    "ond team",
+    "önd team",
     "breathe team",
     "staff",
     "fuck",

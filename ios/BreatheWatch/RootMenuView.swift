@@ -34,6 +34,6 @@ struct RootMenuView: View {
                 Label("Settings", systemImage: "gearshape")
             }
         }
-        .navigationTitle("Breathe")
+        .navigationTitle("önd")
     }
 }

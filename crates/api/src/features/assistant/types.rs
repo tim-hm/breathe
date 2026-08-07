@@ -221,7 +221,7 @@ pub const RECOMMENDATION_COUNT: usize = 3;
 /// Model calls one person may make per UTC day, or `None` for a tier that does
 /// not buy the model at all.
 ///
-/// The language model *is* Breathe Coach — it is the only thing in the app with
+/// The language model *is* önd Coach — it is the only thing in the app with
 /// a marginal cost, and the only reason the top tier exists. So the answer is
 /// `None` below it, and a ceiling above it.
 ///

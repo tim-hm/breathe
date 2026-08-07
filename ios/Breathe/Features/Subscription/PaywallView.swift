@@ -75,7 +75,7 @@ struct PaywallView: View {
 
             Text(
                 """
-                Breathe works without either of these. They open up the rest of \
+                önd works without either of these. They open up the rest of \
                 the catalogue, and an assistant that reads what you told us and \
                 answers in your own words.
                 """

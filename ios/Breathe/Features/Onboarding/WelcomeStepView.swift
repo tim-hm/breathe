@@ -16,10 +16,13 @@ struct WelcomeStepView: View {
     @State private var hasArrived = false
 
     /// The wordmark's letter spacing, scaled with its own type. A fixed value
-    /// beside a Dynamic Type font closes up as the letters grow, which turns
-    /// spaced capitals into ordinary ones at exactly the sizes somebody asked
-    /// for larger text.
-    @ScaledMetric(relativeTo: .body) private var wordmarkTracking: CGFloat = 7
+    /// beside a Dynamic Type font closes up as the letters grow, which turns a
+    /// spaced wordmark into an ordinary word at exactly the sizes somebody
+    /// asked for larger text.
+    ///
+    /// A third of what the old seven-letter wordmark carried: the same airiness
+    /// reads as a gulf across three glyphs.
+    @ScaledMetric(relativeTo: .title2) private var wordmarkTracking: CGFloat = 3
 
     var body: some View {
         VStack(spacing: Theme.Spacing.loose) {
@@ -27,8 +30,12 @@ struct WelcomeStepView: View {
                 .padding(.top, Theme.Spacing.loose)
 
             VStack(spacing: Theme.Spacing.standard) {
-                Text("BREATHE")
-                    .font(.system(.body, design: .serif, weight: .medium))
+                // Lowercase, and never uppercased: the name is önd, and ÖND is
+                // a different word wearing its hat. A size up from the old
+                // wordmark, because three lowercase glyphs hold less width than
+                // seven capitals did.
+                Text("önd")
+                    .font(.system(.title2, design: .serif, weight: .medium))
                     .tracking(wordmarkTracking)
                     .foregroundStyle(Theme.Ink.secondary)
 

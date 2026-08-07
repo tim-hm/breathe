@@ -34,7 +34,7 @@ struct BreatheApp: App {
     /// detail screen and the session that reads the setting are not adjacent.
     @State private var settings = SessionSettings()
 
-    /// Whether this person has Breathe Plus. In the environment for the same
+    /// Whether this person has önd Plus. In the environment for the same
     /// reason `settings` is: the surfaces that offer a subscription — the
     /// assistant's two strips, and the paywall they open — are nowhere near
     /// here, and threading a parameter through every screen between would touch

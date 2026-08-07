@@ -40,11 +40,11 @@ public nonisolated enum Breathe_V1_EntitlementTier: SwiftProtobuf.Enum, Swift.Ca
   /// journey and its leaderboards, schedules, the journal, the basics.
   case free // = 1
 
-  /// Breathe Plus. The full catalogue, and everything the app does that does not
+  /// önd Plus. The full catalogue, and everything the app does that does not
   /// cost us money per use.
   case plus // = 2
 
-  /// Breathe Coach. Plus, and the assistant backed by a language model —
+  /// önd Coach. Plus, and the assistant backed by a language model —
   /// recommendations written for this person and explanations at their level.
   /// The one tier with a marginal cost behind it, which is why it is the one
   /// tier this server enforces.
