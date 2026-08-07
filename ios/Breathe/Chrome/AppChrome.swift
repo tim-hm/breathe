@@ -63,7 +63,7 @@ struct AppChrome: View {
                 drawerChoice = choice
                 isShowingDrawer = false
             }
-            .presentationDetents([.height(180)])
+            .presentationDetents([.height(ChromeDrawer.detentHeight)])
             // The visual echo of the swipe that opened it, and the one hint
             // the drawer can be dragged back down.
             .presentationDragIndicator(.visible)
