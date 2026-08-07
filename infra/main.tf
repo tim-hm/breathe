@@ -304,3 +304,19 @@ resource "aws_route53_record" "apex_txt" {
   ttl     = 3600
   records = ["google-site-verification=ytC4-ZAJ7dO3fLsV52iJmQDu8h27cLFsmFcLHrwgCdg"]
 }
+
+# Hands mail for the domain to Google Workspace. One host at priority 1, not the
+# five ASPMX records older guides still give: Google replaced that set with a
+# single target, and mixing the two is how a domain ends up delivering to both
+# generations of the same service.
+#
+# The box runs no mail server, so this is the only thing that will ever accept
+# mail here — the API's own outbound notifications, if they ever exist, are a
+# provider's API and not this record.
+resource "aws_route53_record" "apex_mx" {
+  zone_id = aws_route53_zone.primary.zone_id
+  name    = aws_route53_zone.primary.name
+  type    = "MX"
+  ttl     = 3600
+  records = ["1 smtp.google.com."]
+}
