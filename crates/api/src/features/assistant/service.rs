@@ -17,7 +17,8 @@ use tokio_stream::{Stream, StreamExt as _};
 use super::errors::AssistantError;
 use super::model::{ModelClient, ModelRequest};
 use super::types::{
-    EXPLANATION_MAX_TOKENS, RECOMMENDATION_MAX_TOKENS, Recommendation, daily_model_calls,
+    EXPLANATION_MAX_TOKENS, HealthContext, RECOMMENDATION_MAX_TOKENS, Recommendation,
+    daily_model_calls,
 };
 use super::{fallback, parse, prompt, repository};
 use crate::features::entitlement::service as entitlement;
@@ -45,22 +46,32 @@ pub async fn get_recommendation(
     pool: &PgPool,
     model: &dyn ModelClient,
     user_id: UserId,
+    health: Option<pb::HealthContext>,
 ) -> Result<pb::GetRecommendationResponse, AssistantError> {
     let (catalogue, profile, practice, tier) = read_context(pool, user_id).await?;
     if catalogue.is_empty() {
         return Err(AssistantError::EmptyCatalogue);
     }
 
-    let (recommendations, source) =
-        match model_recommendations(pool, model, user_id, tier, &catalogue, &profile, &practice)
-            .await
-        {
-            Some(recommendations) => (recommendations, pb::AssistantSource::Model),
-            None => (
-                fallback::recommendations(&catalogue, &profile, &practice),
-                pb::AssistantSource::Fallback,
-            ),
-        };
+    let health = clamp_health(health);
+    let (recommendations, source) = match model_recommendations(
+        pool,
+        model,
+        user_id,
+        tier,
+        &catalogue,
+        &profile,
+        &practice,
+        health.as_ref(),
+    )
+    .await
+    {
+        Some(recommendations) => (recommendations, pb::AssistantSource::Model),
+        None => (
+            fallback::recommendations(&catalogue, &profile, &practice),
+            pb::AssistantSource::Fallback,
+        ),
+    };
 
     Ok(pb::GetRecommendationResponse {
         recommendations: recommendations.into_iter().map(to_proto).collect(),
@@ -110,6 +121,7 @@ async fn read_context(
 /// unusable" into one `None` is deliberate: the caller does the same thing in
 /// all four cases, and a service that branched on them would be four paths
 /// where three are untested.
+#[allow(clippy::too_many_arguments)] // the RPC's whole read context, threaded once
 async fn model_recommendations(
     pool: &PgPool,
     model: &dyn ModelClient,
@@ -118,6 +130,7 @@ async fn model_recommendations(
     catalogue: &[Technique],
     profile: &ProfileSnapshot,
     practice: &PracticeSnapshot,
+    health: Option<&HealthContext>,
 ) -> Option<Vec<Recommendation>> {
     if !model.is_available() || !claim_call(pool, user_id, tier).await {
         return None;
@@ -125,7 +138,7 @@ async fn model_recommendations(
 
     let request = ModelRequest {
         cacheable_prefix: prompt::catalogue_prefix(catalogue),
-        instruction: prompt::recommendation_instruction(profile, practice, catalogue),
+        instruction: prompt::recommendation_instruction(profile, practice, catalogue, health),
         max_tokens: RECOMMENDATION_MAX_TOKENS,
     };
 
@@ -166,11 +179,14 @@ pub async fn explain_technique(
     model: &dyn ModelClient,
     user_id: UserId,
     slug: &str,
+    health: Option<pb::HealthContext>,
 ) -> Result<ExplanationStream, AssistantError> {
     let (catalogue, profile, practice, tier) = read_context(pool, user_id).await?;
     let technique = resolve(&catalogue, slug).ok_or_else(|| {
         AssistantError::UnknownTechnique(format!("no technique has the slug `{slug}`"))
     })?;
+
+    let health = clamp_health(health);
 
     // Availability first, so a process with no key configured — a fresh clone,
     // CI, the whole e2e suite — neither writes a quota row nor builds a prompt
@@ -179,7 +195,11 @@ pub async fn explain_technique(
         let request = ModelRequest {
             cacheable_prefix: prompt::catalogue_prefix(&catalogue),
             instruction: prompt::explanation_instruction(
-                technique, &profile, &practice, &catalogue,
+                technique,
+                &profile,
+                &practice,
+                &catalogue,
+                health.as_ref(),
             ),
             max_tokens: EXPLANATION_MAX_TOKENS,
         };
@@ -279,6 +299,26 @@ async fn claim_call(pool: &PgPool, user_id: UserId, tier: Tier) -> bool {
             false
         }
     }
+}
+
+/// The wire health context as the domain type, clamped, or `None` when
+/// nothing usable was sent.
+///
+/// This is the only place the wire message is read, and the value it produces
+/// lives exactly as long as the call: nothing here or downstream persists it,
+/// and nothing formats it — the domain type deliberately cannot be (see
+/// [`HealthContext`]). The wire message itself derives `Debug` like every
+/// prost type, so it must never be handed to `tracing` either; keeping the
+/// conversion at the top of each RPC keeps its scope one screen tall.
+fn clamp_health(health: Option<pb::HealthContext>) -> Option<HealthContext> {
+    health.and_then(|context| {
+        HealthContext::clamped(
+            context.resting_hr_bpm,
+            context.resting_hr_trend_bpm,
+            context.hrv_sdnn_ms,
+            context.hrv_sdnn_trend_ms,
+        )
+    })
 }
 
 fn to_proto(recommendation: Recommendation) -> pb::Recommendation {

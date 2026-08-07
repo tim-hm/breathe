@@ -101,6 +101,95 @@ pub fn bolt_phrase(bolt: &BoltSnapshot) -> String {
     )
 }
 
+/// The physiological ranges a client-supplied health summary must sit inside.
+///
+/// Wide on purpose: these are not clinical reference ranges but the bounds of
+/// what a wrist sensor could plausibly have measured on a living wearer — a
+/// resting heart rate outside 25–150 bpm, or an SDNN outside 1–300 ms, is a
+/// sensor artefact or a fabricated request, and either way not something the
+/// coach should be reasoning from. The trend windows are the widest week-over-
+/// baseline shift a genuine wearer could show; anything larger reads as a
+/// different person wearing the watch.
+const RESTING_HR_BPM_RANGE: std::ops::RangeInclusive<i32> = 25..=150;
+const RESTING_HR_TREND_BPM_RANGE: std::ops::RangeInclusive<i32> = -40..=40;
+const HRV_SDNN_MS_RANGE: std::ops::RangeInclusive<i32> = 1..=300;
+const HRV_SDNN_TREND_MS_RANGE: std::ops::RangeInclusive<i32> = -150..=150;
+
+/// The coarse heart trends a request carried, after clamping — what
+/// `prompt::health_lines` renders and nothing else reads.
+///
+/// Special-category data under GDPR Art. 9, which shapes this type twice over.
+/// It is built per request and dropped with it — nothing here is ever written
+/// to the database. And it deliberately derives no `Debug` and no `Display`,
+/// so no `tracing` call, panic message, or format string can render it: a
+/// value that cannot be formatted cannot be logged by accident, which turns
+/// "health values never reach the log" from a review rule into a compile
+/// error.
+///
+/// Each metric is a rounded 7-day mean and an optional delta against the
+/// weeks before it, mirroring the phone's `HealthSnapshot`. A trend never
+/// appears without its mean — a delta against a mean that was dropped would be
+/// a number with no referent.
+pub struct HealthContext {
+    pub resting_hr_bpm: Option<i32>,
+    pub resting_hr_trend_bpm: Option<i32>,
+    pub hrv_sdnn_ms: Option<i32>,
+    pub hrv_sdnn_trend_ms: Option<i32>,
+}
+
+impl HealthContext {
+    /// The context these four wire fields support, clamped field by field.
+    ///
+    /// Out-of-range values drop the field and never the request — the request
+    /// also carries the question, and a broken sensor should not silence the
+    /// coach. A trend whose mean was dropped falls with it, and a context left
+    /// with no mean at all is `None`: absent and all-dropped must be
+    /// indistinguishable downstream, because both must render no HEALTH block.
+    pub fn clamped(
+        resting_hr_bpm: Option<i32>,
+        resting_hr_trend_bpm: Option<i32>,
+        hrv_sdnn_ms: Option<i32>,
+        hrv_sdnn_trend_ms: Option<i32>,
+    ) -> Option<Self> {
+        let (resting_hr_bpm, resting_hr_trend_bpm) = clamped_metric(
+            resting_hr_bpm,
+            resting_hr_trend_bpm,
+            RESTING_HR_BPM_RANGE,
+            RESTING_HR_TREND_BPM_RANGE,
+        );
+        let (hrv_sdnn_ms, hrv_sdnn_trend_ms) = clamped_metric(
+            hrv_sdnn_ms,
+            hrv_sdnn_trend_ms,
+            HRV_SDNN_MS_RANGE,
+            HRV_SDNN_TREND_MS_RANGE,
+        );
+
+        (resting_hr_bpm.is_some() || hrv_sdnn_ms.is_some()).then_some(Self {
+            resting_hr_bpm,
+            resting_hr_trend_bpm,
+            hrv_sdnn_ms,
+            hrv_sdnn_trend_ms,
+        })
+    }
+}
+
+/// One metric through the clamp: the mean survives only inside its range, and
+/// the trend survives only inside its own range *and* alongside a surviving
+/// mean — the drop-with-its-mean coupling lives here so a metric added later
+/// cannot forget it.
+fn clamped_metric(
+    mean: Option<i32>,
+    trend: Option<i32>,
+    mean_range: std::ops::RangeInclusive<i32>,
+    trend_range: std::ops::RangeInclusive<i32>,
+) -> (Option<i32>, Option<i32>) {
+    let mean = mean.filter(|value| mean_range.contains(value));
+    (
+        mean,
+        mean.and(trend.filter(|value| trend_range.contains(value))),
+    )
+}
+
 /// The separator between a slug and its reason in a model's reply.
 ///
 /// A pipe rather than a colon or a comma, because both of those occur inside
@@ -163,3 +252,90 @@ pub const RECOMMENDATION_MAX_TOKENS: i32 = 400;
 /// Larger than a recommendation because prose is the deliverable here, and
 /// still small enough that one call cannot become expensive on its own.
 pub const EXPLANATION_MAX_TOKENS: i32 = 700;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// In-range values pass through untouched, trends included.
+    #[test]
+    fn a_plausible_context_survives_clamping_whole() {
+        let context = HealthContext::clamped(Some(62), Some(4), Some(45), Some(-6))
+            .expect("a plausible context is kept");
+
+        assert_eq!(context.resting_hr_bpm, Some(62));
+        assert_eq!(context.resting_hr_trend_bpm, Some(4));
+        assert_eq!(context.hrv_sdnn_ms, Some(45));
+        assert_eq!(context.hrv_sdnn_trend_ms, Some(-6));
+    }
+
+    /// The bounds are inclusive: a value on either edge is evidence, and
+    /// clamping it away would make the documented range a lie by one unit.
+    #[test]
+    fn the_range_edges_are_kept() {
+        let low = HealthContext::clamped(Some(25), Some(-40), Some(1), Some(-150))
+            .expect("the low edges are in range");
+        assert_eq!(low.resting_hr_bpm, Some(25));
+        assert_eq!(low.resting_hr_trend_bpm, Some(-40));
+        assert_eq!(low.hrv_sdnn_ms, Some(1));
+        assert_eq!(low.hrv_sdnn_trend_ms, Some(-150));
+
+        let high = HealthContext::clamped(Some(150), Some(40), Some(300), Some(150))
+            .expect("the high edges are in range");
+        assert_eq!(high.resting_hr_bpm, Some(150));
+        assert_eq!(high.resting_hr_trend_bpm, Some(40));
+        assert_eq!(high.hrv_sdnn_ms, Some(300));
+        assert_eq!(high.hrv_sdnn_trend_ms, Some(150));
+    }
+
+    /// An implausible value drops its own field and nothing else — the request
+    /// still carries a question, and one broken sensor must not silence the
+    /// rest of the summary.
+    #[test]
+    fn an_implausible_value_drops_only_its_field() {
+        let context = HealthContext::clamped(Some(300), Some(4), Some(45), None)
+            .expect("the surviving metric keeps the context alive");
+
+        assert_eq!(context.resting_hr_bpm, None);
+        assert_eq!(context.hrv_sdnn_ms, Some(45));
+    }
+
+    /// A trend is a delta against its own mean, so a dropped mean takes the
+    /// trend with it even when the trend itself is in range.
+    #[test]
+    fn a_trend_falls_with_its_mean() {
+        let context = HealthContext::clamped(Some(300), Some(4), Some(45), Some(-6))
+            .expect("the HRV metric survives");
+
+        assert_eq!(context.resting_hr_bpm, None);
+        assert_eq!(
+            context.resting_hr_trend_bpm, None,
+            "a delta against a dropped mean is a number with no referent"
+        );
+        assert_eq!(context.hrv_sdnn_trend_ms, Some(-6));
+    }
+
+    /// An out-of-range trend drops alone; its mean is independent evidence.
+    #[test]
+    fn an_implausible_trend_leaves_its_mean() {
+        let context = HealthContext::clamped(Some(62), Some(90), Some(45), Some(200))
+            .expect("both means survive");
+
+        assert_eq!(context.resting_hr_bpm, Some(62));
+        assert_eq!(context.resting_hr_trend_bpm, None);
+        assert_eq!(context.hrv_sdnn_ms, Some(45));
+        assert_eq!(context.hrv_sdnn_trend_ms, None);
+    }
+
+    /// A context with no surviving mean is no context at all — downstream must
+    /// not be able to tell "sent nothing" from "sent nothing usable".
+    #[test]
+    fn a_context_with_no_surviving_mean_is_none() {
+        assert!(HealthContext::clamped(None, None, None, None).is_none());
+        assert!(HealthContext::clamped(Some(999), Some(4), Some(0), Some(-6)).is_none());
+        assert!(
+            HealthContext::clamped(None, Some(4), None, Some(-6)).is_none(),
+            "trends alone carry no mean to anchor them"
+        );
+    }
+}

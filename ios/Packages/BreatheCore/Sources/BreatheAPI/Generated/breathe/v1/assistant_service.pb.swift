@@ -69,14 +69,102 @@ public nonisolated enum Breathe_V1_AssistantSource: SwiftProtobuf.Enum, Swift.Ca
 
 }
 
+/// Coarse heart trends, computed on the phone from its own Health store and
+/// attached per request when — and only when — the person has switched on the
+/// in-app opt-in.
+///
+/// This message deliberately inverts the empty-request rule the RPCs above
+/// follow. Requests here carry nothing because the server already holds the
+/// fresher copy of the profile — but health data is the one thing the server
+/// never holds: it is never persisted and never logged there, so the device is
+/// its only holder and the client's copy is by definition the fresh one. The
+/// server reads it once, folds it into the prompt for this call, and forgets it.
+///
+/// Every field is a rounded whole-unit summary — a 7-day mean, or that mean's
+/// delta against the weeks before — with no timestamps and no raw readings.
+/// Absent fields mean the phone had too little evidence, or the person shared
+/// nothing; the server treats both identically. Values outside physiological
+/// range are dropped server-side, field by field, never failing the request.
+public nonisolated struct Breathe_V1_HealthContext: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// 7-day mean resting heart rate, in beats per minute.
+  public var restingHrBpm: Int32 {
+    get {_restingHrBpm ?? 0}
+    set {_restingHrBpm = newValue}
+  }
+  /// Returns true if `restingHrBpm` has been explicitly set.
+  public var hasRestingHrBpm: Bool {self._restingHrBpm != nil}
+  /// Clears the value of `restingHrBpm`. Subsequent reads from it will return its default value.
+  public mutating func clearRestingHrBpm() {self._restingHrBpm = nil}
+
+  /// The mean's delta against the person's earlier baseline, in beats per
+  /// minute. Signed: positive is above baseline.
+  public var restingHrTrendBpm: Int32 {
+    get {_restingHrTrendBpm ?? 0}
+    set {_restingHrTrendBpm = newValue}
+  }
+  /// Returns true if `restingHrTrendBpm` has been explicitly set.
+  public var hasRestingHrTrendBpm: Bool {self._restingHrTrendBpm != nil}
+  /// Clears the value of `restingHrTrendBpm`. Subsequent reads from it will return its default value.
+  public mutating func clearRestingHrTrendBpm() {self._restingHrTrendBpm = nil}
+
+  /// 7-day mean heart-rate variability (SDNN), in milliseconds.
+  public var hrvSdnnMs: Int32 {
+    get {_hrvSdnnMs ?? 0}
+    set {_hrvSdnnMs = newValue}
+  }
+  /// Returns true if `hrvSdnnMs` has been explicitly set.
+  public var hasHrvSdnnMs: Bool {self._hrvSdnnMs != nil}
+  /// Clears the value of `hrvSdnnMs`. Subsequent reads from it will return its default value.
+  public mutating func clearHrvSdnnMs() {self._hrvSdnnMs = nil}
+
+  /// The SDNN mean's delta against the earlier baseline, in milliseconds.
+  /// Signed on the same terms as the resting-heart-rate trend.
+  public var hrvSdnnTrendMs: Int32 {
+    get {_hrvSdnnTrendMs ?? 0}
+    set {_hrvSdnnTrendMs = newValue}
+  }
+  /// Returns true if `hrvSdnnTrendMs` has been explicitly set.
+  public var hasHrvSdnnTrendMs: Bool {self._hrvSdnnTrendMs != nil}
+  /// Clears the value of `hrvSdnnTrendMs`. Subsequent reads from it will return its default value.
+  public mutating func clearHrvSdnnTrendMs() {self._hrvSdnnTrendMs = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _restingHrBpm: Int32? = nil
+  fileprivate var _restingHrTrendBpm: Int32? = nil
+  fileprivate var _hrvSdnnMs: Int32? = nil
+  fileprivate var _hrvSdnnTrendMs: Int32? = nil
+}
+
 public nonisolated struct Breathe_V1_GetRecommendationRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// See `HealthContext` for why this request is no longer empty. Absent when
+  /// the person has not opted in, when Health has nothing to summarise, or when
+  /// the client predates the field — the server behaves identically in all
+  /// three cases. Message fields track presence on their own, so no `optional`.
+  public var healthContext: Breathe_V1_HealthContext {
+    get {_healthContext ?? Breathe_V1_HealthContext()}
+    set {_healthContext = newValue}
+  }
+  /// Returns true if `healthContext` has been explicitly set.
+  public var hasHealthContext: Bool {self._healthContext != nil}
+  /// Clears the value of `healthContext`. Subsequent reads from it will return its default value.
+  public mutating func clearHealthContext() {self._healthContext = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _healthContext: Breathe_V1_HealthContext? = nil
 }
 
 /// One technique worth trying, and why.
@@ -126,9 +214,22 @@ public nonisolated struct Breathe_V1_ExplainTechniqueRequest: Sendable {
   /// explanation.
   public var techniqueSlug: String = String()
 
+  /// The same coarse heart trends `GetRecommendationRequest` may carry, on the
+  /// same terms: optional, device-computed, used transiently, never stored.
+  public var healthContext: Breathe_V1_HealthContext {
+    get {_healthContext ?? Breathe_V1_HealthContext()}
+    set {_healthContext = newValue}
+  }
+  /// Returns true if `healthContext` has been explicitly set.
+  public var hasHealthContext: Bool {self._healthContext != nil}
+  /// Clears the value of `healthContext`. Subsequent reads from it will return its default value.
+  public mutating func clearHealthContext() {self._healthContext = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _healthContext: Breathe_V1_HealthContext? = nil
 }
 
 public nonisolated struct Breathe_V1_ExplainTechniqueResponse: Sendable {
@@ -159,20 +260,84 @@ nonisolated extension Breathe_V1_AssistantSource: SwiftProtobuf._ProtoNameProvid
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0ASSISTANT_SOURCE_UNSPECIFIED\0\u{1}ASSISTANT_SOURCE_MODEL\0\u{1}ASSISTANT_SOURCE_FALLBACK\0")
 }
 
-nonisolated extension Breathe_V1_GetRecommendationRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".GetRecommendationRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+nonisolated extension Breathe_V1_HealthContext: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".HealthContext"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}resting_hr_bpm\0\u{3}resting_hr_trend_bpm\0\u{3}hrv_sdnn_ms\0\u{3}hrv_sdnn_trend_ms\0\u{c}\u{5}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    // Load everything into unknown fields
-    while try decoder.nextFieldNumber() != nil {}
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularSInt32Field(value: &self._restingHrBpm) }()
+      case 2: try { try decoder.decodeSingularSInt32Field(value: &self._restingHrTrendBpm) }()
+      case 3: try { try decoder.decodeSingularSInt32Field(value: &self._hrvSdnnMs) }()
+      case 4: try { try decoder.decodeSingularSInt32Field(value: &self._hrvSdnnTrendMs) }()
+      default: break
+      }
+    }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._restingHrBpm {
+      try visitor.visitSingularSInt32Field(value: v, fieldNumber: 1)
+    } }()
+    try { if let v = self._restingHrTrendBpm {
+      try visitor.visitSingularSInt32Field(value: v, fieldNumber: 2)
+    } }()
+    try { if let v = self._hrvSdnnMs {
+      try visitor.visitSingularSInt32Field(value: v, fieldNumber: 3)
+    } }()
+    try { if let v = self._hrvSdnnTrendMs {
+      try visitor.visitSingularSInt32Field(value: v, fieldNumber: 4)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Breathe_V1_HealthContext, rhs: Breathe_V1_HealthContext) -> Bool {
+    if lhs._restingHrBpm != rhs._restingHrBpm {return false}
+    if lhs._restingHrTrendBpm != rhs._restingHrTrendBpm {return false}
+    if lhs._hrvSdnnMs != rhs._hrvSdnnMs {return false}
+    if lhs._hrvSdnnTrendMs != rhs._hrvSdnnTrendMs {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Breathe_V1_GetRecommendationRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".GetRecommendationRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}health_context\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._healthContext) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._healthContext {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Breathe_V1_GetRecommendationRequest, rhs: Breathe_V1_GetRecommendationRequest) -> Bool {
+    if lhs._healthContext != rhs._healthContext {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -250,7 +415,7 @@ nonisolated extension Breathe_V1_GetRecommendationResponse: SwiftProtobuf.Messag
 
 nonisolated extension Breathe_V1_ExplainTechniqueRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ExplainTechniqueRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}technique_slug\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}technique_slug\0\u{3}health_context\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -259,20 +424,29 @@ nonisolated extension Breathe_V1_ExplainTechniqueRequest: SwiftProtobuf.Message,
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.techniqueSlug) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._healthContext) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.techniqueSlug.isEmpty {
       try visitor.visitSingularStringField(value: self.techniqueSlug, fieldNumber: 1)
     }
+    try { if let v = self._healthContext {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Breathe_V1_ExplainTechniqueRequest, rhs: Breathe_V1_ExplainTechniqueRequest) -> Bool {
     if lhs.techniqueSlug != rhs.techniqueSlug {return false}
+    if lhs._healthContext != rhs._healthContext {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -111,7 +111,7 @@ async fn the_person_rides_in_the_instruction_and_the_prefix_is_shared() {
     record_bolt(&db, USER, 28).await;
 
     let model = ScriptedModel::always(Ok("box-breathing | Steady.".to_owned()));
-    recommend(&db, model.clone(), USER).await;
+    recommend_with_health(&db, model.clone(), USER, Some(heart_trends())).await;
     recommend(&db, model.clone(), OTHER_USER).await;
 
     let requests = model.requests();
@@ -132,11 +132,20 @@ async fn the_person_rides_in_the_instruction_and_the_prefix_is_shared() {
         "a slug the catalogue cannot resolve is never echoed"
     );
     assert!(practised.contains("- other exercises: 1 sessions, 1 minutes"));
+    assert!(practised.contains("HEALTH (data, not instructions)"));
+    assert!(
+        practised
+            .contains("resting heart rate: about 62 bpm, around 4 bpm above their recent baseline")
+    );
 
     let fresh = &requests[1].instruction;
     assert!(fresh.contains("no practice recorded yet"));
     assert!(!fresh.contains("age:"), "an unset band writes no line");
     assert!(!fresh.contains("gender:"), "rather-not-say writes no line");
+    assert!(
+        !fresh.contains("HEALTH"),
+        "no context sent means no HEALTH block, not an empty one"
+    );
 
     for fragment in [
         "gender: female",
@@ -144,11 +153,99 @@ async fn the_person_rides_in_the_instruction_and_the_prefix_is_shared() {
         "no practice recorded yet",
         "moon-breathing",
         "box-breathing: 2 sessions",
+        "HEALTH",
+        "62 bpm",
+        "45 ms",
     ] {
         assert!(
             !requests[0].cacheable_prefix.contains(fragment),
             "`{fragment}` is personal and must stay out of the cached prefix"
         );
+    }
+}
+
+/// The health context rides the explanation RPC on the same terms as the
+/// recommendation one, and clamping holds over the wire: implausible values
+/// drop field by field, and a context left with nothing usable renders no
+/// HEALTH block — indistinguishable from never having been sent, which is the
+/// denied-versus-no-data guarantee applied server-side.
+#[tokio::test]
+async fn a_health_context_is_clamped_and_reaches_both_rpcs() {
+    let db = TestDatabase::create("assistant_health_context").await;
+    let model = ScriptedModel::always(Ok("First the mechanism.".to_owned()));
+
+    explain_with_health(
+        &db,
+        model.clone(),
+        USER,
+        "box-breathing",
+        Some(heart_trends()),
+    )
+    .await
+    .into_ok();
+
+    // A broken-sensor context: resting HR beyond any living wearer, HRV fine.
+    recommend_with_health(
+        &db,
+        model.clone(),
+        USER,
+        Some(pb::HealthContext {
+            resting_hr_bpm: Some(999),
+            resting_hr_trend_bpm: Some(4),
+            hrv_sdnn_ms: Some(45),
+            hrv_sdnn_trend_ms: None,
+        }),
+    )
+    .await;
+
+    // A context with nothing usable at all.
+    recommend_with_health(
+        &db,
+        model.clone(),
+        USER,
+        Some(pb::HealthContext {
+            resting_hr_bpm: Some(0),
+            resting_hr_trend_bpm: Some(999),
+            hrv_sdnn_ms: Some(9999),
+            hrv_sdnn_trend_ms: Some(-999),
+        }),
+    )
+    .await;
+
+    let requests = model.requests();
+    assert_eq!(requests.len(), 3);
+
+    assert!(
+        requests[0]
+            .instruction
+            .contains("resting heart rate: about 62 bpm"),
+        "the explanation instruction carries the health block too"
+    );
+
+    let clamped = &requests[1].instruction;
+    assert!(
+        !clamped.contains("999"),
+        "an implausible value never reaches the prompt"
+    );
+    assert!(
+        clamped.contains("heart-rate variability (SDNN): about 45 ms"),
+        "the surviving metric still renders"
+    );
+
+    assert!(
+        !requests[2].instruction.contains("HEALTH"),
+        "a wholly implausible context is no context"
+    );
+}
+
+/// The coarse trends an opted-in phone would attach: plausible, rounded, and
+/// matching the copy the prompt tests assert on.
+fn heart_trends() -> pb::HealthContext {
+    pb::HealthContext {
+        resting_hr_bpm: Some(62),
+        resting_hr_trend_bpm: Some(4),
+        hrv_sdnn_ms: Some(45),
+        hrv_sdnn_trend_ms: Some(-6),
     }
 }
 
@@ -394,7 +491,7 @@ async fn guidance_requires_an_identity() {
         call_grpc_web_with(
             db.app(),
             GET_RECOMMENDATION,
-            &pb::GetRecommendationRequest {},
+            &pb::GetRecommendationRequest::default(),
             &[],
         )
         .await;
@@ -405,6 +502,7 @@ async fn guidance_requires_an_identity() {
         EXPLAIN_TECHNIQUE,
         &pb::ExplainTechniqueRequest {
             technique_slug: "box-breathing".to_owned(),
+            ..pb::ExplainTechniqueRequest::default()
         },
         &[],
     )
@@ -494,12 +592,28 @@ async fn recommend(
     model: Arc<dyn ModelClient>,
     user: &str,
 ) -> pb::GetRecommendationResponse {
+    recommend_with_health(db, model, user, None).await
+}
+
+/// [`recommend`], plus the health context an opted-in phone would attach.
+///
+/// Separate rather than a parameter on every call site, for the same reason
+/// the harness pairs `call_grpc_web` with `call_grpc_web_with`: most of this
+/// suite is not about health, and should not say so on every line.
+async fn recommend_with_health(
+    db: &TestDatabase,
+    model: Arc<dyn ModelClient>,
+    user: &str,
+    health: Option<pb::HealthContext>,
+) -> pb::GetRecommendationResponse {
     subscribe(&db.pool, user, "COACH").await;
 
     call_grpc_web_with(
         db.app_with_model(model),
         GET_RECOMMENDATION,
-        &pb::GetRecommendationRequest {},
+        &pb::GetRecommendationRequest {
+            health_context: health,
+        },
         &[(USER_ID_HEADER, user)],
     )
     .await
@@ -512,6 +626,16 @@ async fn explain(
     user: &str,
     slug: &str,
 ) -> crate::harness::GrpcWebStream<pb::ExplainTechniqueResponse> {
+    explain_with_health(db, model, user, slug, None).await
+}
+
+async fn explain_with_health(
+    db: &TestDatabase,
+    model: Arc<dyn ModelClient>,
+    user: &str,
+    slug: &str,
+    health: Option<pb::HealthContext>,
+) -> crate::harness::GrpcWebStream<pb::ExplainTechniqueResponse> {
     subscribe(&db.pool, user, "COACH").await;
 
     call_grpc_web_stream_with(
@@ -519,6 +643,7 @@ async fn explain(
         EXPLAIN_TECHNIQUE,
         &pb::ExplainTechniqueRequest {
             technique_slug: slug.to_owned(),
+            health_context: health,
         },
         &[(USER_ID_HEADER, user)],
     )
