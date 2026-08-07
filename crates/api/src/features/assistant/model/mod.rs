@@ -17,6 +17,7 @@ pub mod openrouter;
 
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::Duration;
 
 use tokio_stream::Stream;
 
@@ -110,6 +111,16 @@ pub trait ModelClient: Send + Sync {
     }
 }
 
+/// A duration as the `duration_ms` field `docs/observability.md` fixes by
+/// convention.
+///
+/// Saturating rather than fallible: a duration too large for a `u64` of
+/// milliseconds is a broken clock, and losing the line to it would hide the
+/// outage the line was written to explain.
+fn millis(duration: Duration) -> u64 {
+    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+}
+
 /// Installs the model client this process will use.
 ///
 /// Two outcomes, and both are normal:
@@ -132,12 +143,16 @@ pub fn from_config(config: &Config) -> Arc<dyn ModelClient> {
         return Arc::new(DisabledModelClient);
     };
 
-    let Some(client) = OpenRouterClient::new(key) else {
-        tracing::error!(
-            feature = "assistant",
-            "the HTTP client could not be built — answering from the rule-based fallback"
-        );
-        return Arc::new(DisabledModelClient);
+    let client = match OpenRouterClient::new(key) {
+        Ok(client) => client,
+        Err(error) => {
+            tracing::error!(
+                feature = "assistant",
+                %error,
+                "the HTTP client could not be built — answering from the rule-based fallback"
+            );
+            return Arc::new(DisabledModelClient);
+        }
     };
 
     tracing::info!(

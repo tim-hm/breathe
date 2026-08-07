@@ -14,7 +14,7 @@
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use super::{ModelClient, ModelError, ModelRequest, ModelStream};
+use super::{ModelClient, ModelError, ModelRequest, ModelStream, millis};
 
 /// Consecutive failures that trip it.
 ///
@@ -70,6 +70,13 @@ impl GuardedModelClient {
 
     /// Whether this call may proceed, clearing an expired cooldown on the way
     /// past.
+    ///
+    /// The two transitions are logged here and in [`Self::record`] rather than
+    /// in the service: the caller asks `is_available()` before it prepares
+    /// anything, so an open breaker never reaches a `warn` up there and a whole
+    /// cooldown of degraded answers would otherwise pass without a line. Both
+    /// are per outage rather than per request — only an admitted call can trip
+    /// it, and only the first call past the cooldown closes it.
     fn admits(&self) -> bool {
         let Ok(mut state) = self.state.lock() else {
             // A poisoned lock means a previous holder panicked mid-update. The
@@ -83,6 +90,10 @@ impl GuardedModelClient {
             Some(_) => {
                 state.open_until = None;
                 state.consecutive_failures = 0;
+                tracing::info!(
+                    feature = "assistant",
+                    "the model breaker closed; trying the provider again"
+                );
                 true
             }
             None => true,
@@ -103,6 +114,12 @@ impl GuardedModelClient {
         state.consecutive_failures += 1;
         if state.consecutive_failures >= self.failures_to_trip {
             state.open_until = Some(Instant::now() + self.cooldown);
+            tracing::warn!(
+                feature = "assistant",
+                consecutive_failures = state.consecutive_failures,
+                cooldown_ms = millis(self.cooldown),
+                "the model breaker opened; answering from the rules"
+            );
         }
     }
 
@@ -155,5 +172,92 @@ impl ModelClient for GuardedModelClient {
     /// wrapped client may have its own reason to decline.
     fn is_available(&self) -> bool {
         !self.is_open() && self.inner.is_available()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fmt::Debug;
+
+    use tracing::field::{Field, Visit};
+    use tracing_subscriber::layer::{Context, Layer, SubscriberExt as _};
+
+    use super::*;
+
+    /// A provider that is down.
+    struct AlwaysFails;
+
+    #[tonic::async_trait]
+    impl ModelClient for AlwaysFails {
+        async fn complete(&self, _request: &ModelRequest) -> Result<String, ModelError> {
+            Err(ModelError::Failed("down".to_owned()))
+        }
+
+        async fn stream(&self, _request: &ModelRequest) -> Result<ModelStream, ModelError> {
+            Err(ModelError::Failed("down".to_owned()))
+        }
+    }
+
+    /// Every event's message, which is the whole of what these assertions need.
+    #[derive(Clone, Default)]
+    struct Captured(Arc<Mutex<Vec<String>>>);
+
+    impl<S: tracing::Subscriber> Layer<S> for Captured {
+        fn on_event(&self, event: &tracing::Event<'_>, _context: Context<'_, S>) {
+            let mut messages = self.0.lock().expect("the capture is not poisoned");
+            event.record(&mut Message(&mut messages));
+        }
+    }
+
+    struct Message<'a>(&'a mut Vec<String>);
+
+    impl Visit for Message<'_> {
+        fn record_debug(&mut self, field: &Field, value: &dyn Debug) {
+            if field.name() == "message" {
+                self.0.push(format!("{value:?}"));
+            }
+        }
+    }
+
+    /// The outage has to leave a record. The service asks `is_available()`
+    /// before it prepares anything, so while the breaker is open no call reaches
+    /// a log site above it — without these two lines a cooldown of degraded
+    /// answers is indistinguishable from a quiet minute.
+    #[tokio::test]
+    async fn both_transitions_are_logged() {
+        let captured = Captured::default();
+        let guard =
+            tracing::subscriber::set_default(tracing_subscriber::registry().with(captured.clone()));
+
+        let breaker =
+            GuardedModelClient::with_policy(Arc::new(AlwaysFails), 2, Duration::from_millis(50));
+        let request = ModelRequest {
+            cacheable_prefix: String::new(),
+            instruction: String::new(),
+            max_tokens: 1,
+        };
+
+        for _ in 0..2 {
+            drop(breaker.complete(&request).await);
+        }
+        assert!(!breaker.is_available(), "two failures trip this policy");
+
+        tokio::time::sleep(Duration::from_millis(60)).await;
+        drop(breaker.complete(&request).await);
+
+        drop(guard);
+        let messages = captured
+            .0
+            .lock()
+            .expect("the capture is not poisoned")
+            .clone();
+        assert!(
+            messages.iter().any(|line| line.contains("breaker opened")),
+            "the trip is recorded: {messages:?}"
+        );
+        assert!(
+            messages.iter().any(|line| line.contains("breaker closed")),
+            "the recovery is recorded: {messages:?}"
+        );
     }
 }

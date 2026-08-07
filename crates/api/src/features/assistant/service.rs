@@ -174,16 +174,20 @@ pub async fn explain_technique(
 /// A chunk that fails mid-answer ends the stream rather than replacing what has
 /// already been read: the person is looking at half an explanation, and
 /// switching to the fallback text at that point would contradict the sentence
-/// above it.
+/// above it. It ends it with `UNAVAILABLE` rather than simply stopping, because
+/// a stream that stops is indistinguishable from one that finished — the client
+/// would caption two sentences of a truncated answer as the whole of it.
+/// tonic ends the response at the first `Err`, so nothing the provider sends
+/// after the failure can follow the status onto the wire.
 fn from_model(chunks: super::model::ModelStream) -> ExplanationStream {
-    Box::pin(chunks.map_while(|chunk| match chunk {
-        Ok(text) => Some(Ok(pb::ExplainTechniqueResponse {
+    Box::pin(chunks.map(|chunk| match chunk {
+        Ok(text) => Ok(pb::ExplainTechniqueResponse {
             text,
             source: pb::AssistantSource::Model as i32,
-        })),
+        }),
         Err(error) => {
             tracing::warn!(feature = "assistant", %error, "the explanation stopped early");
-            None
+            Err(tonic::Status::unavailable("the explanation stopped early"))
         }
     }))
 }
@@ -230,7 +234,10 @@ async fn claim_call(pool: &PgPool, user_id: Uuid, tier: Tier) -> bool {
     match repository::claim_daily_call(pool, user_id, limit).await {
         Ok(claimed) => {
             if !claimed {
-                tracing::info!(
+                // `debug`, not `info`: once somebody is past the ceiling this
+                // is every remaining request they make that day, and a heavy
+                // user would otherwise be the loudest thing in the log.
+                tracing::debug!(
                     feature = "assistant",
                     "the caller has spent today's allowance; answering from the rules"
                 );
