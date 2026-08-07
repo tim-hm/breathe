@@ -18,7 +18,9 @@ Keyed on a single question: _was this expected?_
 | `debug` | Detail for an investigation in progress                  | A connection retry attempt                             |
 | `trace` | Per-request hot path                                     |                                                        |
 
-The test for `info`: would you still want this line after a million requests? "listening" yes; "handled a request" no — that is what the `TraceLayer` span is for.
+The test for `info`: would you still want this line after a million requests? "listening" yes; a handler announcing that it is about to do its job, no.
+
+One record per request is the exception, and it earns the level because it is the only thing that answers "what was this process doing at 14:03". It is emitted once, on the way out, by the `TraceLayer` in `crates/api/src/obs.rs` — carrying `status`, `grpc_status` and `duration_ms` against a span holding `method`, `path` and `user_id`. Everything else inherits that span, which is what makes a feature's one-line `error` resolvable to a caller and an RPC. Note that a span emits nothing by itself: the layer was installed for a long time at a level the default filter dropped, and the process was silent per request the whole while.
 
 ## Field conventions
 
