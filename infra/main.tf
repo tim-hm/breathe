@@ -320,3 +320,22 @@ resource "aws_route53_record" "apex_mx" {
   ttl     = 3600
   records = ["1 smtp.google.com."]
 }
+
+# The public half of the key Google signs outgoing mail with, under the selector
+# named in the signature's `s=` tag. Not on the apex: DKIM is always looked up at
+# `<selector>._domainkey`, which is why this is the one record here with a name
+# of its own.
+#
+# The value is one key split across two strings. A DNS character-string caps at
+# 255 bytes and a 2048-bit key's base64 runs to 408, so the `""` in the middle is
+# a real boundary, not a typo — a resolver concatenates adjacent strings back
+# into one value before any verifier sees it. Closing the gap would exceed the
+# cap and Route53 would reject the record; splitting anywhere else is equally
+# valid, since the join is byte-for-byte.
+resource "aws_route53_record" "google_domainkey" {
+  zone_id = aws_route53_zone.primary.zone_id
+  name    = "google._domainkey.${aws_route53_zone.primary.name}"
+  type    = "TXT"
+  ttl     = 3600
+  records = ["v=DKIM1;k=rsa;p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsn5him2Gh5VlT5TgFPytX39+sK9LWweR0ptYpKwkWELZrDJBGVil2ChdVKciIva5HkRUghEdqnBjEl4fSh5qZZYmePE6MvM+AWQ2KrUSU0reHvWXjZZZUzfkHzp7doUc8rw/AKfizCU4KOdVujNqHrp7rAdbxJCu2FKeSO0OMfIFUrLnhC7d1X3mnDRyeXDdq26\"\"LzDtUoArd3SLRvBEcrCq49xvJ2SnnmAodt4cKFqVUxthxe97Hi1k4rCfS3ERhCOhw06Vqtgc/F040rTQ1lBCYZ08AnmnG1lNOi4IQwfNgUfn+t0UGJz4D0weQaLYSaL/4kd/AqsgyX5rHpqj/nQIDAQAB"]
+}
