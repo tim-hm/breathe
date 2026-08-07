@@ -1,13 +1,23 @@
 import BreatheAPI
 import Foundation
 
-public enum TechniqueRepositoryError: Error, Equatable {
+public enum TechniqueRepositoryError: LocalizedError, Equatable {
     /// The RPC itself failed — no network, server down, non-OK gRPC status.
     case transport(String)
     /// The response parsed but described something this app cannot represent,
     /// such as a goal it has no case for. Distinct from `.transport` because
     /// retrying will not help: the client and server contracts have diverged.
     case malformedResponse(String)
+
+    /// Carries the associated message. Without this conformance
+    /// `localizedDescription` bridges to a bare `NSError`, and every log line
+    /// and failure banner reading it says "The operation couldn't be completed".
+    public var errorDescription: String? {
+        switch self {
+        case let .transport(message): "the request failed: \(message)"
+        case let .malformedResponse(message): "the response could not be read: \(message)"
+        }
+    }
 }
 
 /// Reads the technique catalogue and the breathing foundations.
@@ -38,7 +48,7 @@ public struct TechniqueRepository: TechniqueReading {
             // message with no error would be a library invariant violation, so
             // the fallback text exists only to keep this total.
             throw TechniqueRepositoryError.transport(
-                response.error?.localizedDescription ?? "the request failed with no message"
+                response.error?.localizedDescription ?? "the server sent no message"
             )
         }
 
@@ -50,7 +60,7 @@ public struct TechniqueRepository: TechniqueReading {
 
         guard let message = response.message else {
             throw TechniqueRepositoryError.transport(
-                response.error?.localizedDescription ?? "the request failed with no message"
+                response.error?.localizedDescription ?? "the server sent no message"
             )
         }
 

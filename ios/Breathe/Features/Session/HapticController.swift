@@ -12,7 +12,7 @@ import UIKit
 /// `SessionCueing` without knowing which one it has.
 @MainActor
 final class HapticController {
-    private static let logger = Logger(subsystem: "xyz.holmie.breathe", category: "haptics")
+    private static let logger = Logger(category: "haptics")
 
     /// Whether the hardware can play a pattern at all. A Haptic Touch-only
     /// device and the simulator both answer no, and both fall back to
@@ -54,7 +54,8 @@ final class HapticController {
             try engine.start()
             self.engine = engine
         } catch {
-            Self.logger.error("haptic engine unavailable: \(error.localizedDescription)")
+            Self.logger
+                .error("haptic engine unavailable: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -68,7 +69,8 @@ final class HapticController {
             let player = try engine.makePlayer(with: pattern(for: beat))
             try player.start(atTime: CHHapticTimeImmediate)
         } catch {
-            Self.logger.error("haptic pattern failed: \(error.localizedDescription)")
+            Self.logger
+                .error("haptic pattern failed: \(error.localizedDescription, privacy: .public)")
             playFallback(for: beat.kind)
         }
     }
@@ -101,7 +103,8 @@ final class HapticController {
             let player = try engine.makePlayer(with: CHHapticPattern(events: taps, parameters: []))
             try player.start(atTime: CHHapticTimeImmediate)
         } catch {
-            Self.logger.error("completion haptic failed: \(error.localizedDescription)")
+            Self.logger
+                .error("completion haptic failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -125,7 +128,10 @@ final class HapticController {
         do {
             try engine?.start()
         } catch {
-            Self.logger.error("haptic engine restart failed: \(error.localizedDescription)")
+            Self.logger
+                .error(
+                    "haptic engine restart failed: \(error.localizedDescription, privacy: .public)"
+                )
         }
     }
 

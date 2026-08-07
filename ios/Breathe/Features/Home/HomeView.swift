@@ -1,8 +1,6 @@
 import BreatheKit
 import BreatheUI
-import os
 import SwiftUI
-import UIKit
 
 /// The way in: say what you want, start breathing.
 ///
@@ -11,19 +9,14 @@ import UIKit
 /// is the technique the wheel resolves to. The wheel wakes up
 /// where it was last left — the hour's goal decides only the very first
 /// launch — and offers the technique this person last used towards that
-/// goal, which is as much context as an on-device rule should claim
-/// before M6.
+/// goal. The assistant's suggestions stay in the techniques tab: this screen
+/// is one decision, and a second opinion beside it would be two.
 struct HomeView: View {
     /// The catalogue the composition root owns and every tab shares.
     let model: TechniqueListModel
     let sessions: any SessionRecording
 
     @Environment(SessionSettings.self) private var settings
-
-    /// Diagnostic for the wheel haptic that a device reports never feeling:
-    /// both feedback paths log here, so a console next to a silent phone can
-    /// say which half is lying. Remove once the device mystery is solved.
-    private static let wheelLog = Logger(subsystem: "xyz.holmie.breathe", category: "wheel")
 
     /// What the wheel points at. Set once the catalogue lands — before then
     /// there is no goal known to have a technique behind it.
@@ -50,17 +43,20 @@ struct HomeView: View {
                     TechniqueDetailView(technique: technique, sessions: sessions)
                 }
         }
+        // One task for both reads, so leaving the tab cancels a history decode
+        // still in flight instead of orphaning one per switch. Started together
+        // rather than in sequence: neither needs the other, and the catalogue is
+        // what the screen is waiting on.
         .task {
+            async let recorded = sessions.recordedSessions()
             await model.loadIfNeeded()
             settleGoal()
+            history = await recorded
         }
-        .onAppear {
-            Task { history = await sessions.recordedSessions() }
-        }
-        // Refreshed on dismissal rather than left to `onAppear`, which does not
-        // fire again under a cover: the session that just ended is exactly the
-        // one the repeat row should now offer.
         .paywall(highlighting: .plus, isPresented: $isShowingPaywall)
+        // Refreshed on dismissal rather than left to the task above, which does
+        // not run again under a cover: the session that just ended is exactly
+        // the one the repeat row should now offer.
         .fullScreenCover(item: $started) {
             Task { history = await sessions.recordedSessions() }
         } content: { session in
@@ -168,13 +164,7 @@ struct HomeView: View {
         // that is actively dragging the wheel it disappears entirely. Skipped
         // for the settle on launch — that is the app restoring state, not the
         // person choosing.
-        .sensoryFeedback(.impact(weight: .medium), trigger: goal) { old, new in
-            Self.wheelLog
-                .notice(
-                    "sensoryFeedback trigger evaluated: \(String(describing: old), privacy: .public) -> \(String(describing: new), privacy: .public)"
-                )
-            return old != nil
-        }
+        .sensoryFeedback(.impact(weight: .medium), trigger: goal) { old, _ in old != nil }
     }
 
     /// The technique the wheel's goal resolves to, as a way through to its
@@ -189,6 +179,12 @@ struct HomeView: View {
             }
             .font(.subheadline)
             .foregroundStyle(Theme.Ink.secondary)
+            // The row is quiet but it is still the only way through to the
+            // dials, so it carries the 44pt target the type size alone would
+            // not give it — and the shape makes the gap beside the words part
+            // of the target rather than a miss.
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
         }
     }
 
@@ -251,14 +247,6 @@ struct HomeView: View {
             set: {
                 goal = $0
                 settings.lastGoal = $0
-                // Diagnostic, not the design: a direct generator, outside
-                // .sensoryFeedback, so a silent device splits "modifier never
-                // fires" from "feedback generators are suppressed".
-                UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-                Self.wheelLog
-                    .notice(
-                        "wheel settled on \($0.rawValue, privacy: .public); direct heavy impact fired"
-                    )
             }
         )
     }

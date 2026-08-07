@@ -76,6 +76,19 @@ public final class SessionModel {
     /// short the plan was.
     public static let minimumRecordedDuration: Duration = .seconds(10)
 
+    /// How long the cue hardware is held after a session ends.
+    ///
+    /// Long enough for the completion cue to play out on it, and deliberately
+    /// no longer. `AVAudioSession` stays active in `.playback` until
+    /// `SessionCueing.stop()` runs, so every second past the cue is a second of
+    /// somebody else's music ducked for silence — and the summary screen is
+    /// read for as long as it is read.
+    ///
+    /// A single number here is the compromise: how long a completion cue lasts
+    /// is really the cue implementation's answer, and asking it would mean
+    /// `SessionCueing` growing an async `playCompletion()` across three targets.
+    static let cueReleaseDelay: Duration = .seconds(2)
+
     /// Whether the ended session was let go rather than kept — the view's cue
     /// to close quietly instead of presenting a summary of nothing.
     public var wasDiscarded: Bool {
@@ -102,6 +115,10 @@ public final class SessionModel {
     private var holdBegan: Duration?
     private var startedAt: Date?
     private var cueLoop: Task<Void, Never>?
+    private var cueRelease: Task<Void, Never>?
+    /// Whether the current pause was the app leaving rather than a tap on
+    /// Pause. Cleared by any resume, so a hand-paused session never inherits it.
+    private var pausedByScene = false
 
     public init(
         technique: Technique,
@@ -224,7 +241,29 @@ public final class SessionModel {
         status = .paused
     }
 
+    /// Pauses because the app left the screen, remembering that it did.
+    ///
+    /// Separate from `pause()` because only this pause undoes itself. iOS sends
+    /// `.inactive` for a notification banner and a Control Centre pull as well
+    /// as for a real departure, and a session that stopped for a banner and
+    /// never restarted is the breathing going quiet under somebody with their
+    /// eyes shut — so the caller narrows to `.background` and this remembers
+    /// who asked, which is what keeps `resumeIfSceneDriven()` from starting a
+    /// hand-paused session up under its owner.
+    public func pauseForScene() {
+        guard status == .running || status == .holding else { return }
+        pausedByScene = true
+        pause()
+    }
+
+    /// Resumes only a pause `pauseForScene()` caused.
+    public func resumeIfSceneDriven() {
+        guard pausedByScene else { return }
+        resume()
+    }
+
     public func resume() {
+        pausedByScene = false
         guard status == .paused else { return }
         // A pause inside a hold resumes into the hold, not past it: the hold's
         // own clock outlives the pause and picks up where it stopped.
@@ -254,11 +293,17 @@ public final class SessionModel {
         finish(completed: false)
     }
 
-    /// Releases the cue hardware. The view calls this as it goes away, rather
-    /// than the session ending doing it, so the completion cue has time to play.
+    /// Releases the cue hardware now, and is safe to call however many times.
+    ///
+    /// The backstop rather than the route: the view calls this as it goes away,
+    /// which for a session that *ended* is whenever somebody closes the summary
+    /// — so `finish` schedules its own release `cueReleaseDelay` out and this
+    /// covers the sessions that never reach it.
     public func dismiss() {
         cueLoop?.cancel()
         cueLoop = nil
+        cueRelease?.cancel()
+        cueRelease = nil
         cues.stop()
     }
 
@@ -336,6 +381,16 @@ public final class SessionModel {
 
         if completed {
             cues.playCompletion()
+        }
+
+        // The completion cue is playing on hardware this hands back, so the
+        // release waits for it — and only for it. Left to `dismiss()` alone it
+        // ran when the cover went away, which is after however long somebody
+        // spends reading their summary, with an `.playback` audio session
+        // ducking the rest of the phone throughout.
+        cueRelease = Task { [clock, cues] in
+            guard await (try? clock.sleep(for: Self.cueReleaseDelay)) != nil else { return }
+            cues.stop()
         }
 
         guard !wasDiscarded else { return }

@@ -15,10 +15,10 @@ import WatchConnectivity
 @MainActor
 @Observable
 final class PhoneLink: NSObject {
-    private static let logger = Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "BreatheWatch",
-        category: "phone-link"
-    )
+    /// `watch-link`, the same category the phone's `WatchLink` files under:
+    /// correlating a handoff that never arrived means reading one channel, not
+    /// guessing at two names for the two ends of it.
+    private static let logger = Logger(category: "watch-link")
 
     /// The identity now in hand, or nil while this watch is still anonymous.
     /// Observed rather than merely stored so the composition root can start a

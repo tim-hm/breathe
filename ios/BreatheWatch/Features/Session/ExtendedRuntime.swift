@@ -1,3 +1,4 @@
+import BreatheKit
 import Foundation
 import os
 import WatchKit
@@ -20,10 +21,7 @@ import WatchKit
 final class ExtendedRuntime: NSObject {
     /// `nonisolated` because the delegate callbacks below log where they land,
     /// and a `static let` on a main-actor type is main-actor-isolated by default.
-    private nonisolated static let logger = Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "BreatheWatch",
-        category: "extended-runtime"
-    )
+    private nonisolated static let logger = Logger(category: "extended-runtime")
 
     private var session: WKExtendedRuntimeSession?
 

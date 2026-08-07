@@ -16,12 +16,7 @@ import os
 /// concurrent loads can only race to write equivalent snapshots — last one
 /// wins, nothing interleaves.
 public struct CachedTechniqueRepository: TechniqueReading {
-    /// The running app's subsystem, not a hard-coded bundle id: this module is
-    /// shared, and M9's watch app is a second bundle that should log as itself.
-    private static let logger = Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "BreatheKit",
-        category: "catalogue-cache"
-    )
+    private static let logger = Logger(category: "catalogue-cache")
 
     private let network: any TechniqueReading
     private let techniquesURL: URL
@@ -90,9 +85,20 @@ public struct CachedTechniqueRepository: TechniqueReading {
                 // A fetch that fails outright is the offline case, and the
                 // snapshot is already the answer — no reason to sit out the
                 // rest of the deadline for it.
-                guard let fresh = try? await network() else { return cached }
-                persist(fresh, at: url)
-                return fresh
+                do {
+                    let fresh = try await network()
+                    persist(fresh, at: url)
+                    return fresh
+                } catch {
+                    // The one line that makes offline-first observable. Without
+                    // it a device serving a months-old catalogue looks exactly
+                    // like one that refreshed a second ago.
+                    Self.logger
+                        .notice(
+                            "serving the cached catalogue: \(error.localizedDescription, privacy: .public)"
+                        )
+                    return cached
+                }
             }
             group.addTask { [deadline] in
                 try? await Task.sleep(for: deadline)
@@ -123,7 +129,10 @@ public struct CachedTechniqueRepository: TechniqueReading {
             // than a truncated file that reads back as no catalogue at all.
             try JSONEncoder().encode(value).write(to: url, options: .atomic)
         } catch {
-            Self.logger.error("failed to cache the catalogue: \(error.localizedDescription)")
+            Self.logger
+                .error(
+                    "failed to cache the catalogue: \(error.localizedDescription, privacy: .public)"
+                )
         }
     }
 
@@ -138,7 +147,10 @@ public struct CachedTechniqueRepository: TechniqueReading {
         do {
             return try JSONDecoder().decode(Value.self, from: Data(contentsOf: url))
         } catch {
-            Self.logger.error("failed to read the cached catalogue: \(error.localizedDescription)")
+            Self.logger
+                .error(
+                    "failed to read the cached catalogue: \(error.localizedDescription, privacy: .public)"
+                )
             return nil
         }
     }

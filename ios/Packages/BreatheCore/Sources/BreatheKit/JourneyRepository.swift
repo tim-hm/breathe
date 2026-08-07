@@ -1,7 +1,7 @@
 import BreatheAPI
 import Foundation
 
-public enum JourneyRepositoryError: Error, Equatable {
+public enum JourneyRepositoryError: LocalizedError, Equatable {
     /// The RPC itself failed — no network, server down, non-OK gRPC status.
     /// Everything the journey does over the network is optional, so a caller's
     /// correct response is almost always to try again later.
@@ -30,6 +30,18 @@ public enum JourneyRepositoryError: Error, Equatable {
     /// itself, would cost one record instead of all of them; this case is as
     /// deep as the wire boundary can put it.
     case malformedRequest(String)
+
+    /// Carries the associated message. Without this conformance
+    /// `localizedDescription` bridges to a bare `NSError`, and every log line
+    /// and failure banner reading it says "The operation couldn't be completed".
+    public var errorDescription: String? {
+        switch self {
+        case let .transport(message): "the request failed: \(message)"
+        case let .failedPrecondition(message): "the request was refused: \(message)"
+        case let .malformedResponse(message): "the response could not be read: \(message)"
+        case let .malformedRequest(message): "the request could not be built: \(message)"
+        }
+    }
 }
 
 /// The network side of the journey.
@@ -184,7 +196,7 @@ public struct JourneyRepository: JourneySyncing {
         unmetPrecondition: Bool,
         _ error: (any Error)?
     ) -> JourneyRepositoryError {
-        let message = error?.localizedDescription ?? "the request failed with no message"
+        let message = error?.localizedDescription ?? "the server sent no message"
         return unmetPrecondition ? .failedPrecondition(message) : .transport(message)
     }
 }

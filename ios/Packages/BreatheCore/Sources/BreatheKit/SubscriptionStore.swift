@@ -20,10 +20,7 @@ import os
 @MainActor
 @Observable
 public final class SubscriptionStore {
-    private static let logger = Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "BreatheKit",
-        category: "subscription"
-    )
+    private static let logger = Logger(category: "subscription")
 
     /// The key keeps its old spelling on purpose: it names a value already
     /// written to disk on installed builds, and renaming it would silently drop
@@ -204,7 +201,7 @@ public final class SubscriptionStore {
             // cancellation dressed differently or an App Store outage, and a
             // paywall that shows a technical error has already lost the sale it
             // was there for.
-            Self.logger.notice("purchase failed: \(error.localizedDescription)")
+            Self.logger.notice("purchase failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -224,7 +221,7 @@ public final class SubscriptionStore {
         do {
             try await front.restore()
         } catch {
-            Self.logger.notice("restore failed: \(error.localizedDescription)")
+            Self.logger.notice("restore failed: \(error.localizedDescription, privacy: .public)")
         }
 
         // Regardless of the outcome: `AppStore.sync()` throws when the person
@@ -248,7 +245,10 @@ public final class SubscriptionStore {
             try await entitlements.submit(transaction.jws)
             submitted.insert(transaction.submissionKey)
         } catch {
-            Self.logger.notice("entitlement sync deferred: \(error.localizedDescription)")
+            Self.logger
+                .notice(
+                    "entitlement sync deferred: \(error.localizedDescription, privacy: .public)"
+                )
         }
     }
 }

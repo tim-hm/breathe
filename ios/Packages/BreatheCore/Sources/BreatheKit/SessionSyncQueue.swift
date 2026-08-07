@@ -14,10 +14,7 @@ import os
 /// session recorded on Tuesday can reach the file after Wednesday's — and would
 /// silently skip anything that landed behind the mark.
 public actor SessionSyncQueue {
-    private static let logger = Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "BreatheKit",
-        category: "journey-sync"
-    )
+    private static let logger = Logger(category: "journey-sync")
 
     private static let acknowledgedSessionsKey = "journey.acknowledgedSessions"
     private static let acknowledgedScoresKey = "journey.acknowledgedBoltScores"
@@ -91,7 +88,10 @@ public actor SessionSyncQueue {
             try await journeys.delete(batch)
             await tombstones.forgetTombstones(batch)
         } catch {
-            Self.logger.notice("session deletion deferred: \(error.localizedDescription)")
+            Self.logger
+                .notice(
+                    "session deletion deferred: \(error.localizedDescription, privacy: .public)"
+                )
         }
     }
 
@@ -116,7 +116,8 @@ public actor SessionSyncQueue {
         } catch {
             // Not surfaced: a session that syncs a day late costs the person
             // nothing, and there is no action they could take from a view.
-            Self.logger.notice("session sync deferred: \(error.localizedDescription)")
+            Self.logger
+                .notice("session sync deferred: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -138,7 +139,8 @@ public actor SessionSyncQueue {
                 try await journeys.record(score)
                 acknowledged.insert(score.id)
             } catch {
-                Self.logger.notice("bolt sync deferred: \(error.localizedDescription)")
+                Self.logger
+                    .notice("bolt sync deferred: \(error.localizedDescription, privacy: .public)")
                 break
             }
         }
@@ -163,7 +165,8 @@ public actor SessionSyncQueue {
             ledger.acknowledge(stored.map(\.id), at: Self.acknowledgedSessionsKey)
             return changed
         } catch {
-            Self.logger.notice("journey restore deferred: \(error.localizedDescription)")
+            Self.logger
+                .notice("journey restore deferred: \(error.localizedDescription, privacy: .public)")
             return false
         }
     }

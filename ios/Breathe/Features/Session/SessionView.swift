@@ -53,9 +53,14 @@ struct SessionView: View {
         }
         // Haptics do not play in the background and a cue nobody can feel is a
         // phase silently missed, so leaving the app pauses rather than drifts.
+        // `.background` and not `.inactive`, which iOS also sends for a
+        // notification banner and a Control Centre pull; the model owns which
+        // pauses undo themselves.
         .onChange(of: scenePhase) { _, phase in
-            if phase != .active {
-                model.pause()
+            switch phase {
+            case .background: model.pauseForScene()
+            case .active: model.resumeIfSceneDriven()
+            default: break
             }
         }
         .onChange(of: model.currentBeat?.id) { _, _ in announceCurrentPhase() }
@@ -180,27 +185,36 @@ struct SessionView: View {
         return "Round \(model.currentRound) of \(model.timeline.rounds) · \(cycle.lowercased())"
     }
 
-    /// `TimelineView(.animation)` redraws every frame and reads the elapsed time
-    /// back off the session's clock, so the visual follows the same timeline the
-    /// cues do rather than an animation running alongside it. Paused when the
-    /// session is, which stops the redraws as well as the breath.
+    /// Two timelines, because only the orb moves at display refresh.
+    ///
+    /// It redraws every frame and reads elapsed time back off the session's
+    /// clock, so the visual follows the same timeline the cues do rather than an
+    /// animation running alongside it — paused when the session is.
+    ///
+    /// The words tick once a second, which is as often as any of them change.
+    /// On the frame timeline their combined accessibility element was rebuilt a
+    /// hundred times a second, and an accessibility tree invalidated that often
+    /// is what makes VoiceOver stutter over the phase instead of reading it.
     private var breathGuide: some View {
-        TimelineView(.animation(paused: model.status != .running)) { _ in
-            let elapsed = model.elapsed
-            let beat = model.timeline.beat(at: elapsed)
+        VStack(spacing: Theme.Spacing.loose) {
+            TimelineView(.animation(paused: model.status != .running)) { _ in
+                let elapsed = model.elapsed
+                breathVisual(beat: model.timeline.beat(at: elapsed), elapsed: elapsed)
+            }
 
-            VStack(spacing: Theme.Spacing.loose) {
-                breathVisual(beat: beat, elapsed: elapsed)
+            // Under Just the visuals the words leave the screen, not the
+            // accessibility tree — the orb above then carries them, so a
+            // VoiceOver user can always re-read the phase, not only catch
+            // its announcement.
+            if settings.guidance == .full {
+                TimelineView(.periodic(from: .now, by: 1)) { _ in
+                    let elapsed = model.elapsed
+                    let beat = model.timeline.beat(at: elapsed)
 
-                // Under Just the visuals the words leave the screen, not the
-                // accessibility tree — the orb above then carries them, so a
-                // VoiceOver user can always re-read the phase, not only catch
-                // its announcement.
-                if settings.guidance == .full {
                     VStack(spacing: Theme.Spacing.close) {
                         Text(beat?.kind.instruction ?? "")
                             .font(.title2.weight(.medium))
-                        if let hint = hint(for: beat) {
+                        if let hint = PhaseHints.hint(for: beat, in: hints) {
                             Text(hint)
                                 .font(.subheadline.weight(.medium))
                                 .foregroundStyle(model.technique.goal.accent)
@@ -253,7 +267,7 @@ struct SessionView: View {
                 // VoiceOver reads "Hold, lungs empty — 1:23" at every guidance
                 // level, including the one that hides the instruction text.
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(model.currentBeat?.kind.spokenInstruction ?? "")
+                .accessibilityLabel(PhaseHints.spokenPhase(for: model.currentBeat, in: hints))
                 .accessibilityValue(model.holdElapsed.formatted(.time(pattern: .minuteSecond)))
 
                 Button("I'm ready") {
@@ -323,27 +337,9 @@ struct SessionView: View {
         } else {
             visual
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(spokenPhase(for: beat))
+                .accessibilityLabel(PhaseHints.spokenPhase(for: beat, in: hints))
                 .accessibilityValue(secondsRemaining(in: beat, at: elapsed))
         }
-    }
-
-    /// "Breathe in, left nostril" — the phase as VoiceOver should say it.
-    private func spokenPhase(for beat: SessionTimeline.Beat?) -> String {
-        guard let beat else { return "" }
-        guard let hint = hint(for: beat) else { return beat.kind.spokenInstruction }
-        return "\(beat.kind.spokenInstruction), \(hint.lowercased())"
-    }
-
-    /// The hint for `beat` — "Left nostril" — or nil for an unhinted phase.
-    private func hint(for beat: SessionTimeline.Beat?) -> String? {
-        guard let beat, let hints,
-              hints.indices.contains(beat.stage),
-              hints[beat.stage].indices.contains(beat.phase)
-        else {
-            return nil
-        }
-        return hints[beat.stage][beat.phase]
     }
 
     /// VoiceOver reads the screen once and would otherwise never mention that
@@ -352,6 +348,6 @@ struct SessionView: View {
     /// quieter screen is not the same as hearing nothing.
     private func announceCurrentPhase() {
         guard let beat = model.currentBeat else { return }
-        AccessibilityNotification.Announcement(spokenPhase(for: beat)).post()
+        AccessibilityNotification.Announcement(PhaseHints.spokenPhase(for: beat, in: hints)).post()
     }
 }

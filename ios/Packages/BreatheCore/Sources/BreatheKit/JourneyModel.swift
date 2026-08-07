@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import os
 
 /// What the journey tab shows, and where it comes from.
 ///
@@ -38,6 +39,8 @@ public final class JourneyModel {
     public private(set) var leaderboard: LeaderboardState = .idle
     public var board: LeaderboardBoard = .streak
     public var scope: LeaderboardScope = .global
+
+    private static let logger = Logger(category: "leaderboard")
 
     private let sessions: any SessionRecording
     private let scores: any BoltScoreRecording
@@ -126,6 +129,16 @@ public final class JourneyModel {
         } catch JourneyRepositoryError.failedPrecondition {
             leaderboard = .needsBirthYearBand
         } catch {
+            // "Unreachable" is all the screen says and all it should say. The
+            // cause still belongs somewhere, or a board that is down for one
+            // build and one build only is indistinguishable from a train
+            // tunnel. Read out first because the message is an autoclosure,
+            // where a property read needs a `self.` SwiftFormat then deletes.
+            let requested = board
+            Self.logger
+                .notice(
+                    "the \(requested.rawValue, privacy: .public) leaderboard is unreachable: \(error.localizedDescription, privacy: .public)"
+                )
             leaderboard = .unreachable
         }
     }

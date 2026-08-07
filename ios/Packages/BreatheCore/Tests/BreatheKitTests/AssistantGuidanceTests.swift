@@ -63,10 +63,14 @@ struct AssistantGuidanceTests {
         )
     }
 
-    /// A stream that dies after some text keeps the text: half an explanation is
+    /// A stream that dies after some text keeps the text — half an explanation is
     /// still worth reading, and swapping it for a placeholder takes away
-    /// something the person is in the middle of.
-    @Test("A break mid-answer keeps what arrived")
+    /// something the person is in the middle of — but it is not *finished*.
+    ///
+    /// `isComplete` is what the view captions the paragraph with, so the two
+    /// halves of this assertion guard opposite mistakes: dropping the text, and
+    /// presenting a sentence that stops mid-word as the whole answer.
+    @Test("A break mid-answer keeps what arrived, uncaptioned as complete")
     func keepsPartialTextOnFailure() async throws {
         let script = Script()
         let model = ExplanationModel(assistant: script.assistant, techniqueSlug: "box-breathing")
@@ -80,7 +84,7 @@ struct AssistantGuidanceTests {
             model.state == .reading(
                 text: "The mechanism is ",
                 source: .fallback,
-                isComplete: true
+                isComplete: false
             )
         )
     }

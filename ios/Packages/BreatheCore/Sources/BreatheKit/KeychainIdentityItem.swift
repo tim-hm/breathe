@@ -14,10 +14,7 @@ import Security
 /// the app's container, so deleting and reinstalling returns the same person to
 /// their own history instead of stranding it behind an id nothing can reach.
 struct KeychainIdentityItem: Sendable {
-    private static let logger = Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "BreatheKit",
-        category: "identity"
-    )
+    private static let logger = Logger(category: "identity")
 
     let service: String
     let account: String

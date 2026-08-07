@@ -6,8 +6,12 @@ import Foundation
 /// has to survive is the catalogue changing underneath it: a technique that
 /// gains a phase or loses a stage makes these counts disagree, and a mismatch is
 /// the signal to fall back to the curated defaults rather than to guess which
-/// old value belonged to which new phase. Client-side until M4's profiles exist
-/// to sync it.
+/// old value belonged to which new phase.
+///
+/// Stored on the device and staying there. Profiles have shipped and these did
+/// not move onto one: a dialled phase length is how a session feels in the room
+/// it is done in, and `WatchSettings` already treats the wrist's one switch the
+/// same way.
 public struct TechniqueOverrides: Sendable, Codable, Equatable {
     /// Phase durations in milliseconds, per stage, per phase — the same shape as
     /// the technique's own stages. Milliseconds rather than `Duration` because

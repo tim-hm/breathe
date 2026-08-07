@@ -18,13 +18,7 @@ struct JSONFileStore<Element: Codable & Sendable>: Sendable {
 
     init(directory: URL, fileName: String, category: String) {
         fileURL = directory.appending(path: fileName)
-        // The running app's subsystem, not a hard-coded bundle id: this module
-        // is shared, and M9's watch app is a second bundle that should log as
-        // itself.
-        logger = Logger(
-            subsystem: Bundle.main.bundleIdentifier ?? "BreatheKit",
-            category: category
-        )
+        logger = Logger(category: category)
     }
 
     /// Everything on disk, oldest first. An unreadable file reads as empty.
@@ -45,7 +39,9 @@ struct JSONFileStore<Element: Codable & Sendable>: Sendable {
             // not worth deleting either: leaving the file alone keeps whatever
             // it holds available to a later version that can read it.
             logger
-                .error("failed to read \(fileURL.lastPathComponent): \(error.localizedDescription)")
+                .error(
+                    "failed to read \(fileURL.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)"
+                )
             return []
         }
     }
@@ -66,7 +62,7 @@ struct JSONFileStore<Element: Codable & Sendable>: Sendable {
         } catch {
             logger
                 .error(
-                    "failed to write \(fileURL.lastPathComponent): \(error.localizedDescription)"
+                    "failed to write \(fileURL.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)"
                 )
         }
     }
