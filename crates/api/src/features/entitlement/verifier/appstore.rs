@@ -33,9 +33,11 @@
 //! exactly three certificates in `x5c`, leaf first; `alg` must be `ES256`; the
 //! leaf and the intermediate must each carry Apple's marker extension; every
 //! certificate must have been valid when the transaction was signed; and the
-//! chain must lead to Apple Root CA - G3. The root arrives in `x5c[2]` and is
-//! **ignored** — the copy compiled in below is the one the intermediate is
-//! checked against, because a trust anchor a caller supplies is not one.
+//! chain must lead to Apple Root CA - G3.
+//!
+//! Everything after `alg` is `super::chain`'s, which knows nothing about
+//! subscriptions. What is left here is the App Store's own format — the
+//! segments, the payload schema, the bundle id and the price list.
 //!
 //! ## What this cannot see
 //!
@@ -54,18 +56,15 @@
 //! and are refused here — which is the offline-first design working rather than
 //! failing, since nothing on screen waits on this call. Exercising the server
 //! half needs a sandbox tester on a real device; exercising what the server
-//! *does* with an entitlement needs only `UPDATE users SET plus_until = …`.
+//! *does* with an entitlement needs only
+//! `UPDATE users SET subscription_tier = …, subscription_until = …`.
 
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
-use x509_parser::certificate::X509Certificate;
-use x509_parser::nom::AsBytes as _;
-use x509_parser::oid_registry::asn1_rs::{Oid, oid};
-use x509_parser::prelude::{ASN1Time, FromDer as _};
 
-use super::{TransactionVerifier, VerificationError, VerifiedTransaction};
+use super::{TransactionVerifier, VerificationError, VerifiedTransaction, chain};
 use crate::features::entitlement::types::SubscriptionTier;
 
 /// The app the App Store signs transactions for.
@@ -95,30 +94,6 @@ const PRODUCTS: &[(&str, SubscriptionTier)] = &[
     ("xyz.holmie.breathe.coach.monthly", SubscriptionTier::Coach),
 ];
 
-/// Apple Root CA - G3, in DER, 583 bytes.
-///
-/// Compiled in rather than fetched, downloaded, or configured: a trust anchor
-/// that arrives over the network is only as trustworthy as the fetch, and one
-/// that comes from configuration is one a misconfigured deployment can widen.
-/// It expires in 2039.
-///
-/// Verified on the way in — `sha256` is
-/// `63343abfb89a6a03ebb57e9b3f5fa7be7c4f5c756f3017b3a8c488c3653e9179`, which
-/// matches Apple's published fingerprint for the certificate served from
-/// <https://www.apple.com/certificateauthority/AppleRootCA-G3.cer>.
-const APPLE_ROOT_CA_G3: &[u8] = include_bytes!("apple_root_ca_g3.der");
-
-/// Certificates Apple puts in the JWS header: leaf, WWDR intermediate, root.
-///
-/// Asserted exactly rather than as a minimum. Apple's own libraries do the
-/// same, and a chain of another length is not a longer path to the same anchor
-/// — it is a token this code was not written to read.
-const CHAIN_LENGTH: usize = 3;
-
-/// Of those three, the two this code reads. The root is the one it does not —
-/// see [`decode_chain`].
-const SIGNING_CERTIFICATES: usize = 2;
-
 /// The only algorithm Apple signs transactions with.
 ///
 /// Compared against the header rather than inferred from the key, which is what
@@ -126,17 +101,11 @@ const SIGNING_CERTIFICATES: usize = 2;
 /// have the signature checked as a MAC keyed on a public value.
 const SIGNING_ALGORITHM: &str = "ES256";
 
-/// Marks a certificate as one of Apple's receipt-signing leaves.
-const LEAF_MARKER_OID: Oid<'static> = oid!(1.2.840.113635.100.6.11.1);
-
-/// Marks the Worldwide Developer Relations intermediate.
-const INTERMEDIATE_MARKER_OID: Oid<'static> = oid!(1.2.840.113635.100.6.2.1);
-
 /// The verifier a deployment runs.
 ///
-/// Stateless, and therefore a unit struct: the root is compiled in and the
-/// certificate chain arrives with each transaction, so there is nothing to
-/// build and nothing to configure.
+/// Stateless, and therefore a unit struct: the trust anchor is compiled into
+/// `chain` and the certificate chain arrives with each transaction, so there
+/// is nothing to build and nothing to configure.
 pub struct AppStoreVerifier;
 
 impl TransactionVerifier for AppStoreVerifier {
@@ -161,11 +130,7 @@ impl TransactionVerifier for AppStoreVerifier {
         let payload: TransactionPayload = decode_json(&payload, "payload")?;
         let signed_at = timestamp(payload.signed_date, "signedDate")?;
 
-        let chain = decode_chain(&header.x5c)?;
-        let certificates = parse_chain(&chain)?;
-        let leaf = verify_chain(&certificates, signed_at)?;
-
-        verify_signature(leaf, signing_input, &signature)?;
+        chain::verify(&header.x5c, signing_input, &signature, signed_at)?;
 
         payload.into_verified()
     }
@@ -290,160 +255,6 @@ fn decode_json<T: for<'de> Deserialize<'de>>(
     })
 }
 
-/// Takes the leaf and the intermediate, and refuses to touch the third.
-///
-/// The slice pattern is the length check: a chain of any other shape does not
-/// reach the decoder at all. Apple's own root arrives as `x5c[2]` and is never
-/// decoded, because trusting the anchor a caller sent would make the whole chain
-/// self-certifying — anyone can generate three certificates that verify against
-/// each other.
-fn decode_chain(x5c: &[String]) -> Result<[Vec<u8>; SIGNING_CERTIFICATES], VerificationError> {
-    let [leaf, intermediate, _root] = x5c else {
-        return Err(VerificationError::Untrusted(format!(
-            "`x5c` carries {} certificates, not {CHAIN_LENGTH}",
-            x5c.len()
-        )));
-    };
-
-    Ok([decode_certificate(leaf)?, decode_certificate(intermediate)?])
-}
-
-/// Standard base64 with padding, unlike the JWS segments: `x5c` entries are
-/// ordinary base64 per RFC 7515, and only the segments are base64url.
-fn decode_certificate(encoded: &str) -> Result<Vec<u8>, VerificationError> {
-    base64::engine::general_purpose::STANDARD
-        .decode(encoded)
-        .map_err(|error| {
-            VerificationError::Untrusted(format!("an `x5c` entry is not base64: {error}"))
-        })
-}
-
-fn parse_chain(
-    chain: &[Vec<u8>; SIGNING_CERTIFICATES],
-) -> Result<[X509Certificate<'_>; SIGNING_CERTIFICATES], VerificationError> {
-    let [leaf, intermediate] = chain;
-
-    Ok([parse_certificate(leaf)?, parse_certificate(intermediate)?])
-}
-
-fn parse_certificate(der: &[u8]) -> Result<X509Certificate<'_>, VerificationError> {
-    X509Certificate::from_der(der)
-        .map(|(_, certificate)| certificate)
-        .map_err(|error| {
-            VerificationError::Untrusted(format!("an `x5c` entry is not a certificate: {error}"))
-        })
-}
-
-/// Walks leaf ← intermediate ← Apple's root, returning the leaf that signed the
-/// transaction.
-fn verify_chain<'a>(
-    certificates: &'a [X509Certificate<'a>; SIGNING_CERTIFICATES],
-    signed_at: DateTime<Utc>,
-) -> Result<&'a X509Certificate<'a>, VerificationError> {
-    let [leaf, intermediate] = certificates;
-
-    let (_, root) = X509Certificate::from_der(APPLE_ROOT_CA_G3).map_err(|error| {
-        VerificationError::Untrusted(format!("the compiled-in Apple root is unreadable: {error}"))
-    })?;
-
-    require_marker(leaf, &LEAF_MARKER_OID, "leaf")?;
-    require_marker(intermediate, &INTERMEDIATE_MARKER_OID, "intermediate")?;
-
-    for (certificate, name) in [
-        (leaf, "leaf"),
-        (intermediate, "intermediate"),
-        (&root, "root"),
-    ] {
-        require_valid_at(certificate, signed_at, name)?;
-    }
-
-    intermediate
-        .verify_signature(Some(root.public_key()))
-        .map_err(|error| {
-            VerificationError::Untrusted(format!(
-                "the intermediate is not signed by Apple's root: {error}"
-            ))
-        })?;
-
-    leaf.verify_signature(Some(intermediate.public_key()))
-        .map_err(|error| {
-            VerificationError::Untrusted(format!(
-                "the leaf is not signed by the intermediate: {error}"
-            ))
-        })?;
-
-    Ok(leaf)
-}
-
-/// Apple's marker extensions are what stop any certificate Apple ever issued
-/// from signing a transaction — the chain check alone would accept a leaf minted
-/// for an entirely different Apple service.
-fn require_marker(
-    certificate: &X509Certificate<'_>,
-    oid: &Oid<'_>,
-    name: &str,
-) -> Result<(), VerificationError> {
-    let present = certificate
-        .get_extension_unique(oid)
-        .map_err(|error| {
-            VerificationError::Untrusted(format!("the {name}'s extensions are unreadable: {error}"))
-        })?
-        .is_some();
-
-    if present {
-        return Ok(());
-    }
-
-    Err(VerificationError::Untrusted(format!(
-        "the {name} does not carry Apple's `{oid}` extension"
-    )))
-}
-
-/// Judged at the moment the transaction was signed, not now.
-///
-/// Apple's leaf certificates rotate roughly yearly and the old ones expire; a
-/// subscription's JWS is signed once at renewal and resubmitted for a year
-/// afterwards. Measuring against `now()` would therefore reject genuine
-/// transactions on Apple's rotation schedule — which is what broke validators
-/// industry-wide in September 2023 and again in October 2025. This is the
-/// behaviour Apple's own libraries implement for offline verification.
-fn require_valid_at(
-    certificate: &X509Certificate<'_>,
-    signed_at: DateTime<Utc>,
-    name: &str,
-) -> Result<(), VerificationError> {
-    let at = ASN1Time::from_timestamp(signed_at.timestamp()).map_err(|error| {
-        VerificationError::Untrusted(format!("`signedDate` is not a representable time: {error}"))
-    })?;
-
-    if certificate.validity().is_valid_at(at) {
-        return Ok(());
-    }
-
-    Err(VerificationError::Untrusted(format!(
-        "the {name} was not valid when the transaction was signed"
-    )))
-}
-
-/// The ES256 check itself.
-///
-/// `ECDSA_P256_SHA256_FIXED`, not `_ASN1`: a JWS signature is the raw 64-byte
-/// r‖s pair, and the DER-wrapped form ring would otherwise expect fails on every
-/// real transaction.
-fn verify_signature(
-    leaf: &X509Certificate<'_>,
-    signing_input: &[u8],
-    signature: &[u8],
-) -> Result<(), VerificationError> {
-    let key = ring::signature::UnparsedPublicKey::new(
-        &ring::signature::ECDSA_P256_SHA256_FIXED,
-        leaf.public_key().subject_public_key.data.as_bytes(),
-    );
-
-    key.verify(signing_input, signature)
-        .map_err(|_| VerificationError::Untrusted("the signature does not verify".to_owned()))
-}
-
 fn timestamp(millis: i64, field: &str) -> Result<DateTime<Utc>, VerificationError> {
     DateTime::from_timestamp_millis(millis).ok_or_else(|| {
         VerificationError::Malformed(format!("`{field}` is not a representable time"))
@@ -454,15 +265,7 @@ fn timestamp(millis: i64, field: &str) -> Result<DateTime<Utc>, VerificationErro
 mod tests {
     use super::*;
 
-    /// A forged transaction with a self-signed chain, its `signedDate` set so
-    /// every certificate in it is comfortably valid.
-    ///
-    /// This is the shape of the attack the verifier exists to stop: an attacker
-    /// can produce a structurally perfect JWS — correct segments, correct
-    /// `alg`, three parseable certificates, a signature that verifies against
-    /// the key in its own leaf — because none of that requires anything Apple
-    /// holds. What they cannot produce is a chain leading to the root compiled
-    /// in above.
+    /// A structurally perfect JWS carrying a chain that is nobody's.
     fn forged(payload: &str) -> String {
         let header =
             URL_SAFE_NO_PAD.encode(br#"{"alg":"ES256","x5c":["MIIBBg==","MIIBBg==","MIIBBg=="]}"#);
@@ -495,10 +298,14 @@ mod tests {
         }
     }
 
-    /// The whole point. Everything about this token is well-formed and none of
-    /// it is Apple's, so it must not entitle anybody.
+    /// Everything about this token is well-formed and none of it is Apple's, so
+    /// it must not entitle anybody.
+    ///
+    /// What the chain walk itself refuses is pinned beside it in `chain`; this
+    /// pins that a submission still goes through that walk. Without it, deleting
+    /// the `chain::verify` call would leave every test in this file passing.
     #[test]
-    fn a_forged_chain_does_not_verify() {
+    fn a_verified_transaction_still_has_to_reach_apples_root() {
         let error = AppStoreVerifier
             .verify(&forged(&payload_json()))
             .expect_err("a self-signed chain is not Apple's");
@@ -622,25 +429,5 @@ mod tests {
             verified.revoked_at.map(|at| at.timestamp()),
             Some(1_790_000_000)
         );
-    }
-
-    /// The compiled-in anchor is the one thing here with no runtime check
-    /// behind it, so its identity is pinned: a replaced file, a truncated
-    /// download, or a well-meaning swap for G2 fails here rather than in
-    /// production, where it would present as every genuine transaction being
-    /// refused.
-    #[test]
-    fn the_compiled_in_root_is_apples() {
-        let (rest, root) =
-            X509Certificate::from_der(APPLE_ROOT_CA_G3).expect("the root parses as a certificate");
-
-        assert!(rest.is_empty());
-        assert_eq!(
-            root.subject().to_string(),
-            "CN=Apple Root CA - G3, OU=Apple Certification Authority, O=Apple Inc., C=US"
-        );
-        assert_eq!(root.subject(), root.issuer(), "the root is self-signed");
-        root.verify_signature(None)
-            .expect("the root's self-signature verifies");
     }
 }

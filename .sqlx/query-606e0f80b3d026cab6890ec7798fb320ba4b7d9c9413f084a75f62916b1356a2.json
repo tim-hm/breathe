@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users\n              SET subscription_tier = NULL,\n                  subscription_until = NULL,\n                  subscription_signed_at = NULL,\n                  subscription_claimed_at = NULL,\n                  app_store_original_transaction_id = NULL,\n                  updated_at = now()\n            WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "606e0f80b3d026cab6890ec7798fb320ba4b7d9c9413f084a75f62916b1356a2"
+}
