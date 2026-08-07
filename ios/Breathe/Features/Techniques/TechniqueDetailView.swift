@@ -11,6 +11,10 @@ struct TechniqueDetailView: View {
     @Environment(SessionSettings.self) private var settings
     @State private var started: StartedSession?
 
+    @Environment(PlusStore.self) private var plus
+
+    @State private var isShowingPaywall = false
+
     var body: some View {
         @Bindable var settings = settings
         // Derived once per pass and handed down: `dialled` walks the stored
@@ -34,6 +38,9 @@ struct TechniqueDetailView: View {
         .paletteGround()
         .navigationTitle(technique.name)
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $isShowingPaywall) {
+            PaywallView(highlighting: technique.requires)
+        }
         .fullScreenCover(item: $started) { session in
             SessionView(model: session.model)
         }
@@ -153,8 +160,20 @@ struct TechniqueDetailView: View {
         }
     }
 
+    /// Begin, or the offer that has to come first.
+    ///
+    /// The second gate, and deliberately not the only one: the list opens the
+    /// paywall instead of navigating here, but home's wheel and a watch handoff
+    /// both reach this screen directly. A person who arrives on a locked
+    /// technique should read about it — that is what the catalogue is for — and
+    /// meet the offer at the moment they try to breathe it.
     private func beginButton(playing dialled: Technique) -> some View {
         Button {
+            guard technique.isUnlocked(for: plus.tier) else {
+                isShowingPaywall = true
+                return
+            }
+
             started = StartedSession(
                 model: SessionModel(
                     technique: dialled,
@@ -163,7 +182,7 @@ struct TechniqueDetailView: View {
                 )
             )
         } label: {
-            Text("Begin")
+            Text(technique.isUnlocked(for: plus.tier) ? "Begin" : "Unlock to breathe this")
                 .font(.headline)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, Theme.Spacing.close)

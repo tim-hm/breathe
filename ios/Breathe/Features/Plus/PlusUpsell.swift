@@ -2,35 +2,43 @@ import BreatheKit
 import BreatheUI
 import SwiftUI
 
-/// One line offering Plus, wherever the free tier has just met its edge.
+/// One line offering a subscription, wherever the current tier has just met its
+/// edge.
 ///
-/// Draws nothing at all for a subscriber, so a caller never has to branch: the
-/// condition lives here, in one place, rather than in every surface that could
-/// mention Plus. The affordance is a line of text and a tap, not a banner —
-/// this appears next to an answer somebody is reading, and a card would take
-/// the screen away from what they came for.
+/// Draws nothing at all for somebody who already holds `tier`, so a caller never
+/// has to branch: the condition lives here, in one place, rather than in every
+/// surface that could mention a subscription. The affordance is a line of text
+/// and a tap, not a banner — this appears next to something somebody is reading,
+/// and a card would take the screen away from what they came for.
 struct PlusUpsell: View {
     /// What just happened, in the caller's own words. Passed in rather than
-    /// fixed here because "today's answers are from the rules" and "this
-    /// explanation is the technique's own notes" are different moments, and one
-    /// generic sentence would be honest about neither.
+    /// fixed here because "today's answers are from the rules" and "this one is
+    /// in the full catalogue" are different moments, and one generic sentence
+    /// would be honest about neither.
     let reason: String
 
-    /// From the environment, so a surface that wants to offer Plus adds one
-    /// line and learns nothing about where the subscription comes from.
+    /// What would answer it. Decides both whether to draw at all and which tier
+    /// the paywall opens on.
+    let tier: SubscriptionTier
+
     @Environment(PlusStore.self) private var store
 
     @State private var isShowingPaywall = false
 
+    init(reason: String, offering tier: SubscriptionTier) {
+        self.reason = reason
+        self.tier = tier
+    }
+
     var body: some View {
-        if !store.isPlus {
+        if store.tier < tier {
             Button {
                 isShowingPaywall = true
             } label: {
                 HStack(spacing: Theme.Spacing.tight) {
                     Text(reason)
                         .foregroundStyle(Theme.Ink.secondary)
-                    Text("Breathe Plus")
+                    Text(label)
                         .foregroundStyle(Theme.Accent.brand)
                     Image(systemName: "chevron.right")
                         .font(.caption2)
@@ -41,8 +49,15 @@ struct PlusUpsell: View {
             }
             .buttonStyle(.plain)
             .sheet(isPresented: $isShowingPaywall) {
-                PaywallView()
+                PaywallView(highlighting: tier)
             }
+        }
+    }
+
+    private var label: String {
+        switch tier {
+        case .coach: "Breathe Coach"
+        case .plus, .free: "Breathe Plus"
         }
     }
 }

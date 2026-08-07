@@ -12,6 +12,13 @@ struct TechniqueListView: View {
     let model: TechniqueListModel
     let sessions: any SessionRecording
 
+    @Environment(PlusStore.self) private var plus
+
+    /// The locked technique somebody tapped, which is both the paywall's trigger
+    /// and the reason it is being shown. `Technique` is `Identifiable`, so this
+    /// is the whole of the presentation state.
+    @State private var locked: Technique?
+
     var body: some View {
         NavigationStack {
             content
@@ -19,6 +26,9 @@ struct TechniqueListView: View {
                 .navigationTitle("Techniques")
                 .navigationDestination(for: Technique.self) { technique in
                     TechniqueDetailView(technique: technique, sessions: sessions)
+                }
+                .sheet(item: $locked) { technique in
+                    PaywallView(highlighting: technique.requires)
                 }
         }
         // Home usually starts the shared load first, but this tab must not
@@ -55,10 +65,7 @@ struct TechniqueListView: View {
                 ForEach(goals(in: techniques), id: \.self) { goal in
                     Section {
                         ForEach(techniques.filter { $0.goal == goal }) { technique in
-                            NavigationLink(value: technique) {
-                                TechniqueRow(technique: technique)
-                            }
-                            .listRowBackground(Color.clear)
+                            row(for: technique)
                         }
                     } header: {
                         Text(goal.intent)
@@ -83,6 +90,34 @@ struct TechniqueListView: View {
         }
     }
 
+    /// A locked technique is a row like any other that opens the paywall
+    /// instead of the detail screen.
+    ///
+    /// Listed rather than hidden, and drawn at full strength rather than dimmed:
+    /// the catalogue is what Plus sells, so somebody has to be able to read what
+    /// they would be getting. Dimming reads as a punishment for not having paid;
+    /// a lock beside a name and a summary reads as an invitation, which is what
+    /// this is.
+    @ViewBuilder
+    private func row(for technique: Technique) -> some View {
+        if technique.isUnlocked(for: plus.tier) {
+            NavigationLink(value: technique) {
+                TechniqueRow(technique: technique)
+            }
+            .listRowBackground(Color.clear)
+        } else {
+            Button {
+                locked = technique
+            } label: {
+                TechniqueRow(technique: technique, isLocked: true)
+            }
+            // Plain, so the row does not take the accent a button would and
+            // start competing with the unlocked rows above it.
+            .buttonStyle(.plain)
+            .listRowBackground(Color.clear)
+        }
+    }
+
     /// The goals present in the catalogue, in the fixed calm-first order of
     /// the enum — stable across loads, so sections never reshuffle under a
     /// person who has learned where sleep lives.
@@ -95,12 +130,25 @@ struct TechniqueListView: View {
 
 private struct TechniqueRow: View {
     let technique: Technique
+    var isLocked = false
 
     var body: some View {
         HStack(alignment: .center, spacing: Theme.Spacing.standard) {
             VStack(alignment: .leading, spacing: Theme.Spacing.close) {
-                Text(technique.name)
-                    .font(.headline)
+                HStack(spacing: Theme.Spacing.close) {
+                    Text(technique.name)
+                        .font(.headline)
+
+                    if isLocked {
+                        Image(systemName: "lock.fill")
+                            .font(.caption)
+                            // The brand accent rather than a warning colour: the
+                            // lock is the app offering something, not the app
+                            // telling somebody off.
+                            .foregroundStyle(Theme.Accent.brand)
+                            .accessibilityLabel("Included with Breathe Plus")
+                    }
+                }
 
                 Text(technique.summary)
                     .font(.subheadline)

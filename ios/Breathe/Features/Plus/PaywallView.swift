@@ -2,35 +2,52 @@ import BreatheKit
 import BreatheUI
 import SwiftUI
 
-/// What Plus is, what it costs, and the two links App Review will not approve a
-/// paywall without.
+/// The two subscriptions, what each opens, and the links App Review will not
+/// approve a paywall without.
 ///
 /// The copy leads with what stays free, which is the honest framing and also the
-/// product's: the catalogue, the player, the journey, and the boards are the
-/// hero experience and are not for sale. What Plus buys is the one feature that
-/// costs money to run — the assistant asking a language model on this person's
-/// behalf. A paywall that implied otherwise would be selling something the app
-/// already gives away.
+/// product's: the player, the journey, the leaderboards and the basics are not
+/// for sale, and neither are the two techniques the app opens with. Plus sells
+/// the rest of the catalogue. Coach sells the one feature that costs money to
+/// run — the assistant asking a language model on this person's behalf.
+///
+/// Both tiers on one screen rather than two sheets. They are a ladder, not
+/// alternatives, and somebody deciding between them should be able to see the
+/// difference without going back.
 struct PaywallView: View {
     @Environment(\.dismiss) private var dismiss
 
     /// From the environment, like `SessionSettings`: `BreatheApp` owns the one
-    /// instance, and the surfaces that offer Plus are nowhere near it.
+    /// instance, and the surfaces that offer a subscription are nowhere near it.
     @Environment(PlusStore.self) private var store
+
+    /// Which tier the sheet opens on. The surface that presented it knows why
+    /// somebody is here — a locked technique means Plus, an assistant answer
+    /// from the rules means Coach — and leading with the one that answers their
+    /// question is the difference between an offer and a price list.
+    let highlighted: SubscriptionTier
+
+    init(highlighting tier: SubscriptionTier = .plus) {
+        highlighted = tier
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Theme.Spacing.loose) {
                     header
-                    benefits
+
+                    ForEach(SubscriptionTier.purchasable, id: \.self) { tier in
+                        offer(tier)
+                    }
+
                     free
                 }
                 .padding(Theme.Spacing.standard)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .background(Theme.Surface.ground)
-            .safeAreaInset(edge: .bottom) { purchaseBar }
+            .safeAreaInset(edge: .bottom) { legalBar }
             .navigationTitle("Breathe Plus")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -38,31 +55,29 @@ struct PaywallView: View {
                     Button("Close") { dismiss() }
                 }
             }
-            // Dismisses itself the moment the purchase lands, rather than
-            // leaving somebody looking at a paywall for something they now own.
-            .onChange(of: store.isPlus) { _, isPlus in
-                if isPlus {
+            // Dismisses itself once the tier somebody came for is theirs, rather
+            // than leaving them looking at a paywall for something they now own.
+            // Compared, not equated: buying Coach answers a Plus prompt too.
+            .onChange(of: store.tier) { _, tier in
+                if tier >= highlighted {
                     dismiss()
                 }
             }
-            // The price is fetched here rather than at launch: it is the one
-            // App Store round trip this app makes, and only this screen needs
-            // it.
-            .task { await store.loadProduct() }
+            .task { await store.loadProducts() }
         }
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.close) {
-            Text("The assistant, in full")
+            Text(headline)
                 .font(.title2.weight(.semibold))
                 .foregroundStyle(Theme.Ink.primary)
 
             Text(
                 """
-                Breathe is free, and stays free. Plus opens up the one part that \
-                costs us to run — an assistant that reads what you told us and \
-                answers in your words rather than from a script.
+                Breathe works without either of these. They open up the rest of \
+                the catalogue, and an assistant that reads what you told us and \
+                answers in your own words.
                 """
             )
             .font(.body)
@@ -70,44 +85,79 @@ struct PaywallView: View {
         }
     }
 
-    private var benefits: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.standard) {
-            benefit(
-                icon: "sparkles",
-                title: "Guidance written for you",
-                detail: "Where to start, re-tuned as your practice changes."
-            )
-            benefit(
-                icon: "text.book.closed",
-                title: "Why a technique works",
-                detail: "Explained at your level, for any technique in the catalogue."
-            )
-            benefit(
-                icon: "infinity",
-                title: "Ask as often as you like",
-                detail: "The free tier gets a taste each day. Plus lifts the ceiling."
-            )
+    /// Names what they came for rather than what is for sale.
+    private var headline: String {
+        switch highlighted {
+        case .coach: "An assistant that knows your practice"
+        case .plus, .free: "The whole catalogue"
+        }
+    }
+
+    private func offer(_ tier: SubscriptionTier) -> some View {
+        let isHeld = store.tier >= tier
+        let isHighlighted = tier == highlighted
+
+        return VStack(alignment: .leading, spacing: Theme.Spacing.standard) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(tier.title)
+                    .font(.headline)
+                    .foregroundStyle(Theme.Ink.primary)
+                Spacer(minLength: Theme.Spacing.close)
+                Text(price(for: tier))
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(Theme.Ink.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: Theme.Spacing.close) {
+                ForEach(tier.benefits, id: \.self) { benefit in
+                    Label(benefit, systemImage: "checkmark")
+                        .font(.subheadline)
+                        .foregroundStyle(Theme.Ink.secondary)
+                        .labelStyle(.titleAndIcon)
+                }
+            }
+
+            Button {
+                Task { await store.purchase(tier) }
+            } label: {
+                Text(isHeld ? "Your plan" : callToAction(for: tier))
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .tint(Theme.Accent.brand)
+            .disabled(store.isBusy || isHeld)
         }
         .padding(Theme.Spacing.standard)
         .background(Theme.Surface.raised, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.card)
+                .strokeBorder(
+                    isHighlighted ? Theme.Accent.brand : Theme.Surface.line,
+                    lineWidth: isHighlighted ? 2 : 1
+                )
+        )
     }
 
-    private func benefit(icon: String, title: String, detail: String) -> some View {
-        HStack(alignment: .top, spacing: Theme.Spacing.standard) {
-            Image(systemName: icon)
-                .font(.title3)
-                .foregroundStyle(Theme.Accent.brand)
-                .frame(width: 28)
+    /// Says "Upgrade" rather than "Get" when somebody already pays for the tier
+    /// below. Both products live in one subscription group, so this genuinely is
+    /// a change of plan — Apple prorates it and there is never a second charge.
+    private func callToAction(for tier: SubscriptionTier) -> String {
+        store.tier > .free ? "Upgrade" : "Get \(tier.title)"
+    }
 
-            VStack(alignment: .leading, spacing: Theme.Spacing.tight) {
-                Text(title)
-                    .font(.headline)
-                    .foregroundStyle(Theme.Ink.primary)
-                Text(detail)
-                    .font(.subheadline)
-                    .foregroundStyle(Theme.Ink.secondary)
-            }
+    /// The price comes from the App Store or not at all: it varies by
+    /// storefront, and a hardcoded amount would be wrong in most countries and
+    /// illegal in a few. A missing one reads as a blank rather than a guess —
+    /// somebody with no signal can still see what each tier is and buy it when
+    /// the sheet loads.
+    private func price(for tier: SubscriptionTier) -> String {
+        guard let product = store.products.first(where: { $0.tier == tier }) else {
+            return " "
         }
+
+        return "\(product.displayPrice) a month"
     }
 
     private var free: some View {
@@ -118,8 +168,9 @@ struct PaywallView: View {
 
             Text(
                 """
-                Every technique, the guided player with haptics and sound, your \
-                whole journey, the leaderboards, and the Apple Watch app.
+                Box breathing and the physiological sigh, the guided player with \
+                haptics and sound, your whole journey, the leaderboards, the \
+                basics, and the Apple Watch app.
                 """
             )
             .font(.subheadline)
@@ -127,30 +178,18 @@ struct PaywallView: View {
         }
     }
 
-    /// Pinned to the bottom, because the price, the button, and the two required
-    /// links have to be reachable without reading to the end of the page.
-    private var purchaseBar: some View {
+    /// Pinned to the bottom, because Restore Purchases and the two documents
+    /// have to be reachable without reading to the end of the page.
+    private var legalBar: some View {
         VStack(spacing: Theme.Spacing.close) {
-            Button {
-                Task { await store.purchase() }
-            } label: {
-                Text(callToAction)
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .tint(Theme.Accent.brand)
-            .disabled(store.isBusy)
-
             if store.isAwaitingApproval {
-                Text("Waiting for approval. You'll get Plus as soon as it comes through.")
+                Text("Waiting for approval. You'll get it as soon as that comes through.")
                     .font(.footnote)
                     .foregroundStyle(Theme.Ink.secondary)
                     .multilineTextAlignment(.center)
             }
 
-            Text("Renews yearly. Cancel any time in Settings.")
+            Text("Renews monthly. Cancel any time in Settings.")
                 .font(.caption)
                 .foregroundStyle(Theme.Ink.tertiary)
 
@@ -169,15 +208,37 @@ struct PaywallView: View {
         .padding(Theme.Spacing.standard)
         .background(.bar)
     }
+}
 
-    /// The price comes from the App Store or not at all: it varies by
-    /// storefront, and a hardcoded "$4.99" would be wrong in most countries and
-    /// illegal in a few. A missing price reads as a plain call to action rather
-    /// than a blank — somebody with no signal can still see what Plus is and buy
-    /// it when the sheet loads.
-    private var callToAction: String {
-        guard let price = store.product?.displayPrice else { return "Get Plus" }
+private extension SubscriptionTier {
+    var title: String {
+        switch self {
+        case .free: "Free"
+        case .plus: "Plus"
+        case .coach: "Coach"
+        }
+    }
 
-        return "Get Plus — \(price) a year"
+    /// What each tier opens, in the person's terms. Coach lists what it adds
+    /// rather than repeating Plus, with one line saying it contains it — a
+    /// second copy of the same three bullets makes the ladder harder to read,
+    /// not easier.
+    var benefits: [String] {
+        switch self {
+        case .free:
+            []
+        case .plus:
+            [
+                "Every technique in the catalogue",
+                "Sleep, focus, and energy protocols",
+                "The Wim Hof-style rounds",
+            ]
+        case .coach:
+            [
+                "Everything in Plus",
+                "Where to start, written for you",
+                "Why any technique works, at your level",
+            ]
+        }
     }
 }
