@@ -38,7 +38,7 @@
               "locale" : "en_US"
             }
           ],
-          "productID" : "xyz.holmie.breathe.plus.monthly",
+          "productID" : "xyz.holmie.ond.plus.monthly",
           "recurringSubscriptionPeriod" : "P1M",
           "referenceName" : "önd Plus (monthly)",
           "subscriptionGroupID" : "21571893",
@@ -63,7 +63,7 @@
               "locale" : "en_US"
             }
           ],
-          "productID" : "xyz.holmie.breathe.coach.monthly",
+          "productID" : "xyz.holmie.ond.coach.monthly",
           "recurringSubscriptionPeriod" : "P1M",
           "referenceName" : "önd Coach (monthly)",
           "subscriptionGroupID" : "21571893",

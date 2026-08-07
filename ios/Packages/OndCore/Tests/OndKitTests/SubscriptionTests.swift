@@ -143,7 +143,7 @@ struct SubscriptionTransactionTests {
     /// tier at all.
     @Test("A product this build does not sell entitles nothing")
     func unknownProductEntitlesNothing() {
-        let stale = transaction(productID: "xyz.holmie.breathe.plus.yearly")
+        let stale = transaction(productID: "xyz.holmie.ond.plus.yearly")
 
         #expect(stale.entitledTier(at: Date()) == .free)
     }

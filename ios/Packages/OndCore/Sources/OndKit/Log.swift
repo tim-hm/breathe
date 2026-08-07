@@ -4,11 +4,11 @@ import os
 ///
 /// Deriving it from `Bundle.main.bundleIdentifier` names the *host process*, so
 /// a file in this package filed under one subsystem when the phone loaded it and
-/// another when the watch did — and `log stream --subsystem xyz.holmie.breathe`
+/// another when the watch did — and `log stream --subsystem xyz.holmie.ond`
 /// then silently omitted the watch, the target whose failures are hardest to
 /// reproduce.
 public enum Log {
-    public static let subsystem = "xyz.holmie.breathe"
+    public static let subsystem = "xyz.holmie.ond"
 }
 
 public extension Logger {

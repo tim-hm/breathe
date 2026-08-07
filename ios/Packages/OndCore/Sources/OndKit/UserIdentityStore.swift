@@ -45,7 +45,7 @@ public final class KeychainUserIdentityStore: UserIdentityStore {
     ///     separate bundles, do not collide before the id has been handed over.
     ///   - account: the item's account name. Fixed — there is one identity.
     public init(
-        service: String = Bundle.main.bundleIdentifier ?? "xyz.holmie.breathe",
+        service: String = Bundle.main.bundleIdentifier ?? "xyz.holmie.ond",
         account: String = "anonymous-user-id"
     ) {
         item = KeychainIdentityItem(service: service, account: account)

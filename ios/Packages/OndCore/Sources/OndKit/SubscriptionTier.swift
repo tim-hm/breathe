@@ -37,8 +37,8 @@ public enum SubscriptionTier: Int, Sendable, Comparable, Codable, CaseIterable {
     public var productIdentifier: String? {
         switch self {
         case .free: nil
-        case .plus: "xyz.holmie.breathe.plus.monthly"
-        case .coach: "xyz.holmie.breathe.coach.monthly"
+        case .plus: "xyz.holmie.ond.plus.monthly"
+        case .coach: "xyz.holmie.ond.coach.monthly"
         }
     }
 

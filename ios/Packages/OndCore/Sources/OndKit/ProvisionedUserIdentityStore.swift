@@ -53,7 +53,7 @@ public final class ProvisionedUserIdentityStore: UserIdentityStore {
     ///   - account: the item's account name, matching the phone's so that the
     ///     two devices file the same thing under the same name.
     public convenience init(
-        service: String = Bundle.main.bundleIdentifier ?? "xyz.holmie.breathe.watchkitapp",
+        service: String = Bundle.main.bundleIdentifier ?? "xyz.holmie.ond.watchkitapp",
         account: String = "anonymous-user-id"
     ) {
         self.init(storage: KeychainIdentityItem(service: service, account: account))

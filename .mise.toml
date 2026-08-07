@@ -448,7 +448,7 @@ run = '''
     -destination 'generic/platform=iOS Simulator' -showBuildSettings 2>/dev/null \
     | awk -F' = ' '/ BUILT_PRODUCTS_DIR /{print $2; exit}')
   xcrun simctl install booted "$products/Ond.app"
-  xcrun simctl launch booted xyz.holmie.breathe
+  xcrun simctl launch booted xyz.holmie.ond
 '''
 
 [tasks."ios:build:watch"]

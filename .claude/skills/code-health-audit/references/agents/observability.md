@@ -141,7 +141,7 @@ Logs must never contain secrets, and this repo has two specific exposures worth 
 
 `docs/observability.md` covers the backend only, so the app's conventions are set by existing usage rather than by a document. That gap is itself worth reporting once if the Swift logging surface has grown — but review the code against what is already there:
 
-- **`os.Logger`, one subsystem.** Every logger is constructed with subsystem `xyz.holmie.breathe` and a category naming the area (`wheel`, `audio`, `haptics`, `watch-link`). Flag a divergent subsystem string, a missing category, or a category that duplicates an existing one under a different name.
+- **`os.Logger`, one subsystem.** Every logger is constructed with subsystem `xyz.holmie.ond` and a category naming the area (`wheel`, `audio`, `haptics`, `watch-link`). Flag a divergent subsystem string, a missing category, or a category that duplicates an existing one under a different name.
 - **`print()` instead of a logger.** `print` output does not reach the unified log and vanishes outside a debugger session. Flag every occurrence in non-test code.
 - **Privacy annotations.** `os_log` redacts interpolated dynamic strings by default and shows them as `<private>`. That is the right default for anything a person typed, and the wrong one for a technique slug or an error code you will need in a bug report — those want `privacy: .public`. Flag values marked `.public` that carry user-authored text, and diagnostic values left redacted where the log is then useless.
 - **The boundary principle applies here too.** A repository that logs a decode failure _and_ throws leaves the model's catch block logging it again.
