@@ -3,14 +3,14 @@ import BreatheUI
 import SwiftUI
 
 /// How much to explain as the session goes. Drawn in the brand accent, not a
-/// goal's: the answer belongs to the person rather than to any technique.
+/// goal's: the answer belongs to the person rather than to any exercise.
 struct ExperienceStepView: View {
     let model: OnboardingModel
 
     var body: some View {
         OnboardingQuestion(
             title: "Have you done this before?",
-            subtitle: "Every technique is available either way. This only decides how much "
+            subtitle: "Every exercise is available either way. This only decides how much "
                 + "we explain as you go."
         ) {
             ForEach(ExperienceLevel.allCases) { level in

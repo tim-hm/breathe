@@ -3,9 +3,9 @@ import SwiftUI
 
 /// The way out, and the one health note the flow carries.
 ///
-/// The caution goes here rather than on the way in: some techniques breathe fast
+/// The caution goes here rather than on the way in: some exercises breathe fast
 /// enough to make a person light-headed, and the place to say so is immediately
-/// before the first session, not buried in a technique's small print.
+/// before the first session, not buried in one exercise's small print.
 struct DoneStepView: View {
     var body: some View {
         OnboardingQuestion(
@@ -18,7 +18,7 @@ struct DoneStepView: View {
                     .foregroundStyle(Theme.Accent.brand)
 
                 Text(
-                    "One thing before you begin: some techniques use quick, deep "
+                    "One thing before you begin: some exercises use quick, deep "
                         + "breathing that can leave you light-headed. Practise sitting "
                         + "or lying down — never while driving or in water — and if "
                         + "anything feels wrong, just breathe normally."

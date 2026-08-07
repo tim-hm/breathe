@@ -97,6 +97,18 @@ public struct Stage: Sendable, Hashable, Codable {
     }
 }
 
+/// One breathing exercise: what it is, how it is played, and what it costs.
+///
+/// The interface calls these **exercises** and the code calls them
+/// **techniques**, on purpose. "Breathing exercise" is the phrase a general
+/// audience already uses, so that is what every screen says; the domain keeps
+/// `Technique` because the name runs through the proto contract, the
+/// `technique_slug` column in `sessions`, the `technique_goal` Postgres enum,
+/// and the seeded catalogue. Renaming the type would be a breaking proto change
+/// and a column rename across server, watch and seed data, in exchange for
+/// nothing a person using the app would notice. Read "technique" here as the
+/// domain word for the thing the interface calls an exercise.
+///
 /// `Hashable` so a list row can push one as a `NavigationStack` value rather
 /// than pushing a pre-built destination view. `Codable` because the last
 /// fetched catalogue is kept on disk — the app breathes offline from it.

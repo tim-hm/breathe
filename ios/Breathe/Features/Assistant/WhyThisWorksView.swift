@@ -2,8 +2,8 @@ import BreatheKit
 import BreatheUI
 import SwiftUI
 
-/// The science behind one technique, written for how much breathwork this
-/// person has done, and streamed so it can be read as it is written.
+/// The science behind one exercise, written for how much breathwork this person
+/// has done, and streamed so it can be read as it is written.
 ///
 /// Behind a disclosure and closed by default, for two reasons: the detail
 /// screen's job is to get somebody breathing, and an explanation nobody opened
@@ -87,7 +87,7 @@ struct WhyThisWorksView: View {
 
         case .unavailable:
             // Calm, and honest about the fact that nothing was lost: the
-            // technique's own summary and safety note are already on this
+            // exercise's own summary and safety note are already on this
             // screen, above.
             Text("Not available just now. Everything you need to practise is above.")
                 .font(.subheadline)
@@ -98,7 +98,7 @@ struct WhyThisWorksView: View {
     private func caption(for source: GuidanceSource) -> String {
         switch source {
         case .model: "Written for your experience level."
-        case .fallback: "From the technique's own notes."
+        case .fallback: "From the exercise's own notes."
         }
     }
 }

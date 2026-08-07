@@ -82,7 +82,7 @@ pub fn explanation(technique: &Technique, profile: &ProfileSnapshot) -> String {
         Some(ExperienceLevel::Regular) => {
             "You practise already, so treat the counts as a floor rather than a target: \
              the pattern matters more than the numbers, and it is worth staying with one \
-             technique long enough to notice what it does."
+             exercise long enough to notice what it does."
         }
         Some(ExperienceLevel::Occasional) => {
             "You have done some of this before. The counts are a starting point — if a \
