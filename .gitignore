@@ -12,6 +12,9 @@ ios/*.xcworkspace/
 # dictionary, where hand edits silently vanish on the next generate.
 ios/Breathe/Info.plist
 ios/BreatheWatch/Info.plist
+# Same again for the entitlements XcodeGen writes from each `entitlements:` block.
+ios/Breathe/Breathe.entitlements
+ios/BreatheWatch/BreatheWatch.entitlements
 ios/**/.build/
 DerivedData/
 *.xcuserstate

@@ -21,6 +21,12 @@ struct BreatheWatchApp: App {
     /// One store for the whole app, and the same file the sync queue drains.
     private let sessions: any SessionRecording = FileSessionStore()
 
+    /// What the screens record through: the same file, with each kept session
+    /// also credited to Health as Mindful Minutes — the wrist writes its own,
+    /// so a session breathed away from the phone still counts. The sync queue
+    /// keeps the bare store above; restored history is not new practice.
+    private let recorder: any SessionRecording
+
     @State private var catalogue: TechniqueListModel
     @State private var journey: JourneyModel
 
@@ -40,6 +46,7 @@ struct BreatheWatchApp: App {
 
     init() {
         let baseURL = WatchConfiguration.apiBaseURL
+        recorder = MindfulMinutesRecorder(wrapping: sessions, health: HealthKitHealthStore())
 
         _catalogue = State(
             wrappedValue: TechniqueListModel(
@@ -71,7 +78,7 @@ struct BreatheWatchApp: App {
     var body: some Scene {
         WindowGroup {
             NavigationStack {
-                RootMenuView(catalogue: catalogue, sessions: sessions, journey: journey)
+                RootMenuView(catalogue: catalogue, sessions: recorder, journey: journey)
             }
             .tint(Theme.Accent.brand)
             // In the environment rather than passed down: the screens that read
