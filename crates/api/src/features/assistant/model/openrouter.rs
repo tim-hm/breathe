@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 use tokio_stream::StreamExt as _;
 
-use super::{ModelClient, ModelError, ModelRequest, ModelStream, millis};
+use super::{ChatRole, ModelClient, ModelError, ModelRequest, ModelStream, millis};
 use crate::config;
 
 /// Bounds a whole non-streaming call. Generous enough for a long reply on a slow
@@ -93,32 +93,53 @@ impl OpenRouterClient {
         request: &ModelRequest,
         streaming: bool,
     ) -> Result<reqwest::Response, ModelError> {
+        let mut messages = vec![
+            Message {
+                role: "system",
+                content: vec![Part {
+                    kind: "text",
+                    text: &request.cacheable_prefix,
+                    // Marks everything up to here as the cacheable prefix.
+                    // On an Anthropic model OpenRouter passes this through
+                    // verbatim; a provider that does not understand it
+                    // ignores the field, so this is safe on every route.
+                    cache_control: Some(CacheControl { kind: "ephemeral" }),
+                }],
+            },
+            Message {
+                role: "user",
+                content: vec![Part {
+                    kind: "text",
+                    text: &request.instruction,
+                    cache_control: None,
+                }],
+            },
+        ];
+
+        // The conversation as genuinely attributed speech: each turn is its
+        // own user or assistant message, never a transcript serialised into
+        // the instruction. A provider treats an assistant message as words the
+        // model already said, which is what makes an instruction smuggled into
+        // one land as somebody's speech rather than as the caller's authority.
+        // Consecutive same-role messages are legal on this endpoint, so the
+        // instruction message above and a leading person turn need no glue.
+        messages.extend(request.turns.iter().map(|turn| Message {
+            role: match turn.role {
+                ChatRole::Person => "user",
+                ChatRole::Coach => "assistant",
+            },
+            content: vec![Part {
+                kind: "text",
+                text: &turn.text,
+                cache_control: None,
+            }],
+        }));
+
         let body = ChatRequest {
             model: config::OPENROUTER_MODEL_ID,
             max_tokens: request.max_tokens,
             stream: streaming,
-            messages: vec![
-                Message {
-                    role: "system",
-                    content: vec![Part {
-                        kind: "text",
-                        text: &request.cacheable_prefix,
-                        // Marks everything up to here as the cacheable prefix.
-                        // On an Anthropic model OpenRouter passes this through
-                        // verbatim; a provider that does not understand it
-                        // ignores the field, so this is safe on every route.
-                        cache_control: Some(CacheControl { kind: "ephemeral" }),
-                    }],
-                },
-                Message {
-                    role: "user",
-                    content: vec![Part {
-                        kind: "text",
-                        text: &request.instruction,
-                        cache_control: None,
-                    }],
-                },
-            ],
+            messages,
         };
 
         let mut call = self

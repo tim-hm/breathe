@@ -173,6 +173,18 @@ pub fn explanation(
     text
 }
 
+/// The reply when a conversation cannot reach the model.
+///
+/// One fixed sentence pair rather than rules, because the rules can rank
+/// exercises but cannot chat — pretending otherwise would be canned text
+/// wearing the coach's voice. Tier-neutral on purpose: the same words answer
+/// an exhausted quota, a tripped breaker, and a caller whose tier never buys
+/// the model, and the response's `FALLBACK` flag is what tells the client
+/// which framing to draw.
+pub const CHAT_REPLY: &str = "The coach can't reply just now. Every exercise \
+                              still works without it — pick one, practise, \
+                              and ask again later.";
+
 #[cfg(test)]
 mod tests {
     use super::*;

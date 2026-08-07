@@ -8,7 +8,7 @@ use crate::features::assistant::service::{self, ExplanationStream};
 use crate::identity;
 use crate::proto::breathe::v1::assistant_service_server::AssistantService;
 use crate::proto::breathe::v1::{
-    ExplainTechniqueRequest, GetRecommendationRequest, GetRecommendationResponse,
+    ChatRequest, ExplainTechniqueRequest, GetRecommendationRequest, GetRecommendationResponse,
 };
 use crate::state::AppState;
 
@@ -68,6 +68,33 @@ impl AssistantService for AssistantServiceImpl {
             self.state.assistant.as_ref(),
             user_id,
             &request.technique_slug,
+            request.health_context,
+        )
+        .await?;
+
+        Ok(Response::new(stream))
+    }
+
+    // Qualified rather than imported: an imported `ChatStream` would collide
+    // with the associated type's own name in this scope.
+    type ChatStream = service::ChatStream;
+
+    async fn chat(
+        &self,
+        request: Request<ChatRequest>,
+    ) -> Result<Response<Self::ChatStream>, Status> {
+        let user_id = identity::require(&request)?;
+        // The transcript is the person's own conversation and the health
+        // context is special-category data: both pass straight through,
+        // never logged, never stored — same rule as the RPCs above.
+        let request = request.into_inner();
+
+        let stream = service::chat(
+            &self.state.pool,
+            self.state.assistant.as_ref(),
+            user_id,
+            request.history,
+            &request.message,
             request.health_context,
         )
         .await?;

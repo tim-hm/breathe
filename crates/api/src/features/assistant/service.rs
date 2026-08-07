@@ -15,10 +15,10 @@ use sqlx::PgPool;
 use tokio_stream::{Stream, StreamExt as _};
 
 use super::errors::AssistantError;
-use super::model::{ModelClient, ModelRequest};
+use super::model::{ChatRole, ChatTurn, ModelClient, ModelRequest};
 use super::types::{
-    EXPLANATION_MAX_TOKENS, HealthContext, RECOMMENDATION_MAX_TOKENS, Recommendation,
-    daily_model_calls,
+    CHAT_MAX_TOKENS, EXPLANATION_MAX_TOKENS, HealthContext, MAX_CHAT_MESSAGE_CHARS, MAX_CHAT_TURNS,
+    RECOMMENDATION_MAX_TOKENS, Recommendation, daily_model_calls,
 };
 use super::{fallback, parse, prompt, repository};
 use crate::features::entitlement::service as entitlement;
@@ -36,6 +36,9 @@ use crate::proto::breathe::v1 as pb;
 pub type ExplanationStream =
     Pin<Box<dyn Stream<Item = Result<pb::ExplainTechniqueResponse, tonic::Status>> + Send>>;
 
+/// What the `Chat` handler returns to tonic.
+pub type ChatStream = Pin<Box<dyn Stream<Item = Result<pb::ChatResponse, tonic::Status>> + Send>>;
+
 /// Three techniques to try next, with a sentence each.
 ///
 /// Always answers. A model that is unconfigured, over quota, behind a tripped
@@ -48,30 +51,20 @@ pub async fn get_recommendation(
     user_id: UserId,
     health: Option<pb::HealthContext>,
 ) -> Result<pb::GetRecommendationResponse, AssistantError> {
-    let (catalogue, profile, practice, tier) = read_context(pool, user_id).await?;
-    if catalogue.is_empty() {
+    let context = read_context(pool, user_id).await?;
+    if context.catalogue.is_empty() {
         return Err(AssistantError::EmptyCatalogue);
     }
 
     let health = clamp_health(health);
-    let (recommendations, source) = match model_recommendations(
-        pool,
-        model,
-        user_id,
-        tier,
-        &catalogue,
-        &profile,
-        &practice,
-        health.as_ref(),
-    )
-    .await
-    {
-        Some(recommendations) => (recommendations, pb::AssistantSource::Model),
-        None => (
-            fallback::recommendations(&catalogue, &profile, &practice),
-            pb::AssistantSource::Fallback,
-        ),
-    };
+    let (recommendations, source) =
+        match model_recommendations(pool, model, user_id, &context, health.as_ref()).await {
+            Some(recommendations) => (recommendations, pb::AssistantSource::Model),
+            None => (
+                fallback::recommendations(&context.catalogue, &context.profile, &context.practice),
+                pb::AssistantSource::Fallback,
+            ),
+        };
 
     Ok(pb::GetRecommendationResponse {
         recommendations: recommendations.into_iter().map(to_proto).collect(),
@@ -79,19 +72,29 @@ pub async fn get_recommendation(
     })
 }
 
-/// The catalogue, the caller's profile, their recent practice, and what they
-/// are entitled to, read together.
+/// Everything an RPC here reads before deciding anything: the catalogue, the
+/// caller's profile, their recent practice, and what they are entitled to.
 ///
-/// Concurrently because none of the four depends on the others, and all of them
-/// happen before anything else can: serialising them would put four loopback
-/// round-trips in front of every call rather than one. The entitlement joins
-/// them rather than being read where it is used, for exactly that reason — it
-/// decides the model allowance, which is the last thing either RPC settles.
-async fn read_context(
-    pool: &PgPool,
-    user_id: UserId,
-) -> Result<(Vec<Technique>, ProfileSnapshot, PracticeSnapshot, Tier), AssistantError> {
-    Ok(tokio::try_join!(
+/// One struct rather than a tuple because three RPCs now thread it whole, and
+/// a four-way tuple at three call sites is four positional facts nobody can
+/// name at a glance.
+struct Context {
+    catalogue: Vec<Technique>,
+    profile: ProfileSnapshot,
+    practice: PracticeSnapshot,
+    tier: Tier,
+}
+
+/// Reads the [`Context`], concurrently.
+///
+/// Concurrently because none of the four reads depends on the others, and all
+/// of them happen before anything else can: serialising them would put four
+/// loopback round-trips in front of every call rather than one. The
+/// entitlement joins them rather than being read where it is used, for exactly
+/// that reason — it decides the model allowance, which is the last thing any
+/// RPC settles.
+async fn read_context(pool: &PgPool, user_id: UserId) -> Result<Context, AssistantError> {
+    let (catalogue, profile, practice, tier) = tokio::try_join!(
         async {
             technique::catalogue(pool)
                 .await
@@ -112,7 +115,14 @@ async fn read_context(
                 .await
                 .map_err(AssistantError::from)
         },
-    )?)
+    )?;
+
+    Ok(Context {
+        catalogue,
+        profile,
+        practice,
+        tier,
+    })
 }
 
 /// The model's answer, or `None` for every reason there might not be one.
@@ -121,24 +131,26 @@ async fn read_context(
 /// unusable" into one `None` is deliberate: the caller does the same thing in
 /// all four cases, and a service that branched on them would be four paths
 /// where three are untested.
-#[allow(clippy::too_many_arguments)] // the RPC's whole read context, threaded once
 async fn model_recommendations(
     pool: &PgPool,
     model: &dyn ModelClient,
     user_id: UserId,
-    tier: Tier,
-    catalogue: &[Technique],
-    profile: &ProfileSnapshot,
-    practice: &PracticeSnapshot,
+    context: &Context,
     health: Option<&HealthContext>,
 ) -> Option<Vec<Recommendation>> {
-    if !model.is_available() || !claim_call(pool, user_id, tier).await {
+    if !model.is_available() || !claim_call(pool, user_id, context.tier).await {
         return None;
     }
 
     let request = ModelRequest {
-        cacheable_prefix: prompt::catalogue_prefix(catalogue),
-        instruction: prompt::recommendation_instruction(profile, practice, catalogue, health),
+        cacheable_prefix: prompt::catalogue_prefix(&context.catalogue),
+        instruction: prompt::recommendation_instruction(
+            &context.profile,
+            &context.practice,
+            &context.catalogue,
+            health,
+        ),
+        turns: Vec::new(),
         max_tokens: RECOMMENDATION_MAX_TOKENS,
     };
 
@@ -151,7 +163,7 @@ async fn model_recommendations(
     };
 
     // The guard: a slug reaches a client only because the catalogue has it.
-    let recommendations = parse::parse_recommendations(&reply, catalogue);
+    let recommendations = parse::parse_recommendations(&reply, &context.catalogue);
     if recommendations.is_empty() {
         tracing::warn!(
             feature = "assistant",
@@ -181,8 +193,8 @@ pub async fn explain_technique(
     slug: &str,
     health: Option<pb::HealthContext>,
 ) -> Result<ExplanationStream, AssistantError> {
-    let (catalogue, profile, practice, tier) = read_context(pool, user_id).await?;
-    let technique = resolve(&catalogue, slug).ok_or_else(|| {
+    let context = read_context(pool, user_id).await?;
+    let technique = resolve(&context.catalogue, slug).ok_or_else(|| {
         AssistantError::UnknownTechnique(format!("no technique has the slug `{slug}`"))
     })?;
 
@@ -191,16 +203,17 @@ pub async fn explain_technique(
     // Availability first, so a process with no key configured — a fresh clone,
     // CI, the whole e2e suite — neither writes a quota row nor builds a prompt
     // for a call that provably will not be made.
-    if model.is_available() && claim_call(pool, user_id, tier).await {
+    if model.is_available() && claim_call(pool, user_id, context.tier).await {
         let request = ModelRequest {
-            cacheable_prefix: prompt::catalogue_prefix(&catalogue),
+            cacheable_prefix: prompt::catalogue_prefix(&context.catalogue),
             instruction: prompt::explanation_instruction(
                 technique,
-                &profile,
-                &practice,
-                &catalogue,
+                &context.profile,
+                &context.practice,
+                &context.catalogue,
                 health.as_ref(),
             ),
+            turns: Vec::new(),
             max_tokens: EXPLANATION_MAX_TOKENS,
         };
 
@@ -214,32 +227,179 @@ pub async fn explain_technique(
 
     Ok(from_fallback(&fallback::explanation(
         technique,
-        &profile,
-        practice.bolt.as_ref(),
+        &context.profile,
+        context.practice.bolt.as_ref(),
     )))
 }
 
-/// Maps the model's chunks onto the wire.
+/// The coach's reply to one message in a conversation, streamed a chunk at a
+/// time.
+///
+/// Stateless on purpose: the transcript lives on the device and arrives as
+/// `history`, the server keeps and logs none of it, and the only thing this
+/// call writes anywhere is the quota claim. Falls back on the same terms as
+/// the other two RPCs — every failure short of a malformed request streams the
+/// fixed [`fallback::CHAT_REPLY`] flagged `FALLBACK` — and a model that fails
+/// *mid-answer* ends the stream `UNAVAILABLE`, exactly as
+/// [`explain_technique`] does and for the same reason.
+pub async fn chat(
+    pool: &PgPool,
+    model: &dyn ModelClient,
+    user_id: UserId,
+    history: Vec<pb::ChatTurn>,
+    message: &str,
+    health: Option<pb::HealthContext>,
+) -> Result<ChatStream, AssistantError> {
+    // Shape first, so a malformed request is refused before it writes a quota
+    // row or reads anything at all.
+    let turns = conversation(history, message)?;
+
+    // Unlike the explanation's fallback, the fixed reply needs nothing from
+    // the database — so a process with no key, or an open breaker, answers
+    // before any of the four context reads happen.
+    if !model.is_available() {
+        return Ok(fixed_reply());
+    }
+
+    let context = read_context(pool, user_id).await?;
+    let health = clamp_health(health);
+
+    if claim_call(pool, user_id, context.tier).await {
+        let request = ModelRequest {
+            cacheable_prefix: prompt::catalogue_prefix(&context.catalogue),
+            instruction: prompt::chat_instruction(
+                &context.profile,
+                &context.practice,
+                &context.catalogue,
+                health.as_ref(),
+            ),
+            turns,
+            max_tokens: CHAT_MAX_TOKENS,
+        };
+
+        match model.stream(&request).await {
+            Ok(chunks) => return Ok(chat_from_model(chunks)),
+            Err(error) => {
+                tracing::warn!(feature = "assistant", %error, "falling back to the fixed reply");
+            }
+        }
+    }
+
+    Ok(fixed_reply())
+}
+
+/// The fixed [`fallback::CHAT_REPLY`] as a one-chunk stream, flagged
+/// `FALLBACK`.
+fn fixed_reply() -> ChatStream {
+    Box::pin(tokio_stream::iter(vec![Ok(pb::ChatResponse {
+        text: fallback::CHAT_REPLY.to_owned(),
+        source: pb::AssistantSource::Fallback as i32,
+    })]))
+}
+
+/// The wire history and the new message as the turns the model seam carries,
+/// bounded and attributed — or the `INVALID_ARGUMENT` that refuses the call.
+///
+/// Two different bounds, deliberately asymmetric. Length is a *bound*: an
+/// over-long message or turn is refused, because trimming one mid-sentence
+/// would have the coach answer something the person did not say. History depth
+/// is a *truncation*: only the newest [`MAX_CHAT_TURNS`] are kept, silently,
+/// because a transcript's length is the app's doing rather than the person's
+/// and refusing them for it would answer nothing. Dropped turns are dropped
+/// before validation — a malformed turn that no longer participates cannot
+/// fail the request.
+fn conversation(
+    history: Vec<pb::ChatTurn>,
+    message: &str,
+) -> Result<Vec<ChatTurn>, AssistantError> {
+    let message = message.trim();
+    if message.is_empty() {
+        return Err(AssistantError::InvalidChat(
+            "the message is empty".to_owned(),
+        ));
+    }
+    if message.chars().count() > MAX_CHAT_MESSAGE_CHARS {
+        return Err(AssistantError::InvalidChat(format!(
+            "the message exceeds {MAX_CHAT_MESSAGE_CHARS} characters"
+        )));
+    }
+
+    let newest = history.len().saturating_sub(MAX_CHAT_TURNS);
+    let mut turns: Vec<ChatTurn> = history
+        .into_iter()
+        .skip(newest)
+        .map(|turn| {
+            if turn.text.chars().count() > MAX_CHAT_MESSAGE_CHARS {
+                return Err(AssistantError::InvalidChat(format!(
+                    "a history turn exceeds {MAX_CHAT_MESSAGE_CHARS} characters"
+                )));
+            }
+            let role = match turn.role() {
+                pb::ChatRole::Person => ChatRole::Person,
+                pb::ChatRole::Coach => ChatRole::Coach,
+                pb::ChatRole::Unspecified => {
+                    return Err(AssistantError::InvalidChat(
+                        "a history turn does not say who spoke".to_owned(),
+                    ));
+                }
+            };
+            Ok(ChatTurn {
+                role,
+                text: turn.text,
+            })
+        })
+        .collect::<Result<_, _>>()?;
+
+    turns.push(ChatTurn {
+        role: ChatRole::Person,
+        text: message.to_owned(),
+    });
+    Ok(turns)
+}
+
+/// [`model_chunks`] for the chat wire type.
+fn chat_from_model(chunks: super::model::ModelStream) -> ChatStream {
+    model_chunks(chunks, "the reply stopped early", |text| pb::ChatResponse {
+        text,
+        source: pb::AssistantSource::Model as i32,
+    })
+}
+
+/// Maps the model's chunks onto a wire type, one rule for every streaming RPC.
 ///
 /// A chunk that fails mid-answer ends the stream rather than replacing what has
-/// already been read: the person is looking at half an explanation, and
-/// switching to the fallback text at that point would contradict the sentence
-/// above it. It ends it with `UNAVAILABLE` rather than simply stopping, because
-/// a stream that stops is indistinguishable from one that finished — the client
-/// would caption two sentences of a truncated answer as the whole of it.
-/// tonic ends the response at the first `Err`, so nothing the provider sends
-/// after the failure can follow the status onto the wire.
-fn from_model(chunks: super::model::ModelStream) -> ExplanationStream {
-    Box::pin(chunks.map(|chunk| match chunk {
-        Ok(text) => Ok(pb::ExplainTechniqueResponse {
-            text,
-            source: pb::AssistantSource::Model as i32,
-        }),
+/// already been read: the person is looking at half an answer, and switching to
+/// the fallback text at that point would contradict the sentence above it. It
+/// ends with `UNAVAILABLE` rather than simply stopping, because a stream that
+/// stops is indistinguishable from one that finished — the client would caption
+/// a truncated answer as the whole of it. tonic ends the response at the first
+/// `Err`, so nothing the provider sends after the failure can follow the status
+/// onto the wire.
+///
+/// Generic over the wire constructor so the rule has one owner; `stopped` is
+/// each RPC's own phrasing of it, logged and sent alike.
+fn model_chunks<T>(
+    chunks: super::model::ModelStream,
+    stopped: &'static str,
+    wire: impl Fn(String) -> T + Send + 'static,
+) -> Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send>> {
+    Box::pin(chunks.map(move |chunk| match chunk {
+        Ok(text) => Ok(wire(text)),
         Err(error) => {
-            tracing::warn!(feature = "assistant", %error, "the explanation stopped early");
-            Err(tonic::Status::unavailable("the explanation stopped early"))
+            tracing::warn!(feature = "assistant", %error, "{stopped}");
+            Err(tonic::Status::unavailable(stopped))
         }
     }))
+}
+
+/// [`model_chunks`] for the explanation wire type.
+fn from_model(chunks: super::model::ModelStream) -> ExplanationStream {
+    model_chunks(chunks, "the explanation stopped early", |text| {
+        pb::ExplainTechniqueResponse {
+            text,
+            source: pb::AssistantSource::Model as i32,
+        }
+    })
 }
 
 /// Sends the rule-based explanation down the same pipe, a paragraph at a time.
@@ -325,5 +485,87 @@ fn to_proto(recommendation: Recommendation) -> pb::Recommendation {
     pb::Recommendation {
         technique_slug: recommendation.technique_slug,
         reason: recommendation.reason,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn wire_turn(role: pb::ChatRole, text: &str) -> pb::ChatTurn {
+        pb::ChatTurn {
+            role: role as i32,
+            text: text.to_owned(),
+        }
+    }
+
+    /// Truncation keeps the newest turns and always appends the message: the
+    /// end of a conversation is what the next answer hangs on, and the person
+    /// asked their question last.
+    #[test]
+    fn truncation_keeps_the_newest_turns_and_ends_on_the_message() {
+        let history: Vec<pb::ChatTurn> = (0..MAX_CHAT_TURNS + 5)
+            .map(|index| wire_turn(pb::ChatRole::Person, &format!("turn-{index}")))
+            .collect();
+
+        let turns = conversation(history, "the question").expect("a valid conversation");
+
+        assert_eq!(turns.len(), MAX_CHAT_TURNS + 1, "history plus the message");
+        assert_eq!(turns[0].text, "turn-5", "the oldest five are dropped");
+        let last = turns.last().expect("the message is appended");
+        assert_eq!(last.text, "the question");
+        assert_eq!(last.role, ChatRole::Person);
+    }
+
+    /// The length rule is a bound, not a trim: the edge passes whole and one
+    /// character past it refuses the call, for the message and for a history
+    /// turn alike.
+    #[test]
+    fn the_character_bound_refuses_rather_than_trims() {
+        let longest = "x".repeat(MAX_CHAT_MESSAGE_CHARS);
+        let over = "x".repeat(MAX_CHAT_MESSAGE_CHARS + 1);
+
+        assert!(conversation(Vec::new(), &longest).is_ok());
+        assert!(matches!(
+            conversation(Vec::new(), &over),
+            Err(AssistantError::InvalidChat(_))
+        ));
+        assert!(matches!(
+            conversation(vec![wire_turn(pb::ChatRole::Coach, &over)], "hello"),
+            Err(AssistantError::InvalidChat(_))
+        ));
+    }
+
+    /// An empty message — including one that is only whitespace — is a client
+    /// bug, refused rather than answered with a reply to nothing.
+    #[test]
+    fn an_empty_message_is_refused() {
+        assert!(matches!(
+            conversation(Vec::new(), "   "),
+            Err(AssistantError::InvalidChat(_))
+        ));
+    }
+
+    /// A turn that does not name its speaker cannot be handed to the model as
+    /// attributed speech, so it fails the request — unless truncation already
+    /// dropped it, in which case it no longer participates and cannot.
+    #[test]
+    fn an_unattributed_turn_fails_only_while_it_participates() {
+        assert!(matches!(
+            conversation(
+                vec![wire_turn(pb::ChatRole::Unspecified, "who said this")],
+                "hello"
+            ),
+            Err(AssistantError::InvalidChat(_))
+        ));
+
+        let mut history = vec![wire_turn(pb::ChatRole::Unspecified, "who said this")];
+        history.extend(
+            (0..MAX_CHAT_TURNS).map(|index| wire_turn(pb::ChatRole::Person, &format!("{index}"))),
+        );
+        assert!(
+            conversation(history, "hello").is_ok(),
+            "a dropped turn cannot fail the request"
+        );
     }
 }

@@ -225,6 +225,7 @@ fn copy_request(request: &ModelRequest) -> ModelRequest {
     ModelRequest {
         cacheable_prefix: request.cacheable_prefix.clone(),
         instruction: request.instruction.clone(),
+        turns: request.turns.clone(),
         max_tokens: request.max_tokens,
     }
 }
