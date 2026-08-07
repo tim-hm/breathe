@@ -15,6 +15,12 @@ struct BreatheApp: App {
     /// the tombstones deletions wait in until the server confirms them.
     private let sessions = FileSessionStore()
 
+    /// What the screens record through: the same file, with each kept session
+    /// also credited to Health as Mindful Minutes. The journey's sync below
+    /// keeps the bare store — history restored from the server is not new
+    /// practice, and must never write to Health again.
+    private let recorder: any SessionRecording
+
     /// Controlled-pause scores, kept beside the sessions and for the same
     /// reason — the journey tab reads them with no network at all.
     private let scores: any BoltScoreRecording = FileBoltScoreStore()
@@ -76,6 +82,7 @@ struct BreatheApp: App {
     init() {
         let identity = identity
         let baseURL = AppConfiguration.apiBaseURL
+        recorder = MindfulMinutesRecorder(wrapping: sessions, health: HealthKitHealthStore())
         watch = WatchLink(outbox: WatchHandoffOutbox(identity: identity, scores: scores))
 
         let techniques = CachedTechniqueRepository(
@@ -122,7 +129,7 @@ struct BreatheApp: App {
             // opening from whatever was locked.
             AppChrome(
                 catalogue: catalogue,
-                sessions: sessions,
+                sessions: recorder,
                 journey: journey,
                 profiles: profiles,
                 foundations: foundations,

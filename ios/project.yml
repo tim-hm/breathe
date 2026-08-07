@@ -80,6 +80,12 @@ targets:
         # Portrait only. A breathing session is held still in one hand; a
         # rotation mid-cycle interrupts the one thing the app is for.
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+    # Generated at `ios:gen` time, exactly like the Info.plist below, and
+    # gitignored for the same reason: one editable source per dictionary.
+    entitlements:
+      path: Breathe/Breathe.entitlements
+      properties:
+        com.apple.developer.healthkit: true
     # An `info:` block rather than more INFOPLIST_KEY_* settings above, because
     # those only carry scalars and arrays — NSAppTransportSecurity is a dict and
     # has no build-setting form. The generated plist is gitignored.
@@ -102,6 +108,14 @@ targets:
         # looks exactly like the server being down.
         NSLocalNetworkUsageDescription: >-
           During development, Breathe connects to the development server on your local network to load the technique catalogue.
+        # Both Health strings are shown in the system's authorization sheet,
+        # and App Review rejects vague ones. The share string ships ahead of
+        # the read feature it describes: the key must be in the bundle before
+        # the first read request, and a missing key is a crash, not a refusal.
+        NSHealthShareUsageDescription: >-
+          Breathe reads your resting heart rate and heart-rate variability trends, and shares them with your coach only when you choose to, so its guidance can reflect how your body is responding.
+        NSHealthUpdateUsageDescription: >-
+          Breathe records each breathing session you keep in Health as Mindful Minutes.
 
   BreatheWatch:
     type: application
@@ -126,6 +140,11 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: xyz.holmie.breathe.watchkitapp
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Breathe
+    # Same generated-not-committed arrangement as the phone target's.
+    entitlements:
+      path: BreatheWatch/BreatheWatch.entitlements
+      properties:
+        com.apple.developer.healthkit: true
     info:
       path: BreatheWatch/Info.plist
       properties:
@@ -156,6 +175,11 @@ targets:
           NSAllowsLocalNetworking: true
         NSLocalNetworkUsageDescription: >-
           During development, Breathe connects to the development server on your local network to load the technique catalogue.
+        # Same two Health strings as the phone target, same App Review stakes.
+        NSHealthShareUsageDescription: >-
+          Breathe reads your resting heart rate and heart-rate variability trends, and shares them with your coach only when you choose to, so its guidance can reflect how your body is responding.
+        NSHealthUpdateUsageDescription: >-
+          Breathe records each breathing session you keep in Health as Mindful Minutes.
 
 schemes:
   Breathe:
