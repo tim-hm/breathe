@@ -5,9 +5,9 @@
 //! prompt would be the same sentence in a table nobody remembers to think about.
 
 use sqlx::PgPool;
-use uuid::Uuid;
 
 use super::errors::AssistantError;
+use crate::identity::UserId;
 
 /// Claims one call against today's allowance, returning whether there was one
 /// to claim.
@@ -23,7 +23,7 @@ use super::errors::AssistantError;
 /// ceiling exists for.
 pub async fn claim_daily_call(
     pool: &PgPool,
-    user_id: Uuid,
+    user_id: UserId,
     limit: i32,
 ) -> Result<bool, AssistantError> {
     let claimed = sqlx::query_scalar!(
@@ -33,7 +33,7 @@ pub async fn claim_daily_call(
            DO UPDATE SET calls = assistant_usage.calls + 1
            WHERE assistant_usage.calls < $2
          RETURNING calls",
-        user_id,
+        user_id.0,
         limit
     )
     .fetch_optional(pool)

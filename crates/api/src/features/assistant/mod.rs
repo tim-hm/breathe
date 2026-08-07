@@ -12,10 +12,12 @@
 //! believing the answer are different jobs, and only the second one is
 //! load-bearing for safety.
 //!
-//! Reads across to `profile` and `technique` rather than holding its own copy
-//! of either: the guidance is derived from the answers somebody gave and the
-//! catalogue that is served to them, and a second copy of either would be a
-//! second thing to keep in step.
+//! Reads across to `profile`, `technique` and `entitlement` rather than holding
+//! its own copy of any of them: the guidance is derived from the answers
+//! somebody gave and the catalogue that is served to them, and a second copy of
+//! either would be a second thing to keep in step. Each read goes through the
+//! owning feature's *service* and comes back as that feature's domain type, so
+//! nothing here holds a row struct and a schema change stays in one directory.
 
 pub mod errors;
 pub mod fallback;

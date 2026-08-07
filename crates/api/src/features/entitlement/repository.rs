@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use super::errors::EntitlementError;
 use super::types::SubscriptionTier;
+use crate::identity::UserId;
 
 /// The subscription columns of one `users` row.
 pub struct EntitlementRow {
@@ -48,7 +49,7 @@ pub struct TransactionHolder {
 
 pub async fn find_entitlement(
     pool: &PgPool,
-    user_id: Uuid,
+    user_id: UserId,
 ) -> Result<EntitlementRow, EntitlementError> {
     let row = sqlx::query_as!(
         EntitlementRow,
@@ -58,7 +59,7 @@ pub async fn find_entitlement(
             app_store_original_transaction_id AS original_transaction_id
            FROM users
           WHERE id = $1"#,
-        user_id
+        user_id.0
     )
     .fetch_optional(pool)
     .await?
@@ -130,7 +131,7 @@ pub async fn find_transaction_holder(
 /// common case to save a CTE would be the wrong trade.
 pub async fn apply_transaction(
     pool: &PgPool,
-    user_id: Uuid,
+    user_id: UserId,
     original_transaction_id: &str,
     grant: Option<(SubscriptionTier, DateTime<Utc>)>,
     signed_at: DateTime<Utc>,
@@ -164,7 +165,7 @@ pub async fn apply_transaction(
              app_store_original_transaction_id AS original_transaction_id
            FROM users
           WHERE id = $1 AND NOT EXISTS (SELECT 1 FROM moved)"#,
-        user_id,
+        user_id.0,
         tier as Option<SubscriptionTier>,
         until,
         original_transaction_id,
@@ -184,7 +185,7 @@ pub async fn apply_transaction(
 /// entitled by a transaction it no longer holds, which is the state
 /// [`find_transaction_holder`] reads as a revocation. Whether the release is
 /// allowed at all is `service::claim`'s decision.
-pub async fn release_transaction(pool: &PgPool, user_id: Uuid) -> Result<(), EntitlementError> {
+pub async fn release_transaction(pool: &PgPool, user_id: UserId) -> Result<(), EntitlementError> {
     sqlx::query!(
         r#"UPDATE users
               SET subscription_tier = NULL,
@@ -194,7 +195,7 @@ pub async fn release_transaction(pool: &PgPool, user_id: Uuid) -> Result<(), Ent
                   app_store_original_transaction_id = NULL,
                   updated_at = now()
             WHERE id = $1"#,
-        user_id
+        user_id.0
     )
     .execute(pool)
     .await?;

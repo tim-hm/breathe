@@ -12,9 +12,8 @@
 //! different one.
 
 use super::types::{RECOMMENDATION_COUNT, Recommendation, goal_phrase};
-use crate::features::profile::repository::ProfileRow;
-use crate::features::profile::types::ExperienceLevel;
-use crate::features::technique::repository::TechniqueRow;
+use crate::features::profile::types::{ExperienceLevel, ProfileSnapshot};
+use crate::features::technique::types::Technique;
 
 /// Techniques to try, ranked by the goals the person picked.
 ///
@@ -22,8 +21,8 @@ use crate::features::technique::repository::TechniqueRow;
 /// so on; then whatever is left in catalogue order, so the list is always full
 /// even for somebody who picked one goal or none. Catalogue order is curated to
 /// open on what a newcomer should try first, which makes it the right tiebreak.
-pub fn recommendations(catalogue: &[TechniqueRow], profile: &ProfileRow) -> Vec<Recommendation> {
-    let mut ranked: Vec<&TechniqueRow> = catalogue.iter().collect();
+pub fn recommendations(catalogue: &[Technique], profile: &ProfileSnapshot) -> Vec<Recommendation> {
+    let mut ranked: Vec<&Technique> = catalogue.iter().collect();
 
     // A *stable* sort is what expresses the whole rule: techniques serving an
     // earlier goal come first, catalogue order survives within each goal, and
@@ -53,7 +52,7 @@ pub fn recommendations(catalogue: &[TechniqueRow], profile: &ProfileRow) -> Vec<
 /// personalised beyond what the profile actually says — the client is told this
 /// came from the rules, and copy that oversold itself would make that flag a
 /// lie.
-fn reason(technique: &TechniqueRow, profile: &ProfileRow) -> String {
+fn reason(technique: &Technique, profile: &ProfileSnapshot) -> String {
     if profile.goals.contains(&technique.goal) {
         format!(
             "You said you want to {} — this is one of the ways in.",
@@ -73,7 +72,7 @@ fn reason(technique: &TechniqueRow, profile: &ProfileRow) -> String {
 /// data written for exactly this purpose — so the fallback frames it for the
 /// person's experience level and adds the safety note where there is one, rather
 /// than inventing physiology this server has no business asserting.
-pub fn explanation(technique: &TechniqueRow, profile: &ProfileRow) -> String {
+pub fn explanation(technique: &Technique, profile: &ProfileSnapshot) -> String {
     let mut text = format!("{}\n\n", technique.summary);
 
     // `None` reads as "new" here, unlike everywhere else this enum is decoded:

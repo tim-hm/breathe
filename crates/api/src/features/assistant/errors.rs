@@ -13,6 +13,13 @@ use crate::features::entitlement::errors::EntitlementError;
 use crate::features::profile::errors::ProfileError;
 use crate::features::technique::errors::TechniqueError;
 
+/// Why the assistant could not answer at all.
+///
+/// Short by design: the model failing is not one of these. An unreachable
+/// provider, a tripped breaker and an exhausted quota all produce a successful
+/// response flagged `FALLBACK`, so what is left is a slug that does not exist
+/// and a database that cannot be read — and the second is fatal precisely
+/// because the fallback is derived from what the database holds.
 #[derive(Debug, thiserror::Error)]
 pub enum AssistantError {
     /// The caller asked to have a technique explained that the catalogue does

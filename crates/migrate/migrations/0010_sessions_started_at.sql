@@ -1,0 +1,19 @@
+-- The leaderboards read `sessions` across everybody, and until now the only
+-- index on the table led with `user_id` — the right shape for every read that
+-- goes down one person's history, and unusable for a bare `started_at` range
+-- predicate.
+--
+-- Two queries want it. The minutes board sums a rolling thirty days, and the
+-- streak board narrows its gaps-and-islands fold to people who have breathed in
+-- the last few days before folding anything. Both were sequential scans of the
+-- fastest-growing table in the schema, on every request, with no rate limit in
+-- front of them.
+--
+-- Covering rather than bare: `user_id` and `duration_ms` are the only other
+-- columns either query reads, so the boards can be answered from the index
+-- without visiting the heap at all.
+--
+-- This does not replace `sessions_user_started_at_idx`. That one serves the
+-- per-person reads — the history page, the totals, the personal streak fold —
+-- and a range scan by date could not.
+CREATE INDEX sessions_started_at_idx ON sessions (started_at DESC, user_id, duration_ms);

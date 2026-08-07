@@ -9,9 +9,20 @@ use sqlx::PgPool;
 
 use super::errors::TechniqueError;
 use super::repository::{self, PhaseRow, StageRow};
-use super::types::{PhaseKind, TechniqueGoal};
+use super::types::{PhaseKind, Technique, TechniqueGoal};
 use crate::proto::breathe::v1 as pb;
 
+/// The whole catalogue, assembled: every technique with its stages and phases,
+/// in curated presentation order.
+///
+/// Unpaginated and complete, because the client caches the answer and plays
+/// sessions from the cache — a partial catalogue would be a client that can only
+/// breathe some of the app while offline.
+///
+/// Refuses rather than trims. A technique with no stages, a stage with no
+/// phases, or a count the schema's `CHECK`s make unreachable fails the whole
+/// call: a catalogue silently short of a technique is indistinguishable from one
+/// that never had it.
 pub async fn list_techniques(pool: &PgPool) -> Result<pb::ListTechniquesResponse, TechniqueError> {
     // Three sequential reads rather than a `try_join!` of them: the saving is two
     // loopback round-trips on a call each client makes once at launch, and the
@@ -47,6 +58,35 @@ pub async fn list_techniques(pool: &PgPool) -> Result<pb::ListTechniquesResponse
     Ok(pb::ListTechniquesResponse { techniques })
 }
 
+/// The catalogue as another feature reads it.
+///
+/// `assistant` puts every technique in front of a model and checks every slug it
+/// says back against this list, so what it needs is the descriptions rather than
+/// the playable stages. Routed through the service rather than letting the
+/// caller take `TechniqueRow`: the row is this feature's SQL shape, and a
+/// consumer holding it would make every column on `techniques` part of a
+/// contract nobody wrote down.
+pub async fn catalogue(pool: &PgPool) -> Result<Vec<Technique>, TechniqueError> {
+    let catalogue = repository::list_techniques(pool)
+        .await?
+        .into_iter()
+        .map(|row| Technique {
+            slug: row.slug,
+            name: row.name,
+            summary: row.summary,
+            safety_note: row.safety_note,
+            goal: row.goal,
+        })
+        .collect();
+
+    Ok(catalogue)
+}
+
+/// The breathing foundations, in curated reading order.
+///
+/// Served on this service rather than one of their own because they are the
+/// other half of the catalogue's reference data — the same client reads them on
+/// the same terms, and neither is scoped to a caller.
 pub async fn list_foundations(
     pool: &PgPool,
 ) -> Result<pb::ListFoundationsResponse, TechniqueError> {

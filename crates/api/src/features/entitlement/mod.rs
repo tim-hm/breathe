@@ -7,8 +7,9 @@
 //! UI gating reads from there and no screen ever waits on this server. What
 //! lands here is the same purchase re-asserted as something the server can
 //! check for itself, because one decision must not be the client's: whether a
-//! caller may spend a language-model call. `assistant` reads the row through
-//! [`types::Entitlement::from_row`] and never a field off a request.
+//! caller may spend a language-model call. `assistant` reads [`service::tier`]
+//! and never a field off a request — one call, resolved from the caller's own
+//! row, with the pairing of tier and expiry left where it belongs.
 //!
 //! `verifier/` is the seam, in the shape `assistant::model` established — a
 //! trait, a real implementation, and a scripted one for the tests.

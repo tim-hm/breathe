@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT client_session_id, technique_slug, started_at,\n                duration_ms, cycles_completed, breath_count, completed\n         FROM sessions\n         WHERE user_id = $1\n         ORDER BY started_at DESC\n         LIMIT $2",
+  "query": "SELECT client_session_id, technique_slug, started_at,\n                duration_ms, cycles_completed, breath_count, completed\n         FROM sessions\n         WHERE user_id = $1\n           AND ($3::timestamptz IS NULL\n                OR (started_at, client_session_id) < ($3, $4::uuid))\n         ORDER BY started_at DESC, client_session_id DESC\n         LIMIT $2",
   "describe": {
     "columns": [
       {
@@ -84,7 +84,9 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Int8"
+        "Int8",
+        "Timestamptz",
+        "Uuid"
       ]
     },
     "nullable": [
@@ -97,5 +99,5 @@
       false
     ]
   },
-  "hash": "1038ae505906f8afc11d618505d228d7fb13f16993d2d792a28b023dcfc8bc02"
+  "hash": "b32790ec2a18d0663d89814165d8d013c3385bfb6f6a66240a635a7be79edd1b"
 }

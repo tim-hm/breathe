@@ -2,6 +2,11 @@
 
 use tonic::Status;
 
+/// Why the catalogue could not be served.
+///
+/// Neither variant is the caller's doing — this service takes no identity and
+/// its requests carry nothing to get wrong — so both travel as `internal` and
+/// the detail stays in the log.
 #[derive(Debug, thiserror::Error)]
 pub enum TechniqueError {
     /// A technique with no stages, or a stage with no phases. The foreign keys

@@ -4,11 +4,11 @@
 //! `crate::identity`'s business, which is why nothing here inserts.
 
 use sqlx::PgPool;
-use uuid::Uuid;
 
 use super::errors::ProfileError;
 use super::types::{BirthYearBand, ExperienceLevel, MAX_DISPLAY_NAME_CHARS, ReminderIntensity};
 use crate::features::technique::types::TechniqueGoal;
+use crate::identity::UserId;
 
 /// The answer columns of one `users` row.
 pub struct ProfileRow {
@@ -45,7 +45,7 @@ const UNIQUE_VIOLATION: &str = "23505";
 /// The index that makes display names unique, case-insensitively.
 const DISPLAY_NAME_INDEX: &str = "users_display_name_key";
 
-pub async fn find_profile(pool: &PgPool, user_id: Uuid) -> Result<ProfileRow, ProfileError> {
+pub async fn find_profile(pool: &PgPool, user_id: UserId) -> Result<ProfileRow, ProfileError> {
     let row = sqlx::query_as!(
         ProfileRow,
         r#"SELECT
@@ -57,7 +57,7 @@ pub async fn find_profile(pool: &PgPool, user_id: Uuid) -> Result<ProfileRow, Pr
             birth_year_band AS "birth_year_band?: BirthYearBand"
          FROM users
          WHERE id = $1"#,
-        user_id
+        user_id.0
     )
     .fetch_optional(pool)
     .await?
@@ -75,12 +75,12 @@ pub async fn find_profile(pool: &PgPool, user_id: Uuid) -> Result<ProfileRow, Pr
 /// lookup has no such excuse.
 pub async fn find_birth_year_band(
     pool: &PgPool,
-    user_id: Uuid,
+    user_id: UserId,
 ) -> Result<Option<BirthYearBand>, ProfileError> {
     let band = sqlx::query_scalar!(
         r#"SELECT birth_year_band AS "birth_year_band?: BirthYearBand"
            FROM users WHERE id = $1"#,
-        user_id
+        user_id.0
     )
     .fetch_optional(pool)
     .await?
@@ -98,7 +98,7 @@ pub async fn find_birth_year_band(
 /// and the write is caught by the constraint rather than by a race-prone read.
 pub async fn replace_profile(
     pool: &PgPool,
-    user_id: Uuid,
+    user_id: UserId,
     profile: &ProfileRow,
 ) -> Result<Option<String>, ProfileError> {
     let Some(desired) = profile.display_name.as_deref() else {
@@ -125,7 +125,7 @@ pub async fn replace_profile(
 /// answers into a profile neither of them chose.
 async fn write_profile(
     pool: &PgPool,
-    user_id: Uuid,
+    user_id: UserId,
     profile: &ProfileRow,
     display_name: Option<&str>,
 ) -> Result<(), ProfileError> {
@@ -139,7 +139,7 @@ async fn write_profile(
                 birth_year_band = $7,
                 updated_at = now()
           WHERE id = $1",
-        user_id,
+        user_id.0,
         &profile.goals as _,
         profile.experience_level as _,
         profile.reminder_intensity as _,

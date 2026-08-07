@@ -13,7 +13,6 @@ use std::pin::Pin;
 
 use sqlx::PgPool;
 use tokio_stream::{Stream, StreamExt as _};
-use uuid::Uuid;
 
 use super::errors::AssistantError;
 use super::model::{ModelClient, ModelRequest};
@@ -21,20 +20,29 @@ use super::types::{
     EXPLANATION_MAX_TOKENS, RECOMMENDATION_MAX_TOKENS, Recommendation, daily_model_calls,
 };
 use super::{fallback, parse, prompt, repository};
-use crate::features::entitlement::repository::find_entitlement;
-use crate::features::entitlement::types::{Entitlement, Tier};
-use crate::features::profile::repository::{ProfileRow, find_profile};
-use crate::features::technique::repository::{TechniqueRow, list_techniques};
+use crate::features::entitlement::service as entitlement;
+use crate::features::entitlement::types::Tier;
+use crate::features::profile::service as profile;
+use crate::features::profile::types::ProfileSnapshot;
+use crate::features::technique::service as technique;
+use crate::features::technique::types::Technique;
+use crate::identity::UserId;
 use crate::proto::breathe::v1 as pb;
 
 /// What the `ExplainTechnique` handler returns to tonic.
 pub type ExplanationStream =
     Pin<Box<dyn Stream<Item = Result<pb::ExplainTechniqueResponse, tonic::Status>> + Send>>;
 
+/// Three techniques to try next, with a sentence each.
+///
+/// Always answers. A model that is unconfigured, over quota, behind a tripped
+/// breaker, failing, or replying with nothing this server recognises all land on
+/// the same rule-based list, and the response's `source` says which arrived — so
+/// a client can be honest about it without having to model a failure.
 pub async fn get_recommendation(
     pool: &PgPool,
     model: &dyn ModelClient,
-    user_id: Uuid,
+    user_id: UserId,
 ) -> Result<pb::GetRecommendationResponse, AssistantError> {
     let (catalogue, profile, tier) = read_context(pool, user_id).await?;
     if catalogue.is_empty() {
@@ -66,27 +74,25 @@ pub async fn get_recommendation(
 /// decides the model allowance, which is the last thing either RPC settles.
 async fn read_context(
     pool: &PgPool,
-    user_id: Uuid,
-) -> Result<(Vec<TechniqueRow>, ProfileRow, Tier), AssistantError> {
-    let (catalogue, profile, entitlement) = tokio::try_join!(
-        async { list_techniques(pool).await.map_err(AssistantError::from) },
+    user_id: UserId,
+) -> Result<(Vec<Technique>, ProfileSnapshot, Tier), AssistantError> {
+    Ok(tokio::try_join!(
         async {
-            find_profile(pool, user_id)
+            technique::catalogue(pool)
                 .await
                 .map_err(AssistantError::from)
         },
         async {
-            find_entitlement(pool, user_id)
+            profile::snapshot(pool, user_id)
                 .await
                 .map_err(AssistantError::from)
         },
-    )?;
-
-    Ok((
-        catalogue,
-        profile,
-        Entitlement::from_row(&entitlement, chrono::Utc::now()).tier(),
-    ))
+        async {
+            entitlement::tier(pool, user_id)
+                .await
+                .map_err(AssistantError::from)
+        },
+    )?)
 }
 
 /// The model's answer, or `None` for every reason there might not be one.
@@ -98,10 +104,10 @@ async fn read_context(
 async fn model_recommendations(
     pool: &PgPool,
     model: &dyn ModelClient,
-    user_id: Uuid,
+    user_id: UserId,
     tier: Tier,
-    catalogue: &[TechniqueRow],
-    profile: &ProfileRow,
+    catalogue: &[Technique],
+    profile: &ProfileSnapshot,
 ) -> Option<Vec<Recommendation>> {
     if !model.is_available() || !claim_call(pool, user_id, tier).await {
         return None;
@@ -134,10 +140,21 @@ async fn model_recommendations(
     Some(recommendations)
 }
 
+/// Why one technique works, streamed a chunk at a time.
+///
+/// Answers for any slug the catalogue holds and `NOT_FOUND` for one it does not,
+/// which is the only failure a caller can act on. Falls back on the same terms
+/// as [`get_recommendation`], and the fallback is chunked down the same pipe so
+/// the client has one accumulate-and-render path rather than two.
+///
+/// A model that fails *mid-answer* ends the stream with `UNAVAILABLE` rather
+/// than switching to the fallback text: the person is looking at half an
+/// explanation, and a second voice picking up the sentence is worse than a
+/// visible stop.
 pub async fn explain_technique(
     pool: &PgPool,
     model: &dyn ModelClient,
-    user_id: Uuid,
+    user_id: UserId,
     slug: &str,
 ) -> Result<ExplanationStream, AssistantError> {
     let (catalogue, profile, tier) = read_context(pool, user_id).await?;
@@ -226,7 +243,7 @@ fn from_fallback(text: &str) -> ExplanationStream {
 /// A database failure here reads as "no allowance". The alternative — failing
 /// the whole RPC — would take the fallback down with the counter, and the
 /// fallback is the thing that is supposed to survive.
-async fn claim_call(pool: &PgPool, user_id: Uuid, tier: Tier) -> bool {
+async fn claim_call(pool: &PgPool, user_id: UserId, tier: Tier) -> bool {
     let Some(limit) = daily_model_calls(tier) else {
         return false;
     };

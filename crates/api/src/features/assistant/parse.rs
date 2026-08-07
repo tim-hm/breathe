@@ -6,7 +6,7 @@
 //! decides what to believe. Only this one is load-bearing for safety.
 
 use super::types::{FIELD_SEPARATOR, RECOMMENDATION_COUNT, Recommendation};
-use crate::features::technique::repository::TechniqueRow;
+use crate::features::technique::types::Technique;
 
 /// The longest reason kept. A model asked for one sentence that writes five has
 /// misunderstood, and a paragraph in a list row is a layout bug on every client.
@@ -24,7 +24,7 @@ const MAX_REASON_CHARS: usize = 220;
 /// unusable, and the caller reads it as "fall back to the rules" — so no
 /// malformed reply can reach a client, and no unvalidated text can be mistaken
 /// for a slug.
-pub fn parse_recommendations(reply: &str, catalogue: &[TechniqueRow]) -> Vec<Recommendation> {
+pub fn parse_recommendations(reply: &str, catalogue: &[Technique]) -> Vec<Recommendation> {
     let mut recommendations: Vec<Recommendation> = Vec::new();
 
     for line in reply.lines() {
@@ -70,20 +70,17 @@ mod tests {
     use super::*;
     use crate::features::technique::types::TechniqueGoal;
 
-    fn technique(slug: &str, goal: TechniqueGoal) -> TechniqueRow {
-        TechniqueRow {
-            id: slug.to_owned(),
+    fn technique(slug: &str, goal: TechniqueGoal) -> Technique {
+        Technique {
             slug: slug.to_owned(),
             name: slug.to_owned(),
             summary: "a summary".to_owned(),
             safety_note: String::new(),
             goal,
-            recommended_rounds: 1,
-            requires_subscription: true,
         }
     }
 
-    fn catalogue() -> Vec<TechniqueRow> {
+    fn catalogue() -> Vec<Technique> {
         vec![
             technique("box-breathing", TechniqueGoal::Calm),
             technique("four-seven-eight", TechniqueGoal::Sleep),
