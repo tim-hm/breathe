@@ -17,8 +17,10 @@ import SwiftUI
 /// person arrives from are recognisably the same product.
 ///
 /// Deliberately holds no domain types — this package knows nothing about
-/// techniques or goals. Mapping a domain value to an accent is the feature's
-/// job, which keeps the dependency pointing one way (docs/code-structure.md).
+/// techniques or goals, which is what keeps the dependency pointing one way
+/// (docs/code-structure.md). Mapping a domain value onto an accent is
+/// `BreatheStyle`'s job: it depends on this module and on `BreatheKit`, so both
+/// apps read one mapping without this one learning anything.
 public enum Theme {
     /// A four-step scale. Constraining spacing to four values is what keeps a
     /// minimal interface looking deliberate rather than merely sparse.

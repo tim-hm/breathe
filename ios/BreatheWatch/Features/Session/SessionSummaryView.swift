@@ -1,4 +1,5 @@
 import BreatheKit
+import BreatheStyle
 import BreatheUI
 import SwiftUI
 

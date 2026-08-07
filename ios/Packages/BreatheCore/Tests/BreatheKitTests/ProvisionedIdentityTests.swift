@@ -14,9 +14,10 @@ import Testing
 /// Counts both directions of traffic: "never mints" is a claim about what was
 /// not written, and the caching is a claim about what was not read.
 ///
-/// File scope rather than nested in the suite only because its own state struct
-/// would otherwise sit three types deep.
-private final class FakeStorage: IdentityStorage {
+/// File scope rather than nested in the suite because its own state struct would
+/// otherwise sit three types deep, and because `WatchHandoffInboxTests` provisions
+/// through this too — the inbox's rules are about what reaches storage.
+final class FakeStorage: IdentityStorage {
     private struct State {
         var id: UUID?
         var reads = 0

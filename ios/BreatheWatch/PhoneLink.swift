@@ -1,7 +1,5 @@
 import BreatheKit
 import Foundation
-import os
-import SwiftUI
 import WatchConnectivity
 
 /// The watch's side of the pairing: it listens, and never asks.
@@ -12,34 +10,17 @@ import WatchConnectivity
 /// blocks: a watch that has never seen its phone still shows the catalogue,
 /// still records sessions locally, and simply carries an unacknowledged sync
 /// queue until an identity arrives.
+///
+/// The radio and nothing else. What a context means — provisioning the identity,
+/// keeping a mirrored best that a later context does not carry — is
+/// `BreatheKit`'s `WatchHandoffInbox`, which is also what the rest of the app
+/// observes.
 @MainActor
-@Observable
 final class PhoneLink: NSObject {
-    /// `watch-link`, the same category the phone's `WatchLink` files under:
-    /// correlating a handoff that never arrived means reading one channel, not
-    /// guessing at two names for the two ends of it.
-    private static let logger = Logger(category: "watch-link")
+    private let inbox: WatchHandoffInbox
 
-    /// The identity now in hand, or nil while this watch is still anonymous.
-    /// Observed rather than merely stored so the composition root can start a
-    /// sync the moment one lands.
-    private(set) var userId: UUID?
-
-    /// The phone's best controlled pause, or nil until a context has been read.
-    ///
-    /// Deliberately not persisted alongside the identity. The system already
-    /// keeps the last `applicationContext`, and `activate()` below replays it on
-    /// every launch, so a copy in `UserDefaults` would be a second source of
-    /// truth free to go stale against the first. What that costs is the fraction
-    /// of a second between launch and activation with no number in hand — and
-    /// the screen that shows it is two taps away.
-    private(set) var boltBestSeconds: Int?
-
-    private let identity: ProvisionedUserIdentityStore
-
-    init(identity: ProvisionedUserIdentityStore) {
-        self.identity = identity
-        userId = identity.userId()
+    init(inbox: WatchHandoffInbox) {
+        self.inbox = inbox
         super.init()
     }
 
@@ -55,24 +36,6 @@ final class PhoneLink: NSObject {
         let session = WCSession.default
         session.delegate = self
         session.activate()
-    }
-
-    /// Adopts a context, from wherever it arrived.
-    ///
-    /// Everything here is idempotent: the phone re-sends on every foreground, so
-    /// the overwhelmingly common call is one that changes nothing.
-    private func adopt(_ handoff: WatchHandoff) {
-        if identity.provision(handoff.userId) {
-            Self.logger.notice("adopted the phone's identity")
-        }
-        userId = identity.userId()
-
-        // Only overwritten by a context that carries one: a phone whose owner
-        // has not taken the test yet should not blank a number this watch was
-        // given before.
-        if let best = handoff.boltBestSeconds {
-            boltBestSeconds = best
-        }
     }
 }
 
@@ -91,7 +54,7 @@ extension PhoneLink: WCSessionDelegate {
             return
         }
 
-        Task { @MainActor in self.adopt(handoff) }
+        Task { @MainActor in self.inbox.adopt(handoff) }
     }
 
     nonisolated func session(
@@ -99,6 +62,6 @@ extension PhoneLink: WCSessionDelegate {
         didReceiveApplicationContext applicationContext: [String: Any]
     ) {
         guard let handoff = WatchHandoff(dictionary: applicationContext) else { return }
-        Task { @MainActor in self.adopt(handoff) }
+        Task { @MainActor in self.inbox.adopt(handoff) }
     }
 }

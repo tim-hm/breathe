@@ -1,3 +1,4 @@
+import BreatheKit
 import SwiftUI
 
 /// One switch, and deliberately nothing else.

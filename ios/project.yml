@@ -55,6 +55,10 @@ targets:
         product: BreatheKit
       - package: BreatheCore
         product: BreatheUI
+      # The domain→token mappings both apps read, so a goal is the same colour
+      # on the wrist as in the hand.
+      - package: BreatheCore
+        product: BreatheStyle
       # Embeds the watch app in the phone app's bundle, which is the only way
       # the pair reaches a device or App Store Connect as one submission.
       # XcodeGen reads the dependency's platform and emits the embed build
@@ -105,13 +109,15 @@ targets:
     sources:
       - path: BreatheWatch
     dependencies:
-      # Same two products, and BreatheAPI absent for the same reason: the watch
-      # is another client of the domain, not a second place generated protobuf
-      # is allowed to surface.
+      # Same three products, and BreatheAPI absent for the same reason: the
+      # watch is another client of the domain, not a second place generated
+      # protobuf is allowed to surface.
       - package: BreatheCore
         product: BreatheKit
       - package: BreatheCore
         product: BreatheUI
+      - package: BreatheCore
+        product: BreatheStyle
     settings:
       base:
         # A companion watch app's bundle id must be the phone app's with one

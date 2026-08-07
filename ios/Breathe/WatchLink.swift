@@ -14,23 +14,18 @@ import WatchConnectivity
 /// `applicationContext` rather than a message: this is state, not an event. The
 /// system keeps the latest one and delivers it whenever the watch next runs, so
 /// a phone sending into a watch that is off charge loses nothing.
+///
+/// Everything that is not `WCSession` lives in `BreatheKit`'s
+/// `WatchHandoffOutbox`, which decides what is worth sending and remembers what
+/// got through — this type is the radio around it.
 @MainActor
 final class WatchLink: NSObject {
     private static let logger = Logger(category: "watch-link")
 
-    private let identity: any UserIdentityStore
-    private let scores: any BoltScoreRecording
+    private let outbox: WatchHandoffOutbox
 
-    /// The last context handed over, so an unchanged one is not handed over
-    /// again. Every foreground calls `push()` and almost none of them carry
-    /// news; `updateApplicationContext` wakes the watch to deliver whatever it
-    /// is given, so sending the same two values repeatedly is radio time spent
-    /// on nothing.
-    private var sent: WatchHandoff?
-
-    init(identity: any UserIdentityStore, scores: any BoltScoreRecording) {
-        self.identity = identity
-        self.scores = scores
+    init(outbox: WatchHandoffOutbox) {
+        self.outbox = outbox
     }
 
     /// Activates the session if it needs it, and sends the current context.
@@ -58,30 +53,24 @@ final class WatchLink: NSObject {
         Task { await send() }
     }
 
-    /// Reads the current identity and best pause and hands them over.
+    /// Hands over whatever the outbox says is outstanding.
     ///
-    /// Silent when there is no identity yet: minting is lazy on first use, and a
-    /// context with no id is one the watch would refuse anyway.
+    /// A pairing that goes away between the guard and the call — somebody
+    /// unpairing their watch mid-launch — throws, which the outbox reads as
+    /// undelivered. The guard is there to skip a read of the score file that
+    /// would go nowhere, not to make the send safe.
     private func send() async {
-        guard let userId = identity.userId() else { return }
-        let handoff = await WatchHandoff(userId: userId, boltBestSeconds: scores.personalBest())
-        guard handoff != sent else { return }
-
         let session = WCSession.default
-        // The pairing can go away between the guard above and here — a person
-        // unpairing their watch mid-launch — so this is checked at the point of
-        // use rather than trusted from earlier.
         guard session.activationState == .activated, session.isPaired else { return }
 
         do {
-            try session.updateApplicationContext(handoff.dictionary)
-            // Recorded only on success, so a failed send is retried by the next
-            // foreground rather than remembered as delivered.
-            sent = handoff
+            try await outbox.handOver { handoff in
+                try session.updateApplicationContext(handoff.dictionary)
+            }
         } catch {
-            // Nothing to retry and nothing to tell anyone: the next foreground
-            // sends the same context again, and until then the watch works
-            // anonymously by design.
+            // Nothing to retry and nothing to tell anyone: the context stays
+            // outstanding, the next foreground offers it again, and until then
+            // the watch works anonymously by design.
             Self.logger
                 .notice("watch handoff deferred: \(error.localizedDescription, privacy: .public)")
         }

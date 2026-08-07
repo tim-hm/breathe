@@ -1,4 +1,5 @@
 import BreatheKit
+import BreatheStyle
 import BreatheUI
 import SwiftUI
 
@@ -15,6 +16,10 @@ import SwiftUI
 /// Not to be confused with `BreathRhythmChart` on the detail screen. That one is
 /// duration-accurate and redraws as the Advanced dials move; this one is a
 /// portrait, and identical for every dialling of the same technique.
+///
+/// The watch draws the same figures at page weight from its own copy of this
+/// renderer. Deliberate: `BreatheStyle` could hold a shared one, and a shared
+/// one would grow a parameter for every way a wrist differs from a hand.
 struct TechniqueGlyph: View {
     let technique: Technique
     /// The line weight. Sized by the caller because the same drawing appears at

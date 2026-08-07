@@ -2,13 +2,12 @@ import BreatheKit
 import BreatheUI
 import SwiftUI
 
-extension TechniqueGoal {
+public extension TechniqueGoal {
     /// The palette entry a goal is drawn in.
     ///
-    /// App-local rather than inside either feature, because the catalogue and
-    /// the session player both need it and neither owns it. It cannot live in
-    /// `BreatheUI` at all: that module has no dependencies, so that a palette
-    /// stays reusable and the domain never leaks into the design system.
+    /// One mapping, read by both apps, because a second copy of it fails
+    /// silently: the same technique comes out a different colour on the wrist
+    /// than in the hand, and nothing but a person's memory catches it.
     var accent: Color {
         switch self {
         case .calm: Theme.Accent.settle
