@@ -69,7 +69,9 @@ struct TechniqueCarouselView: View {
     /// One technique: its orb, its name, and the button that starts it.
     private func page(_ technique: Technique) -> some View {
         VStack(spacing: Theme.Spacing.close) {
-            TechniqueOrb(accent: technique.goal.accent)
+            BreathWaveform(technique: technique, accent: technique.goal.accent)
+                .frame(height: 70)
+                .padding(.horizontal, Theme.Spacing.close)
                 .overlay(alignment: .topTrailing) {
                     if technique.safetyNote != nil {
                         cautionBadge
