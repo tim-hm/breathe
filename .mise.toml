@@ -397,7 +397,14 @@ run = ["""
   # Under /srv/ond rather than its own tree, so one directory holds
   # everything a deploy ships and compose can mount it by relative path.
   rsync -az --delete web/ "$host":/srv/ond/web/
-  ssh "$host" 'cd /srv/ond && docker compose --profile tools run --rm migrate && docker compose up -d --remove-orphans'
+  # Caddy is restarted explicitly, and it has to be. Its config arrives as a
+  # bind-mounted file, so rsyncing a new Caddyfile changes nothing compose can
+  # see: the container spec is identical, `up -d` leaves it running, and Caddy
+  # goes on serving the config it parsed at boot. The failure is silent and it
+  # is routing — a deploy that moves an API path ships the new binary behind
+  # the old routing table, so every moved RPC 404s into file_server while
+  # /health, matched by both tables, still answers ok.
+  ssh "$host" 'cd /srv/ond && docker compose --profile tools run --rm migrate && docker compose up -d --remove-orphans && docker compose restart caddy'
   """]
 
 # ios
