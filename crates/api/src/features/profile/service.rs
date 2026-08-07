@@ -9,7 +9,8 @@ use sqlx::PgPool;
 use super::errors::ProfileError;
 use super::repository::{self, ProfileRow};
 use super::types::{
-    BirthYearBand, ExperienceLevel, MAX_DISPLAY_NAME_CHARS, ProfileSnapshot, ReminderIntensity,
+    BirthYearBand, ExperienceLevel, Gender, MAX_DISPLAY_NAME_CHARS, ProfileSnapshot,
+    ReminderIntensity,
 };
 use crate::features::technique::service::goal_to_proto;
 use crate::features::technique::types::TechniqueGoal;
@@ -101,8 +102,8 @@ pub async fn update_profile(
 
 /// The profile as another feature reads it.
 ///
-/// `assistant` derives both its prompt and its rule-based fallback from these
-/// three answers. Routed through the service rather than letting the caller take
+/// `assistant` derives its prompt and its rule-based fallback from these
+/// answers. Routed through the service rather than letting the caller take
 /// the row: `ProfileRow` is this feature's SQL shape, and a consumer holding it
 /// would make every column on `users` part of a contract nobody wrote down.
 pub async fn snapshot(pool: &PgPool, user_id: UserId) -> Result<ProfileSnapshot, ProfileError> {
@@ -112,6 +113,8 @@ pub async fn snapshot(pool: &PgPool, user_id: UserId) -> Result<ProfileSnapshot,
         goals: row.goals,
         experience_level: row.experience_level,
         intent_note: row.intent_note,
+        birth_year_band: row.birth_year_band,
+        gender: row.gender,
     })
 }
 
@@ -123,6 +126,8 @@ pub async fn snapshot(pool: &PgPool, user_id: UserId) -> Result<ProfileSnapshot,
 /// queries then filter on the column themselves, because ranking has to happen
 /// in one statement; this is the read that has no such excuse, and routing it
 /// through the service is what keeps `journey` out of this feature's SQL.
+/// Every other consumer wants the band alongside the rest of the answers and
+/// takes it off [`snapshot`] instead.
 pub async fn birth_year_band(
     pool: &PgPool,
     user_id: UserId,
@@ -148,6 +153,7 @@ fn to_proto(row: ProfileRow) -> pb::Profile {
             .birth_year_band
             .map_or(pb::BirthYearBand::Unspecified, birth_year_band_to_proto)
             as i32,
+        gender: row.gender.map_or(pb::Gender::Unspecified, gender_to_proto) as i32,
     }
 }
 
@@ -184,6 +190,7 @@ fn from_proto(profile: pb::Profile) -> Result<ProfileRow, ProfileError> {
         intent_note,
         display_name: display_name_from_proto(&profile.display_name)?,
         birth_year_band: birth_year_band_from_proto(profile.birth_year_band)?,
+        gender: gender_from_proto(profile.gender)?,
     })
 }
 
@@ -262,6 +269,28 @@ fn birth_year_band_from_proto(raw: i32) -> Result<Option<BirthYearBand>, Profile
     }
 }
 
+const fn gender_to_proto(gender: Gender) -> pb::Gender {
+    match gender {
+        Gender::Female => pb::Gender::Female,
+        Gender::Male => pb::Gender::Male,
+        Gender::NonBinary => pb::Gender::NonBinary,
+    }
+}
+
+/// `UNSPECIFIED` is accepted here for the same reason it is on the birth-year
+/// band: nobody has to say, and "rather not say" is `None`, not a fourth value.
+fn gender_from_proto(raw: i32) -> Result<Option<Gender>, ProfileError> {
+    match pb::Gender::try_from(raw) {
+        Ok(pb::Gender::Unspecified) => Ok(None),
+        Ok(pb::Gender::Female) => Ok(Some(Gender::Female)),
+        Ok(pb::Gender::Male) => Ok(Some(Gender::Male)),
+        Ok(pb::Gender::NonBinary) => Ok(Some(Gender::NonBinary)),
+        Err(_) => Err(ProfileError::Invalid(format!(
+            "`{raw}` is not a gender this server knows"
+        ))),
+    }
+}
+
 /// The inbound direction has no counterpart in `technique`, which only ever
 /// serves goals: this is the one place a client sends one back.
 fn goal_from_proto(raw: i32) -> Result<TechniqueGoal, ProfileError> {
@@ -325,12 +354,8 @@ mod tests {
 
     fn profile(reminder_intensity: i32) -> pb::Profile {
         pb::Profile {
-            goals: vec![],
-            experience_level: pb::ExperienceLevel::Unspecified as i32,
             reminder_intensity,
-            intent_note: String::new(),
-            display_name: String::new(),
-            birth_year_band: pb::BirthYearBand::Unspecified as i32,
+            ..pb::Profile::default()
         }
     }
 
@@ -453,6 +478,32 @@ mod tests {
         }
 
         assert!(display_name_from_proto("Tim").is_ok());
+    }
+
+    /// Every value round-trips to itself, in both directions, and silence stays
+    /// silence: `UNSPECIFIED` in decodes to `None`, and `None` out encodes to
+    /// `UNSPECIFIED`. The one mapping error this pins is a variant pair drifting
+    /// apart, which would store an answer the person did not give.
+    #[test]
+    fn gender_round_trips_and_silence_stays_silence() {
+        for gender in [Gender::Female, Gender::Male, Gender::NonBinary] {
+            assert_eq!(
+                gender_from_proto(gender_to_proto(gender) as i32)
+                    .expect("a stored gender is always representable"),
+                Some(gender)
+            );
+        }
+
+        assert_eq!(
+            gender_from_proto(pb::Gender::Unspecified as i32)
+                .expect("unspecified is a valid answer"),
+            None
+        );
+
+        assert!(matches!(
+            gender_from_proto(99),
+            Err(ProfileError::Invalid(_))
+        ));
     }
 
     /// Every level the database can hold has to arrive as a real proto case —

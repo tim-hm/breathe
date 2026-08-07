@@ -50,6 +50,18 @@ pub enum BirthYearBand {
     Born2010OrLater,
 }
 
+/// Mirrors the `gender` Postgres enum.
+///
+/// "Rather not say" is `Option::None` end to end, never a variant; the case
+/// for the closed list lives on the contract, in `profile_service.proto`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, sqlx::Type)]
+#[sqlx(type_name = "gender", rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum Gender {
+    Female,
+    Male,
+    NonBinary,
+}
+
 /// Mirrors the `reminder_intensity` Postgres enum.
 ///
 /// `Never` is the default in every direction — the column default, the proto
@@ -66,11 +78,11 @@ pub enum ReminderIntensity {
 
 /// What another feature reads off a profile.
 ///
-/// The three answers `assistant` derives its prompt and its rule-based fallback
-/// from, and nothing else — no display name, no reminder setting, no birth-year
-/// band. Narrower than the row on purpose: this is the surface the feature
-/// promises to keep, so a column added to `users` for this feature's own use
-/// cannot become another feature's dependency by accident.
+/// The answers `assistant` derives its prompt and its rule-based fallback from,
+/// and nothing else — no display name, no reminder setting. Narrower than the
+/// row on purpose: this is the surface the feature promises to keep, so a
+/// column added to `users` for this feature's own use cannot become another
+/// feature's dependency by accident.
 pub struct ProfileSnapshot {
     /// In the order the person picked them, which is the ranking the fallback
     /// sorts by.
@@ -84,4 +96,13 @@ pub struct ProfileSnapshot {
     /// What the person typed about what they want, already trimmed and bounded
     /// by `super::service`. Empty where they typed nothing.
     pub intent_note: String,
+
+    /// Which decade they were born in, if they said. The assistant reads it —
+    /// with `gender` — to calibrate how it interprets a breath-test score,
+    /// which is exactly the coarseness the band was designed to carry.
+    pub birth_year_band: Option<BirthYearBand>,
+
+    /// Gender, if they said. `None` is "rather not say" and stays that way in
+    /// the prompt: the assistant mentions it only when it is present.
+    pub gender: Option<Gender>,
 }

@@ -99,6 +99,28 @@ message Profile {
   // purpose: it exists so the age-band leaderboard can compare like with like,
   // and a birth year would be a more precise fact than that use needs.
   BirthYearBand birth_year_band = 6;
+
+  // Gender, if they said. It exists so the assistant can calibrate how it
+  // reads a breath-test score — the reference ranges differ by sex — and
+  // nothing else reads it.
+  Gender gender = 7;
+}
+
+// Gender, as someone chose to share it.
+//
+// UNSPECIFIED is the state most profiles hold and keep: nobody has to answer,
+// and the server stores silence as NULL rather than as a fourth value. A
+// closed list without a self-describe field, on purpose — the one consumer is
+// a prompt, and free text here would be a second injection surface bought for
+// a single prose reader.
+enum Gender {
+  GENDER_UNSPECIFIED = 0;
+
+  GENDER_FEMALE = 1;
+
+  GENDER_MALE = 2;
+
+  GENDER_NON_BINARY = 3;
 }
 
 // The decade somebody was born in.

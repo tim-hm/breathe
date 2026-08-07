@@ -123,6 +123,55 @@ public nonisolated enum Breathe_V1_ReminderIntensity: SwiftProtobuf.Enum, Swift.
 
 }
 
+/// Gender, as someone chose to share it.
+///
+/// UNSPECIFIED is the state most profiles hold and keep: nobody has to answer,
+/// and the server stores silence as NULL rather than as a fourth value. A
+/// closed list without a self-describe field, on purpose — the one consumer is
+/// a prompt, and free text here would be a second injection surface bought for
+/// a single prose reader.
+public nonisolated enum Breathe_V1_Gender: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case female // = 1
+  case male // = 2
+  case nonBinary // = 3
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .female
+    case 2: self = .male
+    case 3: self = .nonBinary
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .female: return 1
+    case .male: return 2
+    case .nonBinary: return 3
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Breathe_V1_Gender] = [
+    .unspecified,
+    .female,
+    .male,
+    .nonBinary,
+  ]
+
+}
+
 /// The decade somebody was born in.
 ///
 /// Bands by birth decade rather than by age, so a person's band never changes
@@ -228,6 +277,11 @@ public nonisolated struct Breathe_V1_Profile: Sendable {
   /// and a birth year would be a more precise fact than that use needs.
   public var birthYearBand: Breathe_V1_BirthYearBand = .unspecified
 
+  /// Gender, if they said. It exists so the assistant can calibrate how it
+  /// reads a breath-test score — the reference ranges differ by sex — and
+  /// nothing else reads it.
+  public var gender: Breathe_V1_Gender = .unspecified
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -324,13 +378,17 @@ nonisolated extension Breathe_V1_ReminderIntensity: SwiftProtobuf._ProtoNameProv
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0REMINDER_INTENSITY_NEVER\0\u{1}REMINDER_INTENSITY_GENTLE\0\u{1}REMINDER_INTENSITY_DAILY\0")
 }
 
+nonisolated extension Breathe_V1_Gender: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0GENDER_UNSPECIFIED\0\u{1}GENDER_FEMALE\0\u{1}GENDER_MALE\0\u{1}GENDER_NON_BINARY\0")
+}
+
 nonisolated extension Breathe_V1_BirthYearBand: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0BIRTH_YEAR_BAND_UNSPECIFIED\0\u{1}BIRTH_YEAR_BAND_BORN_BEFORE_1960\0\u{1}BIRTH_YEAR_BAND_BORN_1960S\0\u{1}BIRTH_YEAR_BAND_BORN_1970S\0\u{1}BIRTH_YEAR_BAND_BORN_1980S\0\u{1}BIRTH_YEAR_BAND_BORN_1990S\0\u{1}BIRTH_YEAR_BAND_BORN_2000S\0\u{1}BIRTH_YEAR_BAND_BORN_2010_OR_LATER\0")
 }
 
 nonisolated extension Breathe_V1_Profile: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Profile"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}goals\0\u{3}experience_level\0\u{3}reminder_intensity\0\u{3}intent_note\0\u{3}display_name\0\u{3}birth_year_band\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}goals\0\u{3}experience_level\0\u{3}reminder_intensity\0\u{3}intent_note\0\u{3}display_name\0\u{3}birth_year_band\0\u{1}gender\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -344,6 +402,7 @@ nonisolated extension Breathe_V1_Profile: SwiftProtobuf.Message, SwiftProtobuf._
       case 4: try { try decoder.decodeSingularStringField(value: &self.intentNote) }()
       case 5: try { try decoder.decodeSingularStringField(value: &self.displayName) }()
       case 6: try { try decoder.decodeSingularEnumField(value: &self.birthYearBand) }()
+      case 7: try { try decoder.decodeSingularEnumField(value: &self.gender) }()
       default: break
       }
     }
@@ -368,6 +427,9 @@ nonisolated extension Breathe_V1_Profile: SwiftProtobuf.Message, SwiftProtobuf._
     if self.birthYearBand != .unspecified {
       try visitor.visitSingularEnumField(value: self.birthYearBand, fieldNumber: 6)
     }
+    if self.gender != .unspecified {
+      try visitor.visitSingularEnumField(value: self.gender, fieldNumber: 7)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -378,6 +440,7 @@ nonisolated extension Breathe_V1_Profile: SwiftProtobuf.Message, SwiftProtobuf._
     if lhs.intentNote != rhs.intentNote {return false}
     if lhs.displayName != rhs.displayName {return false}
     if lhs.birthYearBand != rhs.birthYearBand {return false}
+    if lhs.gender != rhs.gender {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

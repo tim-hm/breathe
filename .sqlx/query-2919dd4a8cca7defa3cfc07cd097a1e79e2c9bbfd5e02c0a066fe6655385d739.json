@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE users\n            SET goals = $2,\n                experience_level = $3,\n                reminder_intensity = $4,\n                intent_note = $5,\n                display_name = $6,\n                birth_year_band = $7,\n                updated_at = now()\n          WHERE id = $1",
+  "query": "UPDATE users\n            SET goals = $2,\n                experience_level = $3,\n                reminder_intensity = $4,\n                intent_note = $5,\n                display_name = $6,\n                birth_year_band = $7,\n                gender = $8,\n                updated_at = now()\n          WHERE id = $1",
   "describe": {
     "columns": [],
     "parameters": {
@@ -68,10 +68,22 @@
               ]
             }
           }
+        },
+        {
+          "Custom": {
+            "name": "gender",
+            "kind": {
+              "Enum": [
+                "FEMALE",
+                "MALE",
+                "NON_BINARY"
+              ]
+            }
+          }
         }
       ]
     },
     "nullable": []
   },
-  "hash": "9814bb7f63534a5b6de575ccff5ea0076b4445e80597ed329af1e2da2c1662c5"
+  "hash": "2919dd4a8cca7defa3cfc07cd097a1e79e2c9bbfd5e02c0a066fe6655385d739"
 }

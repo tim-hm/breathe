@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n            goals AS \"goals: Vec<TechniqueGoal>\",\n            experience_level AS \"experience_level?: ExperienceLevel\",\n            reminder_intensity AS \"reminder_intensity: ReminderIntensity\",\n            intent_note,\n            display_name,\n            birth_year_band AS \"birth_year_band?: BirthYearBand\"\n         FROM users\n         WHERE id = $1",
+  "query": "SELECT\n            goals AS \"goals: Vec<TechniqueGoal>\",\n            experience_level AS \"experience_level?: ExperienceLevel\",\n            reminder_intensity AS \"reminder_intensity: ReminderIntensity\",\n            intent_note,\n            display_name,\n            birth_year_band AS \"birth_year_band?: BirthYearBand\",\n            gender AS \"gender?: Gender\"\n         FROM users\n         WHERE id = $1",
   "describe": {
     "columns": [
       {
@@ -125,6 +125,28 @@
             "name": "birth_year_band"
           }
         }
+      },
+      {
+        "ordinal": 6,
+        "name": "gender?: Gender",
+        "type_info": {
+          "Custom": {
+            "name": "gender",
+            "kind": {
+              "Enum": [
+                "FEMALE",
+                "MALE",
+                "NON_BINARY"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "gender"
+          }
+        }
       }
     ],
     "parameters": {
@@ -138,8 +160,9 @@
       false,
       false,
       true,
+      true,
       true
     ]
   },
-  "hash": "3c16383b6e3301b317000bf5b5c4e508d137fa53937198a76f7fddbdb2c5209a"
+  "hash": "2880c2de24417d7369526cb418da5a05ab6e34b23d634f02ad7e09d277259ca7"
 }
