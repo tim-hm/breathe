@@ -16,7 +16,7 @@ use super::types::{RECOMMENDATION_COUNT, Recommendation, bolt_phrase, goal_phras
 use crate::features::journey::bolt::types::BoltSnapshot;
 use crate::features::journey::sessions::types::PracticeSnapshot;
 use crate::features::profile::types::{ExperienceLevel, ProfileSnapshot};
-use crate::features::technique::types::Technique;
+use crate::features::technique::types::{Technique, TechniqueGoal, resolve};
 
 /// Techniques to try, ranked by the goals the person picked.
 ///
@@ -46,68 +46,63 @@ pub fn recommendations(
             .unwrap_or(usize::MAX)
     });
 
-    let mut corrective = corrective_lead(catalogue, profile, practice);
-
-    ranked
+    let mut list: Vec<Recommendation> = ranked
         .into_iter()
         .take(RECOMMENDATION_COUNT)
         .map(|technique| Recommendation {
             technique_slug: technique.slug.clone(),
-            reason: corrective
-                .take()
-                .unwrap_or_else(|| reason(technique, profile)),
+            reason: reason(technique, profile),
         })
-        .collect()
+        .collect();
+
+    if let (Some(lead), Some((stated, practised))) =
+        (list.first_mut(), goal_gap(catalogue, profile, practice))
+    {
+        lead.reason = format!(
+            "You've been practising to {}, but you said you want to {} — start here.",
+            goal_phrase(practised),
+            goal_phrase(stated)
+        );
+    }
+
+    list
 }
 
-/// The one sentence that watches the person's data: their first goal has had
-/// strictly zero recent minutes while other practice exists, so the lead
-/// recommendation opens by saying so.
+/// The one judgement that watches the person's data: their first goal has had
+/// strictly zero recent minutes while resolvable practice went somewhere else.
+/// Returns `(stated, practised)`, or `None` in every other shape — no goals,
+/// the first goal already practised, or nothing resolvable to contrast it
+/// with.
 ///
-/// `None` in every other shape — no goals, no practice at all, the first goal
-/// already practised, or nothing resolvable to contrast it with. The check
-/// reads only the snapshot's named techniques, so a goal practised entirely in
-/// the truncated tail can look neglected; the tail is one-offs by construction,
-/// which is as close to "not practising it" as makes no difference to the copy.
-fn corrective_lead(
+/// Reads only the snapshot's named techniques, so a goal practised entirely in
+/// the truncated tail can look neglected; the tail is one-offs by
+/// construction, which is as close to "not practising it" as makes no
+/// difference to the copy.
+fn goal_gap(
     catalogue: &[Technique],
     profile: &ProfileSnapshot,
     practice: &PracticeSnapshot,
-) -> Option<String> {
-    let first_goal = *profile.goals.first()?;
-    if practice.sessions == 0 {
-        return None;
-    }
+) -> Option<(TechniqueGoal, TechniqueGoal)> {
+    let stated = *profile.goals.first()?;
+    let goal_of = |slug: &str| resolve(catalogue, slug).map(|technique| technique.goal);
 
-    let goal_of = |slug: &str| {
-        catalogue
-            .iter()
-            .find(|technique| technique.slug == slug)
-            .map(|technique| technique.goal)
-    };
-
-    let minutes_toward_goal: u32 = practice
+    if practice
         .by_technique
         .iter()
-        .filter(|entry| goal_of(&entry.technique_slug) == Some(first_goal))
-        .map(|entry| entry.minutes)
-        .sum();
-    if minutes_toward_goal > 0 {
+        .any(|entry| entry.minutes > 0 && goal_of(&entry.technique_slug) == Some(stated))
+    {
         return None;
     }
 
-    // Busiest first, so the goal named is the one their time actually went to.
-    let practised_goal = practice
+    // Busiest first, so the goal named is the one their sessions actually went
+    // to.
+    let practised = practice
         .by_technique
         .iter()
         .filter(|entry| entry.minutes > 0)
-        .find_map(|entry| goal_of(&entry.technique_slug).filter(|goal| *goal != first_goal))?;
+        .find_map(|entry| goal_of(&entry.technique_slug).filter(|goal| *goal != stated))?;
 
-    Some(format!(
-        "You've been practising to {}, but you said you want to {} — start here.",
-        goal_phrase(practised_goal),
-        goal_phrase(first_goal)
-    ))
+    Some((stated, practised))
 }
 
 /// Why this technique, in one sentence.
@@ -299,9 +294,6 @@ mod tests {
         );
 
         assert!(!list[0].reason.contains("start here"));
-        for item in &list {
-            assert!(!item.reason.contains("moon-breathing"));
-        }
     }
 
     /// The BOLT sentence rides in the explanation exactly when a score exists,

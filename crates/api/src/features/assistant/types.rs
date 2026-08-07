@@ -84,15 +84,15 @@ pub const BOLT_BAND_TARGET: u32 = 40;
 /// themselves.
 pub fn bolt_phrase(bolt: &BoltSnapshot) -> String {
     let reading = match bolt.latest {
-        seconds if seconds < BOLT_BAND_BUILDING => {
+        ..BOLT_BAND_BUILDING => {
             "your breathing is still easily unsettled, so keep sessions short and gentle"
         }
-        seconds if seconds < BOLT_BAND_SOLID => {
+        BOLT_BAND_BUILDING..BOLT_BAND_SOLID => {
             "there is clear room to build your CO2 tolerance, and steady practice is what builds it"
         }
-        seconds if seconds < BOLT_BAND_STRONG => "a solid base to build on",
-        seconds if seconds < BOLT_BAND_TARGET => "a strong score, and worth maintaining",
-        _ => "an excellent score — your breathing is well trained",
+        BOLT_BAND_SOLID..BOLT_BAND_STRONG => "a solid base to build on",
+        BOLT_BAND_STRONG..BOLT_BAND_TARGET => "a strong score, and worth maintaining",
+        BOLT_BAND_TARGET.. => "an excellent score — your breathing is well trained",
     };
 
     format!(

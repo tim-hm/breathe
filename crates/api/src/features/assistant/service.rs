@@ -27,7 +27,7 @@ use crate::features::journey::sessions::types::PracticeSnapshot;
 use crate::features::profile::service as profile;
 use crate::features::profile::types::ProfileSnapshot;
 use crate::features::technique::service as technique;
-use crate::features::technique::types::Technique;
+use crate::features::technique::types::{Technique, resolve};
 use crate::identity::UserId;
 use crate::proto::breathe::v1 as pb;
 
@@ -168,12 +168,9 @@ pub async fn explain_technique(
     slug: &str,
 ) -> Result<ExplanationStream, AssistantError> {
     let (catalogue, profile, practice, tier) = read_context(pool, user_id).await?;
-    let technique = catalogue
-        .iter()
-        .find(|row| row.slug == slug)
-        .ok_or_else(|| {
-            AssistantError::UnknownTechnique(format!("no technique has the slug `{slug}`"))
-        })?;
+    let technique = resolve(&catalogue, slug).ok_or_else(|| {
+        AssistantError::UnknownTechnique(format!("no technique has the slug `{slug}`"))
+    })?;
 
     // Availability first, so a process with no key configured — a fresh clone,
     // CI, the whole e2e suite — neither writes a quota row nor builds a prompt

@@ -18,7 +18,7 @@ use super::types::{
 };
 use crate::features::journey::sessions::types::PracticeSnapshot;
 use crate::features::profile::types::ProfileSnapshot;
-use crate::features::technique::types::Technique;
+use crate::features::technique::types::{Technique, resolve};
 
 /// The instructions and the catalogue: the same bytes on every call.
 ///
@@ -212,7 +212,7 @@ fn practice_lines(practice: &PracticeSnapshot, catalogue: &[Technique]) -> Strin
         let mut other_sessions: u32 = 0;
         let mut other_minutes: u32 = 0;
         for entry in &practice.by_technique {
-            if catalogue.iter().any(|row| row.slug == entry.technique_slug) {
+            if resolve(catalogue, &entry.technique_slug).is_some() {
                 let _ = writeln!(
                     lines,
                     "- {}: {} sessions, {} minutes",

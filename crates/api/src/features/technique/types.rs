@@ -50,3 +50,15 @@ pub struct Technique {
 
     pub goal: TechniqueGoal,
 }
+
+/// The technique a slug names, or `None` for one the catalogue does not hold.
+///
+/// The one definition of "resolves in the catalogue", shared by everything in
+/// `assistant` that has to decide whether a slug is real — the reply parser,
+/// the explanation lookup, the prompt's echo guard, and the fallback's goal
+/// attribution. That decision is load-bearing for safety (an unresolvable slug
+/// is client free text and must never reach a client or a prompt), so any
+/// change to how a slug matches happens here or nowhere.
+pub fn resolve<'a>(catalogue: &'a [Technique], slug: &str) -> Option<&'a Technique> {
+    catalogue.iter().find(|technique| technique.slug == slug)
+}
