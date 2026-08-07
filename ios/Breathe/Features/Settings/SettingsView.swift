@@ -48,6 +48,16 @@ struct SettingsView: View {
                         }
                     }
 
+                    Picker("Vibration", selection: $settings.hapticStrength) {
+                        ForEach(HapticStrength.allCases) { strength in
+                            Text(strength.title).tag(strength)
+                        }
+                    }
+                    // Beside Cues rather than folded into it, and dimmed by it:
+                    // a strength control under a mode that plays no haptics is
+                    // a dial connected to nothing.
+                    .disabled(!settings.cueMode.playsHaptics)
+
                     Picker("Guidance", selection: $settings.guidance) {
                         ForEach(SessionGuidance.allCases) { level in
                             Text(level.title).tag(level)
