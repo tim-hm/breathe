@@ -33,3 +33,14 @@ enum LiveAssistant {
 enum LiveHealth {
     @MainActor static let model = HealthContextModel(store: HealthKitHealthStore())
 }
+
+/// The coach's speaking voice, built once on the same terms as the two above.
+///
+/// One instance because a default parameter is evaluated on every view
+/// construction — a fresh `SystemCoachVoice` there would allocate a
+/// synthesiser per body pass of whatever screen links to the chat — and
+/// because two synthesisers contending for one audio session would duck and
+/// un-duck each other.
+enum LiveCoachVoice {
+    @MainActor static let voice: any CoachVoice = SystemCoachVoice()
+}

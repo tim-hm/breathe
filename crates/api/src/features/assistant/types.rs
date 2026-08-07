@@ -225,6 +225,15 @@ pub const RECOMMENDATION_COUNT: usize = 3;
 /// a marginal cost, and the only reason the top tier exists. So the answer is
 /// `None` below it, and a ceiling above it.
 ///
+/// One shared pool for everything the model does. A recommendation, an
+/// explanation, and a chat turn each claim one call, because each is one paid
+/// completion — separate pools would be three ceilings to tune and a person
+/// arguing with the wrong one. Fifty covers a real conversation on top of the
+/// browsing the old ceiling of 25 was sized for: chat charges per turn, and a
+/// ceiling that a genuine chat could exhaust in one sitting would make the
+/// coach's best feature the way to lose the coach for the day (raised 25 → 50
+/// with the conversational coach, product decision 2026-08-07).
+///
 /// **No free taste, deliberately.** M8's first shape gave everybody three calls
 /// a day, which made sense while the subscription was one $4.99 yearly product
 /// and the model was a bonus. It stops making sense now: an unbounded daily
@@ -237,7 +246,7 @@ pub const RECOMMENDATION_COUNT: usize = 3;
 pub const fn daily_model_calls(tier: Tier) -> Option<i32> {
     match tier {
         Tier::Free | Tier::Plus => None,
-        Tier::Coach => Some(25),
+        Tier::Coach => Some(50),
     }
 }
 
@@ -252,6 +261,32 @@ pub const RECOMMENDATION_MAX_TOKENS: i32 = 400;
 /// Larger than a recommendation because prose is the deliverable here, and
 /// still small enough that one call cannot become expensive on its own.
 pub const EXPLANATION_MAX_TOKENS: i32 = 700;
+
+/// The output ceiling on one chat reply.
+///
+/// The explanation's ceiling, for the explanation's reason: a conversational
+/// answer is a few short paragraphs, and anything longer is a lecture in a
+/// chat window.
+pub const CHAT_MAX_TOKENS: i32 = 700;
+
+/// The most history turns one chat call reads, keeping the newest.
+///
+/// Truncation is silent — the person is mid-conversation, and "your transcript
+/// is long" is not an answer to what they asked. Twenty turns is ten
+/// exchanges, which is more context than a coaching answer ever draws on, and
+/// it bounds the per-call input spend the way `CHAT_MAX_TOKENS` bounds the
+/// output.
+pub const MAX_CHAT_TURNS: usize = 20;
+
+/// The longest message — new or replayed as history — one chat call accepts,
+/// in characters.
+///
+/// A bound rather than a truncation, unlike [`MAX_CHAT_TURNS`]: cutting a
+/// message mid-sentence would have the coach answer something the person did
+/// not say, so an over-long one is `INVALID_ARGUMENT` and the client keeps its
+/// composer honest instead. Sized like the intent note's bound — generous for
+/// typing, useless for wholesale prompt smuggling.
+pub const MAX_CHAT_MESSAGE_CHARS: usize = 1000;
 
 #[cfg(test)]
 mod tests {

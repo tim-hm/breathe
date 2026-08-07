@@ -69,6 +69,49 @@ public nonisolated enum Breathe_V1_AssistantSource: SwiftProtobuf.Enum, Swift.Ca
 
 }
 
+/// Who said one turn of a conversation.
+public nonisolated enum Breathe_V1_ChatRole: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+
+  /// The person using the app.
+  case person // = 1
+
+  /// The coach — this service's own earlier replies, read back to it.
+  case coach // = 2
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .person
+    case 2: self = .coach
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .person: return 1
+    case .coach: return 2
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Breathe_V1_ChatRole] = [
+    .unspecified,
+    .person,
+    .coach,
+  ]
+
+}
+
 /// Coarse heart trends, computed on the phone from its own Health store and
 /// attached per request when — and only when — the person has switched on the
 /// in-app opt-in.
@@ -140,6 +183,80 @@ public nonisolated struct Breathe_V1_HealthContext: Sendable {
   fileprivate var _restingHrTrendBpm: Int32? = nil
   fileprivate var _hrvSdnnMs: Int32? = nil
   fileprivate var _hrvSdnnTrendMs: Int32? = nil
+}
+
+/// One turn of the conversation, as the device remembers it.
+public nonisolated struct Breathe_V1_ChatTurn: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Never UNSPECIFIED: a turn that does not say who spoke is INVALID_ARGUMENT,
+  /// because the server hands these to the model as genuinely attributed
+  /// speech and cannot guess an attribution.
+  public var role: Breathe_V1_ChatRole = .unspecified
+
+  /// What was said. Bounded to the same length as a new message; a longer turn
+  /// fails the request rather than being silently trimmed.
+  public var text: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Breathe_V1_ChatRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// The conversation so far, oldest first, supplied by the client. The server
+  /// holds no transcript, so the device's copy is the only one — the same
+  /// inversion of the empty-request rule `HealthContext` documents. COACH turns
+  /// cannot be verified as genuinely the coach's words; they are accepted and
+  /// treated as conversation data, on the same terms as the intent note. Only
+  /// the most recent turns are read; older ones are silently ignored.
+  public var history: [Breathe_V1_ChatTurn] = []
+
+  /// The person's new message. Required, and bounded; an empty or over-long
+  /// message is INVALID_ARGUMENT.
+  public var message: String = String()
+
+  /// The same coarse heart trends the other two RPCs may carry, on the same
+  /// terms: optional, device-computed, used transiently, never stored.
+  public var healthContext: Breathe_V1_HealthContext {
+    get {_healthContext ?? Breathe_V1_HealthContext()}
+    set {_healthContext = newValue}
+  }
+  /// Returns true if `healthContext` has been explicitly set.
+  public var hasHealthContext: Bool {self._healthContext != nil}
+  /// Clears the value of `healthContext`. Subsequent reads from it will return its default value.
+  public mutating func clearHealthContext() {self._healthContext = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _healthContext: Breathe_V1_HealthContext? = nil
+}
+
+public nonisolated struct Breathe_V1_ChatResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// The next piece of the reply, to be appended to what came before — chunk
+  /// boundaries carry no meaning, exactly as on `ExplainTechniqueResponse`.
+  public var text: String = String()
+
+  /// Identical on every chunk of one stream. FALLBACK here is a short fixed
+  /// sentence rather than a conversation: the rules can rank exercises, but
+  /// they cannot chat.
+  public var source: Breathe_V1_AssistantSource = .unspecified
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
 }
 
 public nonisolated struct Breathe_V1_GetRecommendationRequest: Sendable {
@@ -260,6 +377,10 @@ nonisolated extension Breathe_V1_AssistantSource: SwiftProtobuf._ProtoNameProvid
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0ASSISTANT_SOURCE_UNSPECIFIED\0\u{1}ASSISTANT_SOURCE_MODEL\0\u{1}ASSISTANT_SOURCE_FALLBACK\0")
 }
 
+nonisolated extension Breathe_V1_ChatRole: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CHAT_ROLE_UNSPECIFIED\0\u{1}CHAT_ROLE_PERSON\0\u{1}CHAT_ROLE_COACH\0")
+}
+
 nonisolated extension Breathe_V1_HealthContext: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".HealthContext"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}resting_hr_bpm\0\u{3}resting_hr_trend_bpm\0\u{3}hrv_sdnn_ms\0\u{3}hrv_sdnn_trend_ms\0\u{c}\u{5}\u{1}")
@@ -304,6 +425,120 @@ nonisolated extension Breathe_V1_HealthContext: SwiftProtobuf.Message, SwiftProt
     if lhs._restingHrTrendBpm != rhs._restingHrTrendBpm {return false}
     if lhs._hrvSdnnMs != rhs._hrvSdnnMs {return false}
     if lhs._hrvSdnnTrendMs != rhs._hrvSdnnTrendMs {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Breathe_V1_ChatTurn: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ChatTurn"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}role\0\u{1}text\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularEnumField(value: &self.role) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.text) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.role != .unspecified {
+      try visitor.visitSingularEnumField(value: self.role, fieldNumber: 1)
+    }
+    if !self.text.isEmpty {
+      try visitor.visitSingularStringField(value: self.text, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Breathe_V1_ChatTurn, rhs: Breathe_V1_ChatTurn) -> Bool {
+    if lhs.role != rhs.role {return false}
+    if lhs.text != rhs.text {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Breathe_V1_ChatRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ChatRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}history\0\u{1}message\0\u{3}health_context\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.history) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.message) }()
+      case 3: try { try decoder.decodeSingularMessageField(value: &self._healthContext) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.history.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.history, fieldNumber: 1)
+    }
+    if !self.message.isEmpty {
+      try visitor.visitSingularStringField(value: self.message, fieldNumber: 2)
+    }
+    try { if let v = self._healthContext {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Breathe_V1_ChatRequest, rhs: Breathe_V1_ChatRequest) -> Bool {
+    if lhs.history != rhs.history {return false}
+    if lhs.message != rhs.message {return false}
+    if lhs._healthContext != rhs._healthContext {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Breathe_V1_ChatResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ChatResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}text\0\u{1}source\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.text) }()
+      case 2: try { try decoder.decodeSingularEnumField(value: &self.source) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.text.isEmpty {
+      try visitor.visitSingularStringField(value: self.text, fieldNumber: 1)
+    }
+    if self.source != .unspecified {
+      try visitor.visitSingularEnumField(value: self.source, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Breathe_V1_ChatResponse, rhs: Breathe_V1_ChatResponse) -> Bool {
+    if lhs.text != rhs.text {return false}
+    if lhs.source != rhs.source {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

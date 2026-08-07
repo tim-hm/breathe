@@ -25,7 +25,7 @@ pub mod assistant {
     pub use crate::features::assistant::model::disabled::DisabledModelClient;
     pub use crate::features::assistant::model::openrouter::OpenRouterClient;
     pub use crate::features::assistant::model::{
-        ModelClient, ModelError, ModelRequest, ModelStream, from_config,
+        ChatRole, ChatTurn, ModelClient, ModelError, ModelRequest, ModelStream, from_config,
     };
     pub use crate::features::assistant::types::daily_model_calls;
 }

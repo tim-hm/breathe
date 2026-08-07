@@ -43,11 +43,12 @@ public struct Guidance: Sendable, Equatable {
     }
 }
 
-/// A piece of an explanation as it arrives.
+/// A piece of a streamed answer as it arrives — an explanation's or a chat
+/// reply's, which stream on identical terms.
 ///
 /// The source rides on every chunk so a view knows how to frame the text from
 /// the first one, rather than waiting for the stream to finish to find out.
-public struct ExplanationChunk: Sendable, Equatable {
+public struct AssistantChunk: Sendable, Equatable {
     public let text: String
     public let source: GuidanceSource
 

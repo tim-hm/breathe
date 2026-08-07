@@ -28,7 +28,7 @@ struct AssistantGuidanceTests {
         let model = ExplanationModel(assistant: script.assistant, techniqueSlug: "extended-exhale")
 
         model.startIfNeeded()
-        script.yield(ExplanationChunk(text: "A longer exhale ", source: .model))
+        script.yield(AssistantChunk(text: "A longer exhale ", source: .model))
         try await settle()
 
         #expect(
@@ -40,7 +40,7 @@ struct AssistantGuidanceTests {
             "the first chunk is readable before the second arrives"
         )
 
-        script.yield(ExplanationChunk(text: "lengthens each breath.", source: .model))
+        script.yield(AssistantChunk(text: "lengthens each breath.", source: .model))
         try await settle()
 
         #expect(
@@ -76,7 +76,7 @@ struct AssistantGuidanceTests {
         let model = ExplanationModel(assistant: script.assistant, techniqueSlug: "box-breathing")
 
         model.startIfNeeded()
-        script.yield(ExplanationChunk(text: "The mechanism is ", source: .fallback))
+        script.yield(AssistantChunk(text: "The mechanism is ", source: .fallback))
         script.finish(throwing: AssistantRepositoryError.transport("the stream broke"))
         try await settle()
 
@@ -136,15 +136,15 @@ struct AssistantGuidanceTests {
 private final class Script {
     let assistant: any AssistantReading
 
-    private let continuation: AsyncThrowingStream<ExplanationChunk, Error>.Continuation
+    private let continuation: AsyncThrowingStream<AssistantChunk, Error>.Continuation
 
     init() {
-        let (stream, continuation) = AsyncThrowingStream<ExplanationChunk, Error>.makeStream()
+        let (stream, continuation) = AsyncThrowingStream<AssistantChunk, Error>.makeStream()
         self.continuation = continuation
         assistant = ScriptedAssistant(stream: stream)
     }
 
-    func yield(_ chunk: ExplanationChunk) {
+    func yield(_ chunk: AssistantChunk) {
         continuation.yield(chunk)
     }
 
@@ -155,14 +155,21 @@ private final class Script {
 
 private struct ScriptedAssistant: AssistantReading, @unchecked Sendable {
     /// Consumed once, by the single model each test builds.
-    let stream: AsyncThrowingStream<ExplanationChunk, Error>
+    let stream: AsyncThrowingStream<AssistantChunk, Error>
 
     func recommendations() async throws -> Guidance {
         Guidance(recommendations: [], source: .fallback)
     }
 
-    func explanation(of _: String) -> AsyncThrowingStream<ExplanationChunk, Error> {
+    func explanation(of _: String) -> AsyncThrowingStream<AssistantChunk, Error> {
         stream
+    }
+
+    func chat(
+        history _: [ChatTurn],
+        message _: String
+    ) -> AsyncThrowingStream<AssistantChunk, Error> {
+        AsyncThrowingStream { $0.finish() }
     }
 }
 
@@ -171,7 +178,16 @@ private struct FailingAssistant: AssistantReading {
         throw AssistantRepositoryError.transport("no network")
     }
 
-    func explanation(of _: String) -> AsyncThrowingStream<ExplanationChunk, Error> {
+    func explanation(of _: String) -> AsyncThrowingStream<AssistantChunk, Error> {
+        AsyncThrowingStream {
+            $0.finish(throwing: AssistantRepositoryError.transport("no network"))
+        }
+    }
+
+    func chat(
+        history _: [ChatTurn],
+        message _: String
+    ) -> AsyncThrowingStream<AssistantChunk, Error> {
         AsyncThrowingStream {
             $0.finish(throwing: AssistantRepositoryError.transport("no network"))
         }

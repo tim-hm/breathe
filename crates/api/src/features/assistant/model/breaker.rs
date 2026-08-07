@@ -234,6 +234,7 @@ mod tests {
         let request = ModelRequest {
             cacheable_prefix: String::new(),
             instruction: String::new(),
+            turns: Vec::new(),
             max_tokens: 1,
         };
 

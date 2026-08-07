@@ -92,6 +92,7 @@ Dependencies: M2 (catalogue model), M4 (identity), M5 (session sync). Can build 
 
 - `DEVELOPMENT_TEAM` + release signing in `ios/project.yml`; TestFlight internal → external, both app targets.
 - `PrivacyInfo.xcprivacy`, no-tracking privacy labels, wellness (not medical) copy, contraindications surfaced in-session.
+- The conversational coach is free-form generative chat, which App Review treats differently from templated model output: expect the higher age-rating questionnaire and questions about moderation and misuse. The server-side guardrails (stay-on-breathing framing, no diagnosis, bounded messages, Coach-tier gate, daily quota) are the answers — have them written up before submission.
 - Backend hardening: rate limiting on assistant routes, `/health`-based monitoring, a load test of the streaming path.
 - App Store assets for iPhone **and** Watch (screenshots per device class).
 - Support and privacy-policy pages on the site — `web/` is already published, but the one-pager is the only page there and App Store Connect blocks on both URLs.
@@ -99,6 +100,8 @@ Dependencies: M2 (catalogue model), M4 (identity), M5 (session sync). Can build 
 ## Post-V1 parking lot
 
 Deliberately fenced out of V1: HealthKit mindful minutes, widgets and Live Activities, Watch complications and Smart Stack presence beyond the app itself, Sign in with Apple + cross-device sync, push notifications, free-form chat, and any web/Stripe channel.
+
+Two items have since left this list by product decision (2026-08-07, the AI-coach build): HealthKit mindful minutes ship with the coach's health context, and free-form chat ships as the conversational coach — a stateless `Chat` RPC on the assistant service, transcript on-device, with spoken replies behind a `CoachVoice` seam. The fence was about scope risk, not about the features; the coach work paid for both. Still parked from that build: on-device transcript persistence, a push-to-talk mic button, and in-session heart-rate capture.
 
 ## Sequencing notes
 

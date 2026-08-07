@@ -29,6 +29,13 @@ pub enum AssistantError {
     #[error("{0}")]
     UnknownTechnique(String),
 
+    /// The chat request itself was malformed — an empty or over-long message,
+    /// an over-long history turn, or a turn that does not say who spoke.
+    /// Reported verbatim: only a client bug produces one, and the message is
+    /// what names the bug.
+    #[error("{0}")]
+    InvalidChat(String),
+
     /// The catalogue came back empty, so there is nothing to recommend and no
     /// fallback to derive. Unreachable while the seed runs on every migration,
     /// and surfaced rather than answered with an empty list.
@@ -69,6 +76,7 @@ impl From<AssistantError> for Status {
     fn from(error: AssistantError) -> Self {
         match error {
             AssistantError::UnknownTechnique(message) => Self::not_found(message),
+            AssistantError::InvalidChat(message) => Self::invalid_argument(message),
             AssistantError::EmptyCatalogue => {
                 tracing::error!(feature = "assistant", "the catalogue is empty");
                 Self::internal("internal error")

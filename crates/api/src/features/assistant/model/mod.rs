@@ -33,6 +33,32 @@ use crate::config::Config;
 /// concrete stream type is not known at any call site.
 pub type ModelStream = Pin<Box<dyn Stream<Item = Result<String, ModelError>> + Send>>;
 
+/// Who spoke one turn of a conversation, in the seam's own vocabulary.
+///
+/// Two variants and no "unspecified": a wire turn that does not name its
+/// speaker is rejected at the boundary, so nothing behind it has to carry the
+/// doubt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChatRole {
+    /// The person using the app.
+    Person,
+    /// The coach's own earlier reply, read back to it.
+    Coach,
+}
+
+/// One turn of a conversation, ready for a provider to render as genuinely
+/// attributed speech.
+///
+/// Real roles rather than a transcript serialised into the instruction, on
+/// purpose: a provider renders these as actual user/assistant messages, and an
+/// instruction smuggled into a turn arrives marked as somebody's speech rather
+/// than as the caller's authority — materially harder to inject through.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChatTurn {
+    pub role: ChatRole,
+    pub text: String,
+}
+
 /// One call's worth of prompt, split where the cache boundary goes.
 pub struct ModelRequest {
     /// Everything identical from one call to the next — the system prompt and
@@ -44,6 +70,10 @@ pub struct ModelRequest {
     /// The part that differs per caller: their profile, or the technique they
     /// asked about. Always after the prefix, for the same reason.
     pub instruction: String,
+
+    /// The conversation, oldest first, ending on the person's newest message.
+    /// Empty for the one-shot RPCs, whose whole ask fits in `instruction`.
+    pub turns: Vec<ChatTurn>,
 
     /// The output ceiling. Small on purpose — every response here is a handful
     /// of sentences, and a ceiling is the only cost control that binds even
