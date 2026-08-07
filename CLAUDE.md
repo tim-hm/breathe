@@ -21,16 +21,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 2. Architecture
 
-A Cargo workspace (`crates/`) and a native SwiftUI app (`ios/`) sharing one Protobuf contract (`proto/`). PostgreSQL is the only datastore. The iOS client talks **gRPC-Web** to a tonic backend; a small JSON surface (`/health`, `/about`) exists for `curl`.
+A Cargo workspace (`crates/`) and two native SwiftUI apps (`ios/`) sharing one Protobuf contract (`proto/`). PostgreSQL is the only datastore. Both clients talk **gRPC-Web** to a tonic backend; a small JSON surface (`/health`, `/about`) exists for `curl`.
 
 ```text
 proto/          the contract — single source of truth for both languages
 crates/api      axum (JSON) + tonic (gRPC-Web) on one port
 crates/migrate  schema migrations + the seeded technique catalogue
-ios/            SwiftUI app over one local SwiftPM package, BreatheCore
+ios/            two app targets — Breathe (iOS) and BreatheWatch (watchOS) —
+                over one local SwiftPM package, BreatheCore
+web/            the marketing one-pager; static files, no build step
+infra/          OpenTofu for the one box the whole thing deploys onto
 ```
 
-All breathe ports live in **18100–18199** (API 18100, Postgres 18101). See [docs/contributing.md](docs/contributing.md) for why the block starts there.
+All breathe ports live in **18100–18199** (API 18100, Postgres 18101, `web/` preview 18102). See [docs/contributing.md](docs/contributing.md) for why the block starts there.
 
 | Pattern        | One-liner                                                                              | Details                                          |
 | :------------- | :------------------------------------------------------------------------------------- | :----------------------------------------------- |
@@ -39,6 +42,7 @@ All breathe ports live in **18100–18199** (API 18100, Postgres 18101). See [do
 | Testing        | Write tests. Not too many. Mostly integration.                                         | [docs/testing.md](docs/testing.md)               |
 | Observability  | Log at boundaries, stay silent in between                                              | [docs/observability.md](docs/observability.md)   |
 | Setup & ports  | First run, port table, Xcode prerequisites                                             | [docs/contributing.md](docs/contributing.md)     |
+| Deployment     | One box: OpenTofu provisions it, `mise run deploy` ships to it, Caddy fronts it        | [docs/deployment.md](docs/deployment.md)         |
 
 ### Where code lives
 
@@ -47,7 +51,8 @@ All breathe ports live in **18100–18199** (API 18100, Postgres 18101). See [do
 - **Features** — `crates/api/src/features/<name>/` with `handlers/`, `service.rs`, `repository.rs`, `types.rs`, `errors.rs`.
 - **gRPC registration** — `crates/api/src/grpc.rs`. **HTTP routes** — `crates/api/src/http/mod.rs`. Both are single aggregation points.
 - **Generated protobuf** — Rust into `OUT_DIR` via `crates/api/build.rs`, re-exported through `crates/api/src/proto.rs`; Swift committed under `ios/Packages/BreatheCore/Sources/BreatheAPI/Generated/`.
-- **Domain models (Swift)** — the `BreatheKit` target in `ios/Packages/BreatheCore/`. Only it touches generated protobuf types; `BreatheAPI` is not a package product, so the app cannot import one.
+- **Domain models (Swift)** — the `BreatheKit` target in `ios/Packages/BreatheCore/`. Only it touches generated protobuf types; `BreatheAPI` is not a package product, so neither app target can import one.
+- **App targets (Swift)** — `ios/Breathe/` (iOS) and `ios/BreatheWatch/` (watchOS), each with its own composition root over the same three products. What they share and what they deliberately duplicate is in [docs/code-structure.md](docs/code-structure.md).
 
 ## 3. Development
 
@@ -68,7 +73,7 @@ This rule has teeth: a shell that has visited the sibling `connect` repo exports
 | Query the database                  | `echo 'select …;' \| mise run db:psql`                |
 | Rebuild the DB from scratch         | `mise run dev:db:reset`                               |
 | Generate + open the Xcode project   | `mise run ios:gen` / `mise run ios:open`              |
-| Build the app headlessly            | `mise run ios:build`                                  |
+| Build the apps headlessly           | `mise run ios:build` / `mise run ios:build:watch`     |
 | Tests                               | `mise run test` (`test:rs`, `test:e2e`, `test:swift`) |
 
 **Before committing** — three commands, in this order:

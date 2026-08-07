@@ -2,7 +2,7 @@
 
 Ten milestones, each independently shippable and testable, ordered so that every step delivers user value or unblocks the next. The product rationale for each feature is in [business-plan.md](business-plan.md); this doc records the build order and the technical decisions already made.
 
-Current state: the bootstrap slice — `TechniqueService.ListTechniques` over gRPC-Web, four seeded techniques, one list screen. Everything below builds on that seam.
+Current state: M1–M9 have shipped against a live backend (see [deployment.md](../deployment.md)), and M10 is the only one still ahead. Everything below is kept in the future tense it was written in — the technical decisions each milestone records are why the code looks the way it does, and a plan edited into a changelog loses them.
 
 ## M1 — Breathing session player
 
@@ -94,7 +94,7 @@ Dependencies: M2 (catalogue model), M4 (identity), M5 (session sync). Can build 
 - `PrivacyInfo.xcprivacy`, no-tracking privacy labels, wellness (not medical) copy, contraindications surfaced in-session.
 - Backend hardening: rate limiting on assistant routes, `/health`-based monitoring, a load test of the streaming path.
 - App Store assets for iPhone **and** Watch (screenshots per device class).
-- Website deploy from `web/` — the support and privacy-policy URLs it hosts are launch-blocking for App Store Connect.
+- Support and privacy-policy pages on the site — `web/` is already published, but the one-pager is the only page there and App Store Connect blocks on both URLs.
 
 ## Post-V1 parking lot
 

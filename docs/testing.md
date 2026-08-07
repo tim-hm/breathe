@@ -44,7 +44,7 @@ Swift tests run on the **host**, not a simulator — every package declares a ma
 
 ## Integration tests
 
-`crates/api/tests/e2e/` drives the router `main.rs` serves, over a real Postgres. It is the only place the whole slice is exercised at once: rows in Postgres → repository → service → tonic → gRPC-Web framing → a decoded protobuf message.
+`crates/api/tests/e2e/` drives the router `build_app` assembles — the same one the binary serves — over a real Postgres. It is the only place the whole slice is exercised at once: rows in Postgres → repository → service → tonic → gRPC-Web framing → a decoded protobuf message.
 
 **The disposable database.** Each test calls `TestDatabase::create("<name>")`, which derives its connection from `DATABASE_URL` by _replacing_ the database with `breathe_test_<name>`. The dev database is therefore unreachable from here by construction, not by convention — these tests drop wholesale. Creation drops any previous instance and re-migrates, so a failing test leaves its database behind for post-mortem inspection and the next run reclaims it. cargo-nextest runs each test in its own process, which is what makes one database per test the natural unit.
 
@@ -52,28 +52,35 @@ Swift tests run on the **host**, not a simulator — every package declares a ma
 
 **Why the real gRPC-Web framing.** `harness::call_grpc_web` writes the length-prefixed frame and parses the trailer frame by hand, exactly as the Swift client does. gRPC-Web reports call outcomes in trailers, so a _failed_ call still returns HTTP 200 — a harness that called `service::list_techniques` directly could never catch an error that fails to reach the client.
 
-The tests and what they pin:
+Every test in `crates/api/tests/e2e/` carries a `///` naming the regression it guards, so the files are the inventory. What follows is a reading order through them — the calls where the decision being pinned is invisible in the code under test. An absent row means a routine test, not an unjustified one.
 
-| Test                                                         | Guards                                                                                                              |
-| :----------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------ |
-| `the_seeded_catalogue_arrives_over_grpc_web`                 | The bootstrap's acceptance criterion, minus the simulator                                                           |
-| `the_wim_hof_rounds_arrive_as_ordered_stages`                | Stage order, the open-ended flag, and per-stage cycles — the whole reason the stage model exists                    |
-| `phase_dial_ranges_reach_the_client`                         | Every phase arrives with a range containing its default, so a client can render a dial from it                      |
-| `the_foundations_arrive_over_grpc_web`                       | The second RPC, and that the foundations keep their curated reading order                                           |
-| `phase_order_follows_ordinal_not_insertion_order`            | The service groups phases through a `HashMap`; the fixture inserts a cycle out of order so ignoring `ordinal` fails |
-| `a_stageless_technique_fails_the_call_rather_than_vanishing` | A corrupt row surfaces as a non-zero `grpc-status`, not a quietly shortened list                                    |
-| `health_answers_without_a_reachable_database`                | `/health` is liveness-only; its pool points at a dead port, so answering at all proves it issued no query           |
-| `only_real_slugs_reach_the_client`                           | A model naming a technique that does not exist must not be able to put that name in front of anyone                 |
-| `an_exhausted_quota_answers_from_the_rules`                  | The spend ceiling binds, and running out is a flagged answer rather than an error                                   |
-| `the_breaker_trips_and_then_recovers`                        | Both halves, through the call count — a breaker that never opened and one that never closed both still answer       |
-| `the_explanation_streams_ordered_chunks`                     | The first server-streaming RPC: separate frames, in order, over the real gRPC-Web framing                           |
-| `only_coach_reaches_the_model`                               | The one thing the server spends money on, gated on the caller's own row rather than on anything a request carries   |
-| `resubmitting_the_same_transaction_changes_nothing`          | The client resubmits on every launch; the expiry not moving is what says the grant was not applied twice            |
-| `an_upgrade_is_not_shadowed_by_a_longer_cheaper_period`      | Why the ordering key is `signedDate`: a Plus→Coach upgrade's expiry is _earlier_ than the period it replaces        |
-| `a_refund_ends_only_the_subscription_it_paid_for`            | A late refund for a lapsed subscription must not end the one somebody is currently paying for                       |
-| `the_free_techniques_arrive_unlocked_and_the_rest_do_not`    | The free tier is a promise, and one boolean per row is the whole of it on the wire                                  |
+| Test                                                         | Guards                                                                                                                            |
+| :----------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------- |
+| `the_seeded_catalogue_arrives_over_grpc_web`                 | The bootstrap's acceptance criterion, minus the simulator                                                                         |
+| `the_wim_hof_rounds_arrive_as_ordered_stages`                | Stage order, the open-ended flag, and per-stage cycles — the whole reason the stage model exists                                  |
+| `phase_dial_ranges_reach_the_client`                         | Every phase arrives with a range containing its default, so a client can render a dial from it                                    |
+| `the_foundations_arrive_over_grpc_web`                       | The second RPC, and that the foundations keep their curated reading order                                                         |
+| `phase_order_follows_ordinal_not_insertion_order`            | The service groups phases through a `HashMap`; the fixture inserts a cycle out of order so ignoring `ordinal` fails               |
+| `a_stageless_technique_fails_the_call_rather_than_vanishing` | A corrupt row surfaces as a non-zero `grpc-status`, not a quietly shortened list                                                  |
+| `health_answers_without_a_reachable_database`                | `/health` is liveness-only; its pool points at a dead port, so answering at all proves it issued no query                         |
+| `the_first_rpc_creates_the_row_and_later_ones_reuse_it`      | The lazy upsert from both sides — a `DO UPDATE` would pass the first assertion and wipe the profile in the second                 |
+| `the_catalogue_stays_public`                                 | The one service readable with no identity, and still refusing a header that claims one and fails to parse                         |
+| `a_taken_display_name_is_suffixed_rather_than_refused`       | Two people called Tim is the normal case; the stored name can differ from the requested one, and the response says so             |
+| `profiles_are_scoped_to_the_calling_identity`                | No id travels in the request, so the only way this breaks is a layer reading the wrong header                                     |
+| `a_local_day_is_the_callers_day_not_utc`                     | Why the offset travels per request: the same two rows are a streak or a single late evening depending on where they were breathed |
+| `an_impossible_session_fails_the_whole_batch`                | A client that sent one impossible session has a bug, and storing the rest would hide it behind a gap nobody can find              |
+| `a_board_ranks_everyone_and_names_only_the_opted_in`         | The opt-in from both sides: somebody unnamed still sees where they stand, which is what makes a board worth joining               |
+| `only_real_slugs_reach_the_client`                           | A model naming a technique that does not exist must not be able to put that name in front of anyone                               |
+| `an_exhausted_quota_answers_from_the_rules`                  | The spend ceiling binds, and running out is a flagged answer rather than an error                                                 |
+| `the_breaker_trips_and_then_recovers`                        | Both halves, through the call count — a breaker that never opened and one that never closed both still answer                     |
+| `the_explanation_streams_ordered_chunks`                     | The first server-streaming RPC: separate frames, in order, over the real gRPC-Web framing                                         |
+| `only_coach_reaches_the_model`                               | The one thing the server spends money on, gated on the caller's own row rather than on anything a request carries                 |
+| `resubmitting_the_same_transaction_changes_nothing`          | The client resubmits on every launch; the expiry not moving is what says the grant was not applied twice                          |
+| `an_upgrade_is_not_shadowed_by_a_longer_cheaper_period`      | Why the ordering key is `signedDate`: a Plus→Coach upgrade's expiry is _earlier_ than the period it replaces                      |
+| `a_refund_ends_only_the_subscription_it_paid_for`            | A late refund for a lapsed subscription must not end the one somebody is currently paying for                                     |
+| `the_free_techniques_arrive_unlocked_and_the_rest_do_not`    | The free tier is a promise, and one boolean per row is the whole of it on the wire                                                |
 
-Each was verified by breaking the code it covers and confirming it fails.
+Each of these was verified by breaking the code it covers and confirming it fails.
 
 ## Running them
 
