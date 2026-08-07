@@ -24,9 +24,6 @@ struct JourneyView: View {
     /// and nobody browsing for something to breathe was ever looking for them.
     let foundations: FoundationsModel
 
-    /// Opens Settings, which lives behind the gear in this screen's toolbar.
-    let showSettings: () -> Void
-
     /// The row awaiting the person's confirmation before it goes — deletion
     /// takes the stats with it, so it is asked about, not swiped away.
     @State private var toDelete: SessionRecord?
@@ -46,11 +43,6 @@ struct JourneyView: View {
             }
             .paletteGround()
             .navigationTitle("Journey")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    SettingsGearButton(action: showSettings)
-                }
-            }
         }
         // Local read first, so the screen is complete before anything touches
         // the network; the sync then runs behind what is already drawn.

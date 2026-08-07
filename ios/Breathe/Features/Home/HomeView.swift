@@ -3,29 +3,29 @@ import BreatheStyle
 import BreatheUI
 import SwiftUI
 
-/// The way in: say what you want, then press the orb.
+/// The way in: an aim, the orb, and "begin" — nothing else.
 ///
-/// Three elements and nothing else — the wheel (what you want), the orb (the
-/// act), and the word under it. The wheel wakes up where it was last left, the
-/// hour's goal decides only the very first launch, and the exercise it resolves
-/// to is never named here: somebody who wants a particular one goes to the
-/// exercises tab, and somebody who just wants to breathe should not have to read
-/// a label to do it. The assistant's suggestions stay in that tab too — this
-/// screen is one decision, and a second opinion beside it would be two.
+/// The aim is one faint word; a horizontal swipe anywhere on the screen cycles
+/// it, and tapping it fans out the full set. It wakes up where it was last
+/// left, the hour's goal decides only the very first launch, and the exercise
+/// it resolves to is never named here: somebody who wants a particular one
+/// goes to the exercises tab, and somebody who just wants to breathe should
+/// not have to read a label to do it. The assistant's suggestions stay in that
+/// tab too — this screen is one decision, and a second opinion beside it would
+/// be two.
 struct HomeView: View {
     /// The catalogue the composition root owns and every root shares.
     let model: TechniqueListModel
     let sessions: any SessionRecording
 
-    /// Opens Settings, which lives behind the gear in this screen's corner.
-    let showSettings: () -> Void
-
     @Environment(SessionSettings.self) private var settings
     @Environment(SubscriptionStore.self) private var plus
 
-    /// What the wheel points at. Set once the catalogue lands — before then
-    /// there is no goal known to have an exercise behind it.
+    /// The chosen aim. Set once the catalogue lands — before then there is no
+    /// goal known to have an exercise behind it.
     @State private var goal: TechniqueGoal?
+    /// Whether the aim word is fanned out into the full set.
+    @State private var isChoosingAim = false
     /// Recorded history, oldest first. Re-read after every session, because one
     /// just finished has changed what to offer next.
     @State private var history: [SessionRecord] = []
@@ -34,9 +34,6 @@ struct HomeView: View {
 
     var body: some View {
         content
-            .overlay(alignment: .topTrailing) {
-                SettingsGearButton(action: showSettings)
-            }
             .paletteGround()
             // One task for both reads, so leaving the screen cancels a history
             // decode still in flight instead of orphaning one per switch. Started
@@ -65,9 +62,8 @@ struct HomeView: View {
         case .loading:
             ProgressView()
 
-        // A healthy server with nothing seeded would otherwise render the wheel
-        // with no options and no orb — a dead screen with no way out but
-        // relaunch.
+        // A healthy server with nothing seeded would otherwise render neither
+        // aim nor orb — a dead screen with no way out but relaunch.
         case let .loaded(techniques) where techniques.isEmpty:
             ContentUnavailableView {
                 Label("The catalogue is empty", systemImage: "wind")
@@ -100,24 +96,68 @@ struct HomeView: View {
         }
     }
 
-    /// Two bands with a breath of space around and between them, so the wheel
-    /// and the orb centre themselves on any screen height rather than one of
-    /// them being pinned to an edge.
+    /// One band, centred: the aim word above the orb, held between equal
+    /// spacers so the pair sits in the middle of any screen height.
     private func loaded(_ techniques: [Technique]) -> some View {
         VStack(spacing: 0) {
             Spacer(minLength: Theme.Spacing.loose)
 
-            IntentWheel(goals: TechniqueGoal.present(in: techniques), goal: $goal)
+            if let goal {
+                VStack(spacing: Theme.Spacing.loose) {
+                    AimSelector(
+                        goals: TechniqueGoal.present(in: techniques),
+                        goal: goal,
+                        isExpanded: $isChoosingAim,
+                        onSelect: select
+                    )
 
-            Spacer(minLength: Theme.Spacing.loose)
-
-            if let chosen = chosen(from: techniques) {
-                OrbBeginButton(technique: chosen) { begin(chosen) }
+                    if let chosen = chosen(from: techniques) {
+                        OrbBeginButton(technique: chosen) { begin(chosen) }
+                    }
+                }
             }
 
             Spacer(minLength: Theme.Spacing.loose)
         }
         .padding(.horizontal, Theme.Spacing.standard)
+        .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
+        // The swipe that cycles the aim. A plain gesture, so the orb's tap
+        // wins until 24pt of travel; the dominance check leaves anything
+        // vertical alone. Off while the row is fanned out — with every aim on
+        // screen, a swipe has nothing to reveal.
+        .gesture(
+            DragGesture(minimumDistance: 24).onEnded { value in
+                let w = value.translation.width
+                guard !isChoosingAim,
+                      abs(w) > abs(value.translation.height),
+                      abs(w) > 40,
+                      let goal,
+                      case let goals = TechniqueGoal.present(in: techniques),
+                      let stepped = w < 0 ? goal.next(in: goals) : goal.previous(in: goals)
+                else { return }
+
+                select(stepped)
+            }
+        )
+        // Simultaneous, so the fan-out's own buttons and the orb still get
+        // their taps — a tap anywhere while the row is out collapses it, and
+        // whatever was tapped happens too.
+        .simultaneousGesture(
+            TapGesture().onEnded { isChoosingAim = false }
+        )
+        // One firm tap as the aim changes. An impact rather than `.selection`,
+        // which is the lightest haptic there is. Skipped for the settle on
+        // launch — that is the app restoring state, not the person choosing.
+        .sensoryFeedback(.impact(weight: .medium), trigger: goal) { old, _ in old != nil }
+    }
+
+    /// The one place a person's choice lands: the swipe, the fan-out, and
+    /// VoiceOver's adjust all funnel here. `settleGoal()` deliberately does
+    /// not — restoring state is not choosing, and only choices are remembered.
+    private func select(_ new: TechniqueGoal) {
+        goal = new
+        settings.lastGoal = new
     }
 
     /// Starts the exercise as this person dialled it, or opens the paywall where
@@ -137,8 +177,9 @@ struct HomeView: View {
         return HomeSuggestion.technique(for: goal, techniques: techniques, history: history)
     }
 
-    /// Points the wheel where it last sat, falling back to the hour's goal on a
-    /// first launch — and to whatever the catalogue has if it serves neither.
+    /// Settles the aim where it was last left, falling back to the hour's goal
+    /// on a first launch — and to whatever the catalogue has if it serves
+    /// neither.
     private func settleGoal() {
         guard case let .loaded(techniques) = model.state else { return }
         let available = TechniqueGoal.present(in: techniques)

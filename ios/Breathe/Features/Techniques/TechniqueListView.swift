@@ -5,15 +5,12 @@ import SwiftUI
 /// The whole catalogue, grouped by what each exercise is for.
 ///
 /// Its own root rather than part of home: someone who wants to breathe says so
-/// on the wheel, and someone who wants to read about nine exercises has come
-/// here deliberately. The model arrives shared with home — two views onto one
-/// load.
+/// with home's aim word, and someone who wants to read about nine exercises
+/// has come here deliberately. The model arrives shared with home — two views
+/// onto one load.
 struct TechniqueListView: View {
     let model: TechniqueListModel
     let sessions: any SessionRecording
-
-    /// Opens Settings, which lives behind the gear in this screen's toolbar.
-    let showSettings: () -> Void
 
     @Environment(SubscriptionStore.self) private var plus
 
@@ -32,11 +29,6 @@ struct TechniqueListView: View {
                 }
                 .sheet(item: $locked) { technique in
                     PaywallView(highlighting: technique.requires)
-                }
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        SettingsGearButton(action: showSettings)
-                    }
                 }
         }
         // Home usually starts the shared load first, but this tab must not
