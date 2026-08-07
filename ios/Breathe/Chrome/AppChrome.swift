@@ -15,10 +15,16 @@ import SwiftUI
 /// rather than by insetting their safe area. `safeAreaInset` is the obvious tool
 /// and it does not work here: a `NavigationStack` ignores an inset applied from
 /// outside it, so every root lays out as though the row were not there and the
-/// words land on top of whatever is at the foot of the screen. What that costs is
-/// content scrolling *under* the words, which is what this treatment wants
-/// anyway — there is no bar and no hairline, and the palette's ground runs to the
-/// physical edge, so the whole thing reads as one continuous page.
+/// words land on top of whatever is at the foot of the screen.
+///
+/// The row sits on `Surface.raised`, carried past the bottom safe area to the
+/// physical edge. It ran on the plain ground first, on the theory that one
+/// unbroken page reads calmer than a page plus a bar — but the `VStack` stops a
+/// root's content dead at the row's top edge, and with nothing marking that edge
+/// a list scrolled to its end looks like it merely ran out of screen. One step
+/// off the ground separates the chrome from the content without drawing
+/// anything; a hairline is the harder edge of the two and would reintroduce the
+/// bar this row exists to avoid.
 ///
 /// Everything that is not a root arrives through the drawer: swiping up on the
 /// word row lifts a short sheet of secondary destinations (`ChromeDrawer`),
@@ -51,9 +57,6 @@ struct AppChrome: View {
             }
             row
         }
-        // The row stops at the safe area, above the home indicator. The ground
-        // carries on past it to the physical edge, so no strip of system
-        // background shows under the words.
         .background(Theme.Surface.ground.ignoresSafeArea())
         .sheet(isPresented: $isShowingSettings) {
             roots.settingsRoot { isShowingSettings = false }
@@ -112,6 +115,9 @@ struct AppChrome: View {
             }
         }
         .padding(.top, Theme.Spacing.close)
+        // The row stops at the safe area, above the home indicator; the shelf
+        // carries on past it so no strip of ground shows under the words.
+        .background(Theme.Surface.raised.ignoresSafeArea(edges: .bottom))
         .sensoryFeedback(.selection, trigger: selection)
         // Simultaneous so the word buttons keep their taps — a tap has no
         // translation, so it never trips the threshold. The row sits above the
