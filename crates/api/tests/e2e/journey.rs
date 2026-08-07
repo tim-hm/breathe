@@ -11,6 +11,7 @@ use chrono::{DateTime, Duration, TimeZone, Utc};
 use crate::harness::{GrpcWebResponse, TestDatabase, call_grpc_web_with};
 
 const RECORD_SESSIONS: &str = "/breathe.v1.JourneyService/RecordSessions";
+const DELETE_SESSIONS: &str = "/breathe.v1.JourneyService/DeleteSessions";
 const GET_JOURNEY: &str = "/breathe.v1.JourneyService/GetJourney";
 const RECORD_BOLT_SCORE: &str = "/breathe.v1.JourneyService/RecordBoltScore";
 const GET_LEADERBOARD: &str = "/breathe.v1.JourneyService/GetLeaderboard";
@@ -159,6 +160,101 @@ async fn journeys_are_scoped_to_the_calling_identity() {
     assert_eq!(theirs.current_streak_days, 0);
     assert!(theirs.recent_sessions.is_empty());
     assert_eq!(theirs.best_bolt_seconds, None);
+}
+
+/// The other half of the tombstone contract. A session deleted on a device has
+/// to be gone from the server too, or the next restore hands it straight back —
+/// and a `client_session_id` is minted on a phone, so the same value can name
+/// two people's sessions. Deleting one must not touch the other.
+#[tokio::test]
+async fn a_deleted_session_stays_gone_and_only_for_the_caller() {
+    let db = TestDatabase::create("journey_delete_scoping").await;
+    let shared = "aaaa0000-0000-4000-8000-000000000001";
+
+    record(
+        &db,
+        ADA,
+        vec![
+            session(shared, hours_ago(1)),
+            session("aaaa0000-0000-4000-8000-000000000002", hours_ago(2)),
+        ],
+    )
+    .await
+    .into_ok();
+    record(&db, BEA, vec![session(shared, hours_ago(1))])
+        .await
+        .into_ok();
+
+    let deleted = delete(&db, ADA, vec![shared.to_owned()]).await.into_ok();
+    assert_eq!(deleted.deleted, 1);
+
+    let theirs = journey(&db, ADA, 0).await.into_ok();
+    assert_eq!(
+        theirs
+            .recent_sessions
+            .iter()
+            .map(|record| record.client_session_id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["aaaa0000-0000-4000-8000-000000000002"],
+        "a restore must not hand back what was deleted"
+    );
+
+    let untouched = journey(&db, BEA, 0).await.into_ok();
+    assert_eq!(
+        untouched.recent_sessions.len(),
+        1,
+        "the same id names a different person's session"
+    );
+
+    // The client keeps its tombstone until the call succeeds, so it is entitled
+    // to send the same id again — and the second attempt has to be free.
+    let repeated = delete(&db, ADA, vec![shared.to_owned()]).await.into_ok();
+    assert_eq!(repeated.deleted, 0);
+    assert_eq!(
+        journey(&db, ADA, 0).await.into_ok().recent_sessions.len(),
+        1
+    );
+}
+
+/// A tombstone can name a session the server never held — one recorded and
+/// deleted with no signal in between. Refusing it would strand the tombstone on
+/// the device forever, which is exactly the state this RPC exists to end.
+#[tokio::test]
+async fn an_unknown_id_is_forgotten_without_complaint() {
+    let db = TestDatabase::create("journey_delete_unknown").await;
+
+    record(
+        &db,
+        ADA,
+        vec![session(
+            "bbbb0000-0000-4000-8000-000000000001",
+            hours_ago(1),
+        )],
+    )
+    .await
+    .into_ok();
+
+    let unknown = delete(
+        &db,
+        ADA,
+        vec![
+            "bbbb0000-0000-4000-8000-000000000002".to_owned(),
+            "bbbb0000-0000-4000-8000-000000000003".to_owned(),
+        ],
+    )
+    .await
+    .into_ok();
+    assert_eq!(unknown.deleted, 0);
+    assert_eq!(
+        journey(&db, ADA, 0).await.into_ok().recent_sessions.len(),
+        1
+    );
+
+    let malformed = delete(&db, ADA, vec!["not-a-uuid".to_owned()]).await;
+    assert_eq!(malformed.status, tonic::Code::InvalidArgument as i32);
+
+    let empty = delete(&db, ADA, vec![]).await;
+    assert_eq!(empty.status, tonic::Code::InvalidArgument as i32);
 }
 
 /// The personal best is the server's answer rather than the client's, because a
@@ -569,6 +665,20 @@ async fn record(
         db.app(),
         RECORD_SESSIONS,
         &pb::RecordSessionsRequest { sessions },
+        &[(USER_ID_HEADER, user)],
+    )
+    .await
+}
+
+async fn delete(
+    db: &TestDatabase,
+    user: &str,
+    client_session_ids: Vec<String>,
+) -> GrpcWebResponse<pb::DeleteSessionsResponse> {
+    call_grpc_web_with(
+        db.app(),
+        DELETE_SESSIONS,
+        &pb::DeleteSessionsRequest { client_session_ids },
         &[(USER_ID_HEADER, user)],
     )
     .await

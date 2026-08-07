@@ -149,6 +149,17 @@ public struct Profile: Sendable, Equatable, Codable {
         intentNote: ""
     )
 
+    /// Whether anybody has told this profile anything.
+    ///
+    /// The question a restore turns on: the server answers `GetProfile` for an
+    /// identity it has never been written to, so "there is a profile" is not the
+    /// same claim as "there are answers worth adopting". Compared against the
+    /// default wholesale rather than field by field, so a field added later is
+    /// covered without anybody remembering to extend a list.
+    public var hasAnswers: Bool {
+        self != .unanswered
+    }
+
     public init(
         goals: [TechniqueGoal],
         experienceLevel: ExperienceLevel?,

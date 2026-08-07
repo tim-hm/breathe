@@ -32,6 +32,19 @@ public protocol Breathe_V1_JourneyServiceClientInterface: Sendable {
     @available(iOS 13, *)
     func `recordSessions`(request: Breathe_V1_RecordSessionsRequest, headers: Connect.Headers) async -> ResponseMessage<Breathe_V1_RecordSessionsResponse>
 
+    /// Forgets sessions the person deleted on their device.
+    ///
+    /// The counterpart to RecordSessions, and the reason deletion is not merely
+    /// local: the client keeps a tombstone for every session it has deleted so a
+    /// later GetJourney cannot hand it back, and without this call that tombstone
+    /// has to survive forever — a reinstall loses it and resurrects the session.
+    ///
+    /// Idempotent, like RecordSessions: an id the server does not hold is not an
+    /// error, because the client is entitled to ask twice and a tombstone is only
+    /// dropped once the server has definitely forgotten the session.
+    @available(iOS 13, *)
+    func `deleteSessions`(request: Breathe_V1_DeleteSessionsRequest, headers: Connect.Headers) async -> ResponseMessage<Breathe_V1_DeleteSessionsResponse>
+
     /// Returns the caller's totals, streaks, and recent history.
     ///
     /// Everything here is derived on read. There are no denormalised counters, so
@@ -70,6 +83,11 @@ public final class Breathe_V1_JourneyServiceClient: Breathe_V1_JourneyServiceCli
     }
 
     @available(iOS 13, *)
+    public func `deleteSessions`(request: Breathe_V1_DeleteSessionsRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Breathe_V1_DeleteSessionsResponse> {
+        return await self.client.unary(path: "/breathe.v1.JourneyService/DeleteSessions", idempotencyLevel: .unknown, request: request, headers: headers)
+    }
+
+    @available(iOS 13, *)
     public func `getJourney`(request: Breathe_V1_GetJourneyRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Breathe_V1_GetJourneyResponse> {
         return await self.client.unary(path: "/breathe.v1.JourneyService/GetJourney", idempotencyLevel: .unknown, request: request, headers: headers)
     }
@@ -87,6 +105,7 @@ public final class Breathe_V1_JourneyServiceClient: Breathe_V1_JourneyServiceCli
     public enum Metadata {
         public enum Methods {
             public static let recordSessions = Connect.MethodSpec(name: "RecordSessions", service: "breathe.v1.JourneyService", type: .unary)
+            public static let deleteSessions = Connect.MethodSpec(name: "DeleteSessions", service: "breathe.v1.JourneyService", type: .unary)
             public static let getJourney = Connect.MethodSpec(name: "GetJourney", service: "breathe.v1.JourneyService", type: .unary)
             public static let recordBoltScore = Connect.MethodSpec(name: "RecordBoltScore", service: "breathe.v1.JourneyService", type: .unary)
             public static let getLeaderboard = Connect.MethodSpec(name: "GetLeaderboard", service: "breathe.v1.JourneyService", type: .unary)

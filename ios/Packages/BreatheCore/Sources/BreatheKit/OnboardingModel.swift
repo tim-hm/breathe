@@ -45,9 +45,56 @@ public final class OnboardingModel {
     public var reminderIntensity: ReminderIntensity = .never
 
     private let store: ProfileStore
+    private let schedules: ScheduleStore?
+    private let catalogue: TechniqueListModel?
 
-    public init(store: ProfileStore) {
+    /// - Parameters:
+    ///   - schedules: where a reminder the person asked for lands. Absent, the
+    ///     dial is still stored on the profile and simply rings nothing.
+    ///   - catalogue: what that reminder opens with. Also absent-able, and for
+    ///     the same reason: onboarding has to finish with no network, and the
+    ///     catalogue is a fetch.
+    public init(
+        store: ProfileStore,
+        schedules: ScheduleStore? = nil,
+        catalogue: TechniqueListModel? = nil
+    ) {
         self.store = store
+        self.schedules = schedules
+        self.catalogue = catalogue
+    }
+
+    /// Whether this person has told the flow anything yet.
+    ///
+    /// Asked of the profile the answers make rather than field by field, so the
+    /// question a restore turns on and the question asked of the server's copy
+    /// are the same one — and a fourth question cannot make them disagree.
+    public var hasAnswered: Bool {
+        profile.hasAnswers
+    }
+
+    /// Adopts the answers the server already holds for this identity, closing
+    /// the flow if it finds them.
+    ///
+    /// Runs *alongside* the questions rather than in front of them. The
+    /// alternative — racing the fetch against a short timeout before drawing
+    /// anything — puts a network wait between launch and the welcome screen for
+    /// every genuinely new user, which is nearly all of them and none of whom
+    /// have a profile to restore. Here the flow is on screen immediately, and
+    /// somebody with no signal never learns this was attempted.
+    ///
+    /// - Returns: whether the flow should close, having adopted a profile.
+    public func restoreIfPossible() async -> Bool {
+        guard !hasAnswered else { return false }
+        guard let restored = await store.restoredProfile() else { return false }
+
+        // Asked again on the way back: the request was in flight while the
+        // person could answer, and an answer given here is both the more recent
+        // of the two and the one they are looking at.
+        guard !hasAnswered else { return false }
+
+        store.adopt(restored)
+        return true
     }
 
     /// Adds or removes a goal, keeping the order the person picked in.
@@ -101,6 +148,7 @@ public final class OnboardingModel {
     private func moveOn() {
         if step == .reminders {
             store.complete(with: profile)
+            seedReminder()
             // Not awaited: the person is one tap from breathing, and the upload
             // has a whole app lifetime to succeed in. `ProfileStore` has already
             // written the answers and closed onboarding by this point.
@@ -109,6 +157,49 @@ public final class OnboardingModel {
 
         guard let next = Step(rawValue: step.rawValue + 1) else { return }
         step = next
+    }
+
+    /// Makes the reminder the dial asked for, once.
+    ///
+    /// `never` falls out through `ReminderSeed.schedule` returning nil, so
+    /// nothing is created and `ScheduleStore.add` — the one place notification
+    /// permission is ever requested — is not reached at all.
+    ///
+    /// Only ever seeds into an empty list: somebody who already keeps schedules
+    /// has an arrangement of their own, and a flow that has just asked one
+    /// question about reminders is not entitled to add to it.
+    ///
+    /// Waits for the catalogue rather than reading whatever it holds at this
+    /// instant, because a reminder can only name a technique the app has heard
+    /// of and this runs on a first launch — the one launch where the fetch may
+    /// still be in the air. Joining the shared load rather than starting a fetch
+    /// of its own, and not awaited, so the person is still one tap from
+    /// breathing.
+    private func seedReminder() {
+        guard let schedules, schedules.schedules.isEmpty, let catalogue else { return }
+        let goal = goals.first ?? .calm
+        let intensity = reminderIntensity
+
+        Task {
+            await catalogue.loadIfNeeded()
+
+            guard case let .loaded(techniques) = catalogue.state,
+                  // Calm where they skipped the goals question: the seed is a
+                  // starting point to edit rather than a claim about them, and
+                  // it is the one goal that suits an unknown reason for being
+                  // here.
+                  let technique = HomeSuggestion.technique(
+                      for: goal,
+                      techniques: techniques,
+                      history: []
+                  ),
+                  let seeded = ReminderSeed.schedule(for: intensity, technique: technique)
+            else {
+                return
+            }
+
+            schedules.add(seeded)
+        }
     }
 
     /// Whether there is a question behind this one to return to.

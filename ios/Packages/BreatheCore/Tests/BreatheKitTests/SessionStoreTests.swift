@@ -97,6 +97,23 @@ struct SessionStoreTests {
         #expect(await store.recordedSessions() == [incoming])
     }
 
+    /// A tombstone's whole life. It holds the deletion until `DeleteSessions`
+    /// has landed and goes the moment it has — kept forever, the file would
+    /// grow for the life of the install and filter against ids the server no
+    /// longer holds.
+    @Test("A tombstone is dropped once the server has forgotten the session")
+    func tombstonesAreDrainedRatherThanHoarded() async {
+        let store = FileSessionStore(directory: temporaryDirectory())
+        let deleted = record()
+
+        await store.record(deleted)
+        await store.remove(deleted.id)
+        #expect(await store.tombstonedSessions() == [deleted.id])
+
+        await store.forgetTombstones([deleted.id])
+        #expect(await store.tombstonedSessions().isEmpty)
+    }
+
     /// Unreadable history must not take a session down with it: the person is
     /// mid-breath and there is nothing they could do about it.
     @Test("Corrupt history reads as empty rather than throwing")

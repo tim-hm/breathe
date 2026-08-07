@@ -29,17 +29,24 @@ public actor SessionSyncQueue {
     private let sessions: any SessionRecording
     private let scores: any BoltScoreRecording
     private let journeys: any JourneySyncing
+    private let tombstones: (any TombstoneStoring)?
     private let ledger: SyncLedger
 
+    /// - Parameter tombstones: where deletions wait for the server. Optional
+    ///   because `SessionRecording` cannot express it — a caller that has only
+    ///   the recording seam still syncs, it just never drains deletions, which
+    ///   is the behaviour that existed before `DeleteSessions` did.
     public init(
         sessions: any SessionRecording,
         scores: any BoltScoreRecording,
         journeys: any JourneySyncing,
+        tombstones: (any TombstoneStoring)? = nil,
         ledger: SyncLedger = SyncLedger()
     ) {
         self.sessions = sessions
         self.scores = scores
         self.journeys = journeys
+        self.tombstones = tombstones
         self.ledger = ledger
     }
 
@@ -56,9 +63,36 @@ public actor SessionSyncQueue {
     ///   reinstall.
     @discardableResult
     public func sync() async -> Bool {
+        // Deletions go first so the restore at the end reads a server that has
+        // already forgotten them. Any other order would have the same run pull
+        // back sessions this one was about to delete, and leave the tombstones
+        // doing the filtering for another cycle.
+        await sendDeletions()
         await sendSessions()
         await sendScores()
         return await restore()
+    }
+
+    /// Tells the server about sessions deleted here, and forgets the tombstone
+    /// only once it has said so.
+    ///
+    /// The order is the whole point: a tombstone dropped before the server
+    /// confirmed would let the next restore hand the session back, which is the
+    /// resurrection this exists to prevent. A failed call leaves the file
+    /// untouched and the next run tries again.
+    private func sendDeletions() async {
+        guard let tombstones else { return }
+
+        let pending = await tombstones.tombstonedSessions()
+        guard !pending.isEmpty else { return }
+
+        let batch = Array(pending.prefix(Self.maxBatch))
+        do {
+            try await journeys.delete(batch)
+            await tombstones.forgetTombstones(batch)
+        } catch {
+            Self.logger.notice("session deletion deferred: \(error.localizedDescription)")
+        }
     }
 
     private func sendSessions() async {

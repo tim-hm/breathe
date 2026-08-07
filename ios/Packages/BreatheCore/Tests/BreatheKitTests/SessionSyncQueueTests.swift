@@ -9,8 +9,11 @@ import Testing
 /// remembers too eagerly loses the sessions a failed request never delivered.
 @Suite("Session sync queue")
 struct SessionSyncQueueTests {
-    private actor SessionSpy: SessionRecording {
+    /// Records and tombstones together, the way `FileSessionStore` does — the
+    /// two seams are separate protocols and one store answers both.
+    private actor SessionSpy: SessionRecording, TombstoneStoring {
         private(set) var stored: [SessionRecord]
+        private(set) var tombstoned: [SessionRecord.ID] = []
 
         init(_ stored: [SessionRecord] = []) {
             self.stored = stored
@@ -21,7 +24,18 @@ struct SessionSyncQueueTests {
         }
 
         func remove(_ id: SessionRecord.ID) async {
+            guard stored.contains(where: { $0.id == id }) else { return }
             stored.removeAll { $0.id == id }
+            tombstoned.append(id)
+        }
+
+        func tombstonedSessions() async -> [SessionRecord.ID] {
+            tombstoned
+        }
+
+        func forgetTombstones(_ ids: [SessionRecord.ID]) async {
+            let forgotten = Set(ids)
+            tombstoned.removeAll { forgotten.contains($0) }
         }
 
         func recordedSessions() async -> [SessionRecord] {
@@ -59,8 +73,9 @@ struct SessionSyncQueueTests {
         /// a test can tell "sent once" from "sent again".
         private(set) var received: [UUID] = []
         private(set) var receivedScores: [UUID] = []
+        private(set) var deleted: [UUID] = []
         private var isReachable: Bool
-        private let held: [SessionRecord]
+        private var held: [SessionRecord]
 
         init(isReachable: Bool = true, held: [SessionRecord] = []) {
             self.isReachable = isReachable
@@ -74,6 +89,12 @@ struct SessionSyncQueueTests {
         func record(_ sessions: [SessionRecord]) async throws {
             guard isReachable else { throw Offline() }
             received.append(contentsOf: sessions.map(\.id))
+        }
+
+        func delete(_ ids: [SessionRecord.ID]) async throws {
+            guard isReachable else { throw Offline() }
+            deleted.append(contentsOf: ids)
+            held.removeAll { ids.contains($0.id) }
         }
 
         func record(_ score: BoltScore) async throws {
@@ -188,6 +209,63 @@ struct SessionSyncQueueTests {
         #expect(await !queue.sync())
         #expect(await sessions.stored.count == 1, "and is not duplicated on the way in")
         #expect(await server.received.isEmpty)
+    }
+
+    /// The deletion round trip, and the reason it is a round trip at all: the
+    /// server holds a copy the local delete cannot reach, so a reinstall would
+    /// restore a session the person got rid of. The tombstone is the client's
+    /// half of that promise and only leaves once the server has answered.
+    @Test("A deleted session is deleted on the server, and only then forgotten")
+    func deletionsReachTheServerBeforeTheTombstoneGoes() async {
+        let deleted = session(-1)
+        let sessions = SessionSpy([deleted, session(-2)])
+        let server = ServerSpy(held: [deleted])
+        let queue = SessionSyncQueue(
+            sessions: sessions,
+            scores: ScoreSpy(),
+            journeys: server,
+            tombstones: sessions,
+            ledger: SyncLedger(defaults: defaults())
+        )
+
+        await queue.sync()
+        await sessions.remove(deleted.id)
+        #expect(await sessions.tombstoned == [deleted.id])
+
+        await queue.sync()
+        #expect(await server.deleted == [deleted.id])
+        #expect(await sessions.tombstoned.isEmpty, "the server has forgotten it")
+        #expect(
+            await sessions.stored.count == 1,
+            "and the restore in the same run cannot hand it back"
+        )
+    }
+
+    /// The mirror of the failed send, and the more dangerous half: a tombstone
+    /// dropped on a request that never landed leaves the server holding a
+    /// session the person deleted, and the next restore returns it.
+    @Test("A failed deletion keeps its tombstone")
+    func aFailedDeletionIsRetried() async {
+        let deleted = session(-1)
+        let sessions = SessionSpy([deleted])
+        let server = ServerSpy(isReachable: false, held: [deleted])
+        let queue = SessionSyncQueue(
+            sessions: sessions,
+            scores: ScoreSpy(),
+            journeys: server,
+            tombstones: sessions,
+            ledger: SyncLedger(defaults: defaults())
+        )
+
+        await sessions.remove(deleted.id)
+        await queue.sync()
+        #expect(await server.deleted.isEmpty)
+        #expect(await sessions.tombstoned == [deleted.id])
+
+        await server.comeBackOnline()
+        await queue.sync()
+        #expect(await server.deleted == [deleted.id])
+        #expect(await sessions.tombstoned.isEmpty)
     }
 
     /// The ledger is pruned to what still exists, so it cannot grow without
