@@ -174,7 +174,18 @@ description = "Export the seeded technique catalogue for the drawings to derive 
 # array in seed.rs, so the export never opens a connection. That is what keeps
 # `mise run check` from needing Postgres to verify the drawings.
 env = { CARGO_TARGET_DIR = "{{env.CHECK_TARGET_DIR}}" }
-run = "cargo run --quiet -p migrate --bin export-catalogue > catalogue.json"
+# Through a temporary file rather than redirecting straight onto the artefact.
+# A shell truncates the target before cargo runs, so a compile error in
+# crates/migrate would leave an empty catalogue.json behind — and the next thing
+# to fail would be test:swift or OndDiagrams, pointing at a decoder rather than
+# at the build that actually broke. Beside the target rather than in $TMPDIR, so
+# the move is a rename and the file lands with the usual permissions.
+run = """
+tmp={{config_root}}/catalogue.json.tmp
+trap 'rm -f "$tmp"' EXIT
+cargo run --quiet -p migrate --bin export-catalogue > "$tmp"
+mv "$tmp" {{config_root}}/catalogue.json
+"""
 
 [tasks."generate:diagrams"]
 description = "Redraw the marketing site's figures from the shared breathing geometry"
