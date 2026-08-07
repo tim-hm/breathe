@@ -2,6 +2,160 @@ import Foundation
 @testable import OndKit
 import Testing
 
+/// Records and tombstones together, the way `FileSessionStore` does — the two
+/// seams are separate protocols and one store answers both.
+///
+/// At file scope rather than nested in the suite, so the body below is tests and
+/// nothing else. Four doubles and two factories came to more than half the type,
+/// which is what put it over `type_body_length`.
+private actor SessionSpy: SessionRecording, TombstoneStoring {
+    private(set) var stored: [SessionRecord]
+    private(set) var tombstoned: [SessionRecord.ID] = []
+
+    init(_ stored: [SessionRecord] = []) {
+        self.stored = stored
+    }
+
+    func record(_ session: SessionRecord) async {
+        stored.append(session)
+    }
+
+    func remove(_ id: SessionRecord.ID) async {
+        guard stored.contains(where: { $0.id == id }) else { return }
+        stored.removeAll { $0.id == id }
+        tombstoned.append(id)
+    }
+
+    func tombstonedSessions() async -> [SessionRecord.ID] {
+        tombstoned
+    }
+
+    func forgetTombstones(_ ids: [SessionRecord.ID]) async {
+        let forgotten = Set(ids)
+        tombstoned.removeAll { forgotten.contains($0) }
+    }
+
+    func recordedSessions() async -> [SessionRecord] {
+        stored
+    }
+
+    func merge(_ sessions: [SessionRecord]) async -> Bool {
+        let known = Set(stored.map(\.id))
+        let missing = sessions.filter { !known.contains($0.id) }
+        stored.append(contentsOf: missing)
+        return !missing.isEmpty
+    }
+}
+
+private actor ScoreSpy: BoltScoreRecording {
+    private(set) var stored: [BoltScore]
+
+    init(_ stored: [BoltScore] = []) {
+        self.stored = stored
+    }
+
+    func record(_ score: BoltScore) async {
+        stored.append(score)
+    }
+
+    func recordedScores() async -> [BoltScore] {
+        stored
+    }
+}
+
+private struct Offline: Error {}
+
+private actor ServerSpy: JourneySyncing {
+    /// Every session id this "server" has been sent, including repeats — so
+    /// a test can tell "sent once" from "sent again".
+    private(set) var received: [UUID] = []
+    private(set) var receivedScores: [UUID] = []
+    private(set) var deleted: [UUID] = []
+    /// How many times the restore has asked for a page, reachable or not —
+    /// what tells a sync that skipped the round trip from one that made it
+    /// and found nothing.
+    private(set) var restoreCalls = 0
+    private var isReachable: Bool
+    private var held: [SessionRecord]
+
+    private let pageSize: Int
+
+    init(isReachable: Bool = true, held: [SessionRecord] = [], pageSize: Int = 500) {
+        self.isReachable = isReachable
+        self.held = held
+        self.pageSize = pageSize
+    }
+
+    func comeBackOnline() {
+        isReachable = true
+    }
+
+    func record(_ sessions: [SessionRecord]) async throws {
+        guard isReachable else { throw Offline() }
+        received.append(contentsOf: sessions.map(\.id))
+    }
+
+    func delete(_ ids: [SessionRecord.ID]) async throws {
+        guard isReachable else { throw Offline() }
+        deleted.append(contentsOf: ids)
+        held.removeAll { ids.contains($0.id) }
+    }
+
+    func record(_ score: BoltScore) async throws {
+        guard isReachable else { throw Offline() }
+        receivedScores.append(score.id)
+    }
+
+    /// Serves the held history one page at a time, keyed on the index the
+    /// last page stopped at — the same contract the real server offers, so
+    /// a queue that stopped after the first page fails here rather than
+    /// only against Postgres.
+    func storedSessions(after pageToken: String?) async throws -> StoredSessionPage {
+        restoreCalls += 1
+        guard isReachable else { throw Offline() }
+
+        let start = pageToken.flatMap(Int.init) ?? 0
+        let end = min(start + pageSize, held.count)
+        let page = Array(held[start ..< end])
+
+        return StoredSessionPage(
+            sessions: page,
+            nextPageToken: end < held.count ? String(end) : nil
+        )
+    }
+
+    func leaderboard(
+        _: LeaderboardBoard,
+        scope _: LeaderboardScope
+    ) async throws -> Leaderboard {
+        throw Offline()
+    }
+}
+
+/// A defaults suite of its own, so tests neither see each other's ledger nor
+/// leave one behind on the machine that ran them.
+private func defaults() -> UserDefaults {
+    let name = "journey-sync-tests.\(UUID().uuidString)"
+    guard let defaults = UserDefaults(suiteName: name) else {
+        Issue.record("a defaults suite is available")
+        return .standard
+    }
+    defaults.removePersistentDomain(forName: name)
+    return defaults
+}
+
+private func session(_ offsetHours: Int) -> SessionRecord {
+    SessionRecord(
+        techniqueSlug: "box-breathing",
+        startedAt: Date(timeIntervalSince1970: 1_777_000_000)
+            .addingTimeInterval(TimeInterval(offsetHours) * 3600),
+        duration: .seconds(120),
+        cyclesCompleted: 4,
+        breathCount: 8,
+        completed: true
+    )
+}
+
 /// The bookkeeping that decides what crosses the network.
 ///
 /// Worth testing because both ways of getting it wrong are invisible: a ledger
@@ -9,156 +163,6 @@ import Testing
 /// remembers too eagerly loses the sessions a failed request never delivered.
 @Suite("Session sync queue")
 struct SessionSyncQueueTests {
-    /// Records and tombstones together, the way `FileSessionStore` does — the
-    /// two seams are separate protocols and one store answers both.
-    private actor SessionSpy: SessionRecording, TombstoneStoring {
-        private(set) var stored: [SessionRecord]
-        private(set) var tombstoned: [SessionRecord.ID] = []
-
-        init(_ stored: [SessionRecord] = []) {
-            self.stored = stored
-        }
-
-        func record(_ session: SessionRecord) async {
-            stored.append(session)
-        }
-
-        func remove(_ id: SessionRecord.ID) async {
-            guard stored.contains(where: { $0.id == id }) else { return }
-            stored.removeAll { $0.id == id }
-            tombstoned.append(id)
-        }
-
-        func tombstonedSessions() async -> [SessionRecord.ID] {
-            tombstoned
-        }
-
-        func forgetTombstones(_ ids: [SessionRecord.ID]) async {
-            let forgotten = Set(ids)
-            tombstoned.removeAll { forgotten.contains($0) }
-        }
-
-        func recordedSessions() async -> [SessionRecord] {
-            stored
-        }
-
-        func merge(_ sessions: [SessionRecord]) async -> Bool {
-            let known = Set(stored.map(\.id))
-            let missing = sessions.filter { !known.contains($0.id) }
-            stored.append(contentsOf: missing)
-            return !missing.isEmpty
-        }
-    }
-
-    private actor ScoreSpy: BoltScoreRecording {
-        private(set) var stored: [BoltScore]
-
-        init(_ stored: [BoltScore] = []) {
-            self.stored = stored
-        }
-
-        func record(_ score: BoltScore) async {
-            stored.append(score)
-        }
-
-        func recordedScores() async -> [BoltScore] {
-            stored
-        }
-    }
-
-    private struct Offline: Error {}
-
-    private actor ServerSpy: JourneySyncing {
-        /// Every session id this "server" has been sent, including repeats — so
-        /// a test can tell "sent once" from "sent again".
-        private(set) var received: [UUID] = []
-        private(set) var receivedScores: [UUID] = []
-        private(set) var deleted: [UUID] = []
-        /// How many times the restore has asked for a page, reachable or not —
-        /// what tells a sync that skipped the round trip from one that made it
-        /// and found nothing.
-        private(set) var restoreCalls = 0
-        private var isReachable: Bool
-        private var held: [SessionRecord]
-
-        private let pageSize: Int
-
-        init(isReachable: Bool = true, held: [SessionRecord] = [], pageSize: Int = 500) {
-            self.isReachable = isReachable
-            self.held = held
-            self.pageSize = pageSize
-        }
-
-        func comeBackOnline() {
-            isReachable = true
-        }
-
-        func record(_ sessions: [SessionRecord]) async throws {
-            guard isReachable else { throw Offline() }
-            received.append(contentsOf: sessions.map(\.id))
-        }
-
-        func delete(_ ids: [SessionRecord.ID]) async throws {
-            guard isReachable else { throw Offline() }
-            deleted.append(contentsOf: ids)
-            held.removeAll { ids.contains($0.id) }
-        }
-
-        func record(_ score: BoltScore) async throws {
-            guard isReachable else { throw Offline() }
-            receivedScores.append(score.id)
-        }
-
-        /// Serves the held history one page at a time, keyed on the index the
-        /// last page stopped at — the same contract the real server offers, so
-        /// a queue that stopped after the first page fails here rather than
-        /// only against Postgres.
-        func storedSessions(after pageToken: String?) async throws -> StoredSessionPage {
-            restoreCalls += 1
-            guard isReachable else { throw Offline() }
-
-            let start = pageToken.flatMap(Int.init) ?? 0
-            let end = min(start + pageSize, held.count)
-            let page = Array(held[start ..< end])
-
-            return StoredSessionPage(
-                sessions: page,
-                nextPageToken: end < held.count ? String(end) : nil
-            )
-        }
-
-        func leaderboard(
-            _: LeaderboardBoard,
-            scope _: LeaderboardScope
-        ) async throws -> Leaderboard {
-            throw Offline()
-        }
-    }
-
-    /// A defaults suite of its own, so tests neither see each other's ledger nor
-    /// leave one behind on the machine that ran them.
-    private func defaults() -> UserDefaults {
-        let name = "journey-sync-tests.\(UUID().uuidString)"
-        guard let defaults = UserDefaults(suiteName: name) else {
-            Issue.record("a defaults suite is available")
-            return .standard
-        }
-        defaults.removePersistentDomain(forName: name)
-        return defaults
-    }
-
-    private func session(_ offsetHours: Int) -> SessionRecord {
-        SessionRecord(
-            techniqueSlug: "box-breathing",
-            startedAt: Date(timeIntervalSince1970: 1_777_000_000)
-                .addingTimeInterval(TimeInterval(offsetHours) * 3600),
-            duration: .seconds(120),
-            cyclesCompleted: 4,
-            breathCount: 8,
-            completed: true
-        )
-    }
-
     @Test("Acknowledged sessions are never sent twice")
     func acknowledgedSessionsAreNotResent() async {
         let sessions = SessionSpy([session(-1), session(-2)])
