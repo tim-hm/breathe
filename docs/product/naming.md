@@ -17,7 +17,7 @@ The name is decided and shipping; two checks from the list below have not been r
 
 ## How we got here
 
-**Breathe** was the internal working name and is unusable as a listing name: at least six live apps use it or a close variant, and Apple's own Watch app owned the word for years (renamed _Mindfulness_ in watchOS 8, partly because the space is so crowded). It survives in this repo only where a rename would cost more than it buys — the OpenTofu state bucket and the `breathe-tofu` IAM user, both operator-only, both recorded as legacy in [deployment.md](../deployment.md).
+**Breathe** was the internal working name and is unusable as a listing name: at least six live apps use it or a close variant, and Apple's own Watch app owned the word for years (renamed _Mindfulness_ in watchOS 8, partly because the space is so crowded). Nothing answers to it now: the OpenTofu state bucket and the `breathe-tofu` IAM user were the last two holdouts, operator-only and carried for a while as legacy, and both were renamed to `ond-*` once it was clear the inconsistency cost more attention than the migration did. The word survives in the codebase only as a verb, which is the one place it was never a brand.
 
 **Cadence** was carried as far as validation as the market-facing name and taken no further. What validation found, in August 2026, via the iTunes Search API (US storefront) and DNS:
 
