@@ -39,7 +39,7 @@ The container gets exactly the three variables `crates/api/src/config.rs` reads,
 
 | Variable             | Required | Where it comes from                                                              |
 | :------------------- | :------- | :------------------------------------------------------------------------------- |
-| `BREATHE_ENV`        | yes      | Literal `production` in `infra/box/compose.yaml` — JSON logs, no permissive CORS |
+| `OND_ENV`            | yes      | Literal `production` in `infra/box/compose.yaml` — JSON logs, no permissive CORS |
 | `DATABASE_URL`       | yes      | Assembled in the same file from the generated `POSTGRES_PASSWORD`                |
 | `OPENROUTER_API_KEY` | no       | `/srv/data/ond.env`, added by hand — see below                                   |
 
@@ -97,7 +97,7 @@ Every subsequent release is step 6 alone.
 
 ```sh
 aws s3 cp s3://<backup_bucket>/ond-<date>.sql.gz - | gunzip |
-  ssh ubuntu@<elastic_ip> 'docker compose -f /srv/ond/compose.yaml exec -T db psql -U postgres breathe'
+  ssh ubuntu@<elastic_ip> 'docker compose -f /srv/ond/compose.yaml exec -T db psql -U postgres ond'
 ```
 
 Restores into the live database; for a from-scratch rebuild, apply migrations first (`deploy` does) and restore over the empty schema.

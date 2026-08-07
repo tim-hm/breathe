@@ -1,4 +1,4 @@
-//! Migration runner for the `breathe` database.
+//! Migration runner for the `ond` database.
 //!
 //! Creates the database if it is absent, applies `migrations/`, then seeds the
 //! technique catalogue. The work itself lives in `lib.rs` so the API's test
@@ -32,7 +32,7 @@ fn init_logging() {
 
     let builder = tracing_subscriber::fmt().with_env_filter(filter);
 
-    if std::env::var("BREATHE_ENV").as_deref() == Ok("production") {
+    if std::env::var("OND_ENV").as_deref() == Ok("production") {
         builder.json().init();
     } else {
         builder.init();

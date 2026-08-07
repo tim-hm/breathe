@@ -74,7 +74,7 @@ SQLX_OFFLINE = "true"
 # a shell that has visited the sibling `connect` repo exports a DATABASE_URL
 # pointing at *its* cluster — so every task here supplies its own rather than
 # inheriting whatever the shell happens to hold.
-DATABASE_URL = "postgres://postgres:postgres@localhost:18101/breathe?sslmode=disable"
+DATABASE_URL = "postgres://postgres:postgres@localhost:18101/ond?sslmode=disable"
 
 # Every non-`dev` cargo invocation builds here instead of ./target. The reason is
 # the cargo *file lock*, not artifact invalidation: `clippy` and `build` write
@@ -112,7 +112,7 @@ run = "cargo run -p migrate"
 
 [tasks."db:psql"]
 description = "Query the local database (SQL on stdin)"
-run = "docker compose exec -T db psql -U postgres -d breathe"
+run = "docker compose exec -T db psql -U postgres -d ond"
 
 [tasks."build:release"]
 description = "Build the API release binary (what a deployment ships)"
@@ -302,7 +302,7 @@ run = "cargo nextest run --workspace --lib --bins"
 [tasks."test:e2e"]
 description = "Integration tests: the real router over a disposable database"
 depends = ["dev:db"]
-# Each test creates and migrates its own `breathe_test_<name>` database, so they
+# Each test creates and migrates its own `ond_test_<name>` database, so they
 # neither share state nor touch the development one. nextest runs each test in
 # its own process, which is what makes per-test databases the natural unit.
 env = { CARGO_TARGET_DIR = "{{env.CHECK_TARGET_DIR}}" }
@@ -407,7 +407,7 @@ description = "Generate Ond.xcodeproj from ios/project.yml"
 dir = "{{config_root}}/ios"
 # The plutil step bakes this Mac's Bonjour address into the freshly generated
 # (gitignored) Info.plist. Debug builds fall back to it when the
-# BREATHE_API_BASE_URL environment variable is absent — which is every launch
+# OND_API_BASE_URL environment variable is absent — which is every launch
 # from the home screen, where no debugger means no environment — so a device
 # build keeps working untethered. The Bonjour name rather than the LAN IP
 # because it survives a DHCP renewal, and derives per machine with no config:

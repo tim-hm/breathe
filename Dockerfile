@@ -41,8 +41,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 COPY --from=build /src/target/release/api /src/target/release/migrate /usr/local/bin/
 
 # Unprivileged by default; the container has no reason to be root.
-RUN useradd --system --no-create-home breathe
-USER breathe
+RUN useradd --system --no-create-home ond
+USER ond
 
 EXPOSE 18100
 CMD ["api"]

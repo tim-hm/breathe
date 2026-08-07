@@ -16,7 +16,7 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      # The `breathe` database is created by `crates/migrate`, not here, so that
+      # The `ond` database is created by `crates/migrate`, not here, so that
       # the one code path that provisions it is exercised on every fresh clone.
       POSTGRES_DB: postgres
     volumes:

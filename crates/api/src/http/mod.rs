@@ -56,7 +56,7 @@ struct About {
     #[serde(flatten)]
     build: BuildInfo,
     /// Which environment this process believes it is. Reported because
-    /// `BREATHE_ENV` decides the CORS policy and the log format, and "it is
+    /// `OND_ENV` decides the CORS policy and the log format, and "it is
     /// running the environment I think it is" is otherwise unverifiable from
     /// outside the process.
     environment: &'static str,

@@ -124,9 +124,9 @@ Logs must never contain secrets, and this repo has two specific exposures worth 
 
 **What to check:**
 
-- **Level configuration.** `RUST_LOG` overrides the filter; the default is `api=info,tower_http=info,warn`, chosen at boot in `crates/api/src/obs.rs` from `BREATHE_ENV`. Flag ad-hoc level gating anywhere else — a hand-rolled `if verbose` is a second configuration surface for something already configured.
+- **Level configuration.** `RUST_LOG` overrides the filter; the default is `api=info,tower_http=info,warn`, chosen at boot in `crates/api/src/obs.rs` from `OND_ENV`. Flag ad-hoc level gating anywhere else — a hand-rolled `if verbose` is a second configuration surface for something already configured.
 - **Format selection.** JSON in production, human-readable in dev, decided once in `obs.rs`. Flag any second place that formats log output.
-- **New environment variables.** `CLAUDE.md` §1.4 caps the backend at three: `BREATHE_ENV`, `DATABASE_URL`, and the optional `OPENROUTER_API_KEY`. A fourth read anywhere — including one that only affects logging — is a convention violation, because it is a value that can differ between a laptop and a deployment without anything noticing.
+- **New environment variables.** `CLAUDE.md` §1.4 caps the backend at three: `OND_ENV`, `DATABASE_URL`, and the optional `OPENROUTER_API_KEY`. A fourth read anywhere — including one that only affects logging — is a convention violation, because it is a value that can differ between a laptop and a deployment without anything noticing.
 - **Metrics and tracing export.** `docs/observability.md` says neither exists yet, and that when metrics arrive they must be served on a **separate port** from the public listener so the scrape target is never exposed. If an exporter has appeared on the main listener, that is the finding.
 
 **Severity guide:**

@@ -38,7 +38,7 @@ const MAX_REQUEST_BYTES: usize = 256 * 1024;
 /// entitlement surface — to anyone who asks. Wanting it against the deployed box
 /// is the argument for the separate port `docs/observability.md` reserves for
 /// metrics, not for registering it here. `infra/box/Caddyfile` declines to proxy
-/// the path as well, because an unset `BREATHE_ENV` falls back to `Dev` and this
+/// the path as well, because an unset `OND_ENV` falls back to `Dev` and this
 /// gate therefore fails open.
 ///
 /// There is deliberately no `tonic-health` service. Liveness is answered by the
@@ -98,7 +98,7 @@ mod tests {
     /// name derived from the same source as the registration could not fail.
     const REFLECTION_PATH: &str = "/grpc.reflection.v1.ServerReflection/ServerReflectionInfo";
 
-    const DATABASE_URL: &str = "postgres://postgres@localhost:18101/breathe";
+    const DATABASE_URL: &str = "postgres://postgres@localhost:18101/ond";
 
     /// A state with no database behind it. `connect_lazy` parses the URL and
     /// connects on first use, and registration touches neither — nor does it

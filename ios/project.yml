@@ -28,7 +28,7 @@ settings:
     # simulator build wants. Only a device or archive build needs the variable,
     # and now that the phone app embeds the watch app both bundles must be
     # signed by the same team, which is why this sits at project level.
-    DEVELOPMENT_TEAM: ${BREATHE_DEV_TEAM}
+    DEVELOPMENT_TEAM: ${OND_DEV_TEAM}
 
 packages:
   OndCore:
@@ -208,7 +208,7 @@ schemes:
       # entitled locally regardless — and it is why the server half needs a
       # sandbox tester on a real device.
       storeKitConfiguration: Ond/Ond.storekit
-      # `BREATHE_API_BASE_URL` is deliberately not set here, and a physical
+      # `OND_API_BASE_URL` is deliberately not set here, and a physical
       # device must not rely on it either: scheme environment variables exist
       # only under Xcode's debugger, so an app opened from the home screen
       # never sees them. Device builds instead read the URL `ios:gen` bakes

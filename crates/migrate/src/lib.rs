@@ -1,4 +1,4 @@
-//! Bringing a `breathe` database into existence and up to date.
+//! Bringing a `ond` database into existence and up to date.
 //!
 //! The binary in `main.rs` is one caller. The other is the API's `tests/e2e`
 //! harness, which creates a disposable database through exactly these functions
@@ -103,7 +103,7 @@ mod tests {
     #[test]
     fn carries_the_query_string_onto_the_maintenance_url() {
         let options = PgConnectOptions::from_str(
-            "postgres://postgres:postgres@localhost:18101/breathe?sslmode=require",
+            "postgres://postgres:postgres@localhost:18101/ond?sslmode=require",
         )
         .expect("a valid connection string");
 

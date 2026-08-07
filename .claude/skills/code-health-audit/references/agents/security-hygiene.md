@@ -137,7 +137,7 @@ The assistant sends text a person wrote to a third party and renders what comes 
 
 - **No secrets in source.** Strings shaped like API keys, base64 blobs, `password = "…"`, connection strings with credentials. Check test files too — test secrets must be obviously fake.
 - **`.env` is gitignored** (`.gitignore:25`) and must not be tracked. Verify with `git ls-files` rather than assuming, and check the same for `*.pem`, `*.key`, `*.p8` (the App Store connect key shape), and anything under `infra/` holding state or credentials.
-- **The three-variable rule.** `CLAUDE.md` §1.4: the backend reads `BREATHE_ENV`, `DATABASE_URL`, and the optional `OPENROUTER_API_KEY`, and nothing else. A fourth is a config value that can differ between a laptop and a deployment without anything noticing — which is a correctness problem before it is a security one, but it is often both.
+- **The three-variable rule.** `CLAUDE.md` §1.4: the backend reads `OND_ENV`, `DATABASE_URL`, and the optional `OPENROUTER_API_KEY`, and nothing else. A fourth is a config value that can differ between a laptop and a deployment without anything noticing — which is a correctness problem before it is a security one, but it is often both.
 - **No default value for a secret.** A fallback that is a real key is the worst case; a fallback that is a placeholder which then _works_ against something is nearly as bad.
 - **`Debug` derives on structs holding secrets.** A `#[derive(Debug)]` on a config struct containing the API key prints it the first time anything logs that struct.
 - **Deployment configuration.** Check `infra/` and `Dockerfile` for a secret baked into an image layer or a Terraform variable with a committed default.

@@ -41,7 +41,7 @@ One record per request is the exception, and it earns the level because it is th
 
 ## Format
 
-JSON in production, human-readable in dev — chosen once at boot in `crates/api/src/obs.rs` from `BREATHE_ENV`. JSON is unreadable in a terminal and mandatory in a log aggregator, and `Environment` already knows which one is reading.
+JSON in production, human-readable in dev — chosen once at boot in `crates/api/src/obs.rs` from `OND_ENV`. JSON is unreadable in a terminal and mandatory in a log aggregator, and `Environment` already knows which one is reading.
 
 `RUST_LOG` overrides the filter; the default is `api=info,tower_http=info,warn`.
 

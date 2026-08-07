@@ -1,6 +1,6 @@
 //! Boot-time configuration.
 //!
-//! Three values come from the environment: `BREATHE_ENV`, `DATABASE_URL`, and
+//! Three values come from the environment: `OND_ENV`, `DATABASE_URL`, and
 //! the optional `OPENROUTER_API_KEY`. Everything else is *derived* from the
 //! environment name (CLAUDE.md §1.4–1.5). The reason is that every environment
 //! variable is a value that can differ between a developer's machine and a
@@ -18,7 +18,7 @@ use std::str::FromStr;
 use anyhow::{Context, Result};
 use sqlx::postgres::PgConnectOptions;
 
-/// Which deployment this process is. Chosen from `BREATHE_ENV`; everything
+/// Which deployment this process is. Chosen from `OND_ENV`; everything
 /// environment-dependent is a `match` on this rather than another variable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Environment {
@@ -155,7 +155,7 @@ pub const OPENROUTER_BASE_URL: &str = "https://openrouter.ai/api/v1";
 pub const OPENROUTER_MODEL_ID: &str = "~anthropic/claude-haiku-latest";
 
 pub fn load() -> Result<Config> {
-    let environment = environment_from(std::env::var("BREATHE_ENV"))?;
+    let environment = environment_from(std::env::var("OND_ENV"))?;
 
     let database_url = std::env::var("DATABASE_URL").context(
         "DATABASE_URL is not set — run through `mise run dev`, which supplies it (CLAUDE.md §3)",
@@ -181,13 +181,13 @@ fn secret_from(var: Result<String, std::env::VarError>) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
-/// Interprets the raw `BREATHE_ENV` lookup. Split from `load` so the branching
+/// Interprets the raw `OND_ENV` lookup. Split from `load` so the branching
 /// is testable without mutating the process environment.
 fn environment_from(var: Result<String, std::env::VarError>) -> Result<Environment> {
     match var {
         Ok(value) => Environment::parse(&value).with_context(|| {
             format!(
-                "BREATHE_ENV must be one of {:?}, got `{value}`",
+                "OND_ENV must be one of {:?}, got `{value}`",
                 Environment::ALL.map(Environment::as_str)
             )
         }),
@@ -197,7 +197,7 @@ fn environment_from(var: Result<String, std::env::VarError>) -> Result<Environme
         // front of things a deployment should not expose, and the Caddyfile
         // declines to proxy the reflection path rather than trusting it alone.
         Err(std::env::VarError::NotPresent) => Ok(Environment::Dev),
-        Err(e) => Err(e).context("BREATHE_ENV is not valid UTF-8"),
+        Err(e) => Err(e).context("OND_ENV is not valid UTF-8"),
     }
 }
 
@@ -242,7 +242,7 @@ mod tests {
     fn debug_redacts_both_credentials() {
         let config = Config {
             environment: Environment::Production,
-            database_url: "postgres://postgres:hunter2@db:5432/breathe?sslmode=disable".to_owned(),
+            database_url: "postgres://postgres:hunter2@db:5432/ond?sslmode=disable".to_owned(),
             port: DEFAULT_PORT,
             openrouter_api_key: Some("sk-or-v1-example".to_owned()),
         };
@@ -251,7 +251,7 @@ mod tests {
         assert!(!rendered.contains("hunter2"), "{rendered}");
         assert!(!rendered.contains("sk-or-v1-example"), "{rendered}");
         assert!(
-            rendered.contains("db:5432/breathe"),
+            rendered.contains("db:5432/ond"),
             "the host and database name are the part worth keeping: {rendered}"
         );
     }
