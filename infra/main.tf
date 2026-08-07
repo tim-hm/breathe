@@ -69,8 +69,50 @@ module "backups" {
 
   bucket_prefix = "breathe-backups-"
 
+  # A nightly dump holds the whole `users` table, and under this identity model
+  # every `users.id` *is* the bearer credential for that person's profile,
+  # journey and entitlement — so this bucket takes the same hardening the state
+  # bucket takes in bootstrap/main.tf, stated rather than inherited. The module's
+  # v4 defaults already block public access and AWS encrypts new buckets by
+  # default; writing both out is what stops an upstream default changing under a
+  # major version bump from silently relaxing the more sensitive of the two
+  # buckets. No `prevent_destroy` to match, though: dumps expire at 30 days by
+  # design, so this bucket is reproducible in a way state never is.
+  versioning = {
+    enabled = true
+  }
+
+  server_side_encryption_configuration = {
+    rule = {
+      apply_server_side_encryption_by_default = {
+        sse_algorithm = "AES256"
+      }
+      bucket_key_enabled = true
+    }
+  }
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+
+  # The dump crosses the public internet from the box's `aws s3 cp`; refusing
+  # plaintext transport is the same cheap insurance bootstrap takes on state.
+  attach_deny_insecure_transport_policy = true
+
   # Dumps are worthless past the point anyone would restore them; 30 days keeps
-  # the bucket from quietly accumulating forever.
+  # the bucket from quietly accumulating forever. Both of the other two clauses
+  # exist to keep that 30 honest:
+  #
+  # Versioning turns `expiration` into a delete marker rather than a delete, so
+  # without a noncurrent rule the bytes would stay for ever and the number above
+  # would be fiction. One day, not thirty — the current-version expiry *is* the
+  # retention policy, and the noncurrent window only has to outlast a mistaken
+  # delete.
+  #
+  # The cron pipes `pg_dump | gzip | aws s3 cp -` from stdin, which is always a
+  # multipart upload, so a reboot or a dropped link mid-dump strands parts that
+  # are billed as storage and are invisible to both expiry rules.
   lifecycle_rule = [
     {
       id      = "expire-dumps"
@@ -78,6 +120,10 @@ module "backups" {
       expiration = {
         days = 30
       }
+      noncurrent_version_expiration = {
+        days = 1
+      }
+      abort_incomplete_multipart_upload_days = 7
     }
   ]
 }

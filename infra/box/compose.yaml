@@ -1,8 +1,23 @@
 # What runs on the box, rsynced to /srv/breathe by `mise run deploy`. The
 # ${POSTGRES_PASSWORD} interpolations read /srv/breathe/.env — a symlink onto
 # the data volume, written once at first boot by cloud-init.
+
+# Docker's json-file driver keeps everything for ever by default, and the only
+# disk it can fill is the one Postgres writes to. Nothing ships these logs
+# anywhere, so 50 MiB per resident service is the whole retention policy:
+# enough to read back an incident over `docker compose logs`, bounded enough
+# that a chatty week cannot take the database down. `migrate` is deliberately
+# exempt: `run --rm` deletes its log file along with the container.
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "5"
+
 services:
   caddy:
+    <<: *logging
     image: caddy:2
     restart: unless-stopped
     ports:
@@ -20,6 +35,7 @@ services:
       - caddy-config:/config
 
   api:
+    <<: *logging
     image: breathe-api:latest
     restart: unless-stopped
     environment:
@@ -48,6 +64,7 @@ services:
         condition: service_healthy
 
   db:
+    <<: *logging
     image: postgres:18-alpine
     restart: unless-stopped
     # No host port mapping: only the compose network can reach Postgres. Admin

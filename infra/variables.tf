@@ -16,9 +16,8 @@ variable "ssh_public_key" {
 }
 
 variable "admin_cidr" {
-  description = "CIDR allowed to reach SSH. Defaults open because a home IP changes under DHCP; tighten to <your-ip>/32 in terraform.tfvars if yours is stable."
+  description = "CIDR allowed to reach SSH, as `<your-ip>/32` for a stable address or the range your ISP hands out. Required — a default here would be a committed choice to open 22/tcp to the internet, and the SSM attachment in main.tf already covers the case an open default was hedging against: a DHCP renewal that strands the operator outside their own CIDR."
   type        = string
-  default     = "0.0.0.0/0"
 }
 
 variable "data_volume_gb" {

@@ -1,0 +1,43 @@
+# The advisory watch. Separate from checks.yml because it fails on the calendar
+# rather than on a diff: a new RustSec advisory makes an untouched Cargo.lock
+# vulnerable overnight, and nothing in a push-triggered job would ever notice.
+# `ring` and `x509-parser` are the ones that matter — between them they are the
+# whole of the App Store signature check.
+name: audit
+
+on:
+  schedule:
+    # 07:00 UTC daily. Early enough that the result is waiting at the start of
+    # the working day, late enough to pick up the previous day's advisories.
+    - cron: "0 7 * * *"
+  # Cargo.lock alone, because `cargo audit` reads nothing else — a manifest edit
+  # that could change the verdict has to move the lock file too. So a pull
+  # request that pulls in a crate with a known advisory fails at the pull
+  # request, not the next morning.
+  pull_request:
+    paths:
+      - Cargo.lock
+      - .github/workflows/audit.yml
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+        with:
+          # Three tools, not the whole table — same narrowing, and the same
+          # reason, as checks.yml's lint-swift job. cargo-binstall comes first so
+          # cargo-audit arrives prebuilt rather than compiling; `rust` is here
+          # because `cargo audit` is a cargo subcommand and needs cargo on PATH.
+          install_args: rust cargo-binstall cargo:cargo-audit
+          # The lint job is also ubuntu-latest against this same .mise.toml.
+          # Sharing a cache key would let whichever job ran first decide whether
+          # the entry holds three tools or fourteen, so each keeps its own.
+          cache_key_prefix: mise-audit
+      - run: mise run check:audit
+        env:
+          # Without this, `mise run` auto-installs every tool in .mise.toml,
+          # defeating the selective install above.
+          MISE_AUTO_INSTALL: "false"

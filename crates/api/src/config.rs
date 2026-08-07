@@ -66,8 +66,13 @@ impl Config {
         matches!(self.environment, Environment::Production)
     }
 
-    /// Whether cleartext HTTP from a simulator or a browser on this machine
-    /// should be permitted a permissive CORS policy.
+    /// Whether this process is a developer's machine rather than a deployment.
+    ///
+    /// Two callers, and they want the same answer for different reasons:
+    /// `cors_layer` permits cleartext HTTP from a simulator or a browser here,
+    /// and `grpc::build_services` registers reflection here. Both are surfaces a
+    /// deployment must not carry, so a third caller almost certainly belongs to
+    /// the same set — check that it does before adding one.
     pub const fn is_local(&self) -> bool {
         matches!(self.environment, Environment::Dev)
     }
@@ -137,8 +142,9 @@ fn environment_from(var: Result<String, std::env::VarError>) -> Result<Environme
         }),
         // Dev is the default because an unset variable means a developer's
         // machine. A deployment that forgets to set it gets dev's permissive
-        // CORS and pretty logs, which is loud enough to notice immediately and
-        // is not itself a security boundary.
+        // CORS, pretty logs, and gRPC reflection — so this fallback does sit in
+        // front of things a deployment should not expose, and the Caddyfile
+        // declines to proxy the reflection path rather than trusting it alone.
         Err(std::env::VarError::NotPresent) => Ok(Environment::Dev),
         Err(e) => Err(e).context("BREATHE_ENV is not valid UTF-8"),
     }
