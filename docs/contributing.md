@@ -29,7 +29,7 @@ In another terminal:
 
 ```bash
 curl -s localhost:18100/health
-grpcurl -plaintext localhost:18100 breathe.v1.TechniqueService/ListTechniques
+grpcurl -plaintext localhost:18100 ond.v1.TechniqueService/ListTechniques
 ```
 
 Then the app:
@@ -83,7 +83,7 @@ CI (`.github/workflows/checks.yml`) runs the formatting and lint subset on every
 | Wipe and rebuild the database  | `mise run dev:db:reset`                                                           |
 | Query the database             | `echo 'select * from techniques;' \| mise run db:psql`                            |
 | Change the technique catalogue | Edit `crates/migrate/src/seed.rs`, then `mise run migrate`                        |
-| Change the API contract        | Edit `proto/breathe/v1/…`, then `mise run generate`                               |
+| Change the API contract        | Edit `proto/ond/v1/…`, then `mise run generate`                                   |
 | Add a Swift file               | Create it under `ios/Breathe/` or `ios/OndWatch/`; `mise run ios:gen` picks it up |
 | Build the apps headlessly      | `mise run ios:build`, `mise run ios:build:watch`                                  |
 

@@ -19,36 +19,36 @@ public enum OndClients {
     public static func techniqueService(
         baseURL: URL,
         userId: @escaping @Sendable () -> UUID?
-    ) -> Breathe_V1_TechniqueServiceClient {
-        Breathe_V1_TechniqueServiceClient(client: protocolClient(baseURL: baseURL, userId: userId))
+    ) -> Ond_V1_TechniqueServiceClient {
+        Ond_V1_TechniqueServiceClient(client: protocolClient(baseURL: baseURL, userId: userId))
     }
 
     public static func profileService(
         baseURL: URL,
         userId: @escaping @Sendable () -> UUID?
-    ) -> Breathe_V1_ProfileServiceClient {
-        Breathe_V1_ProfileServiceClient(client: protocolClient(baseURL: baseURL, userId: userId))
+    ) -> Ond_V1_ProfileServiceClient {
+        Ond_V1_ProfileServiceClient(client: protocolClient(baseURL: baseURL, userId: userId))
     }
 
     public static func journeyService(
         baseURL: URL,
         userId: @escaping @Sendable () -> UUID?
-    ) -> Breathe_V1_JourneyServiceClient {
-        Breathe_V1_JourneyServiceClient(client: protocolClient(baseURL: baseURL, userId: userId))
+    ) -> Ond_V1_JourneyServiceClient {
+        Ond_V1_JourneyServiceClient(client: protocolClient(baseURL: baseURL, userId: userId))
     }
 
     public static func assistantService(
         baseURL: URL,
         userId: @escaping @Sendable () -> UUID?
-    ) -> Breathe_V1_AssistantServiceClient {
-        Breathe_V1_AssistantServiceClient(client: protocolClient(baseURL: baseURL, userId: userId))
+    ) -> Ond_V1_AssistantServiceClient {
+        Ond_V1_AssistantServiceClient(client: protocolClient(baseURL: baseURL, userId: userId))
     }
 
     public static func entitlementService(
         baseURL: URL,
         userId: @escaping @Sendable () -> UUID?
-    ) -> Breathe_V1_EntitlementServiceClient {
-        Breathe_V1_EntitlementServiceClient(client: protocolClient(
+    ) -> Ond_V1_EntitlementServiceClient {
+        Ond_V1_EntitlementServiceClient(client: protocolClient(
             baseURL: baseURL,
             userId: userId
         ))

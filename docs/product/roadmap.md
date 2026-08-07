@@ -14,7 +14,7 @@ The product's reason to exist: tap a technique, get a full-screen guided session
 - **Session length**: proto gains `recommended_cycles` on `Technique` (migration `0002` + `crates/migrate/src/seed.rs` + both codegens) — curated reference data like everything else on the message. User overrides live client-side until identity exists (M4).
 - **Accessibility & housekeeping**: Reduce Motion swaps the scaling orb for a progress ring; VoiceOver announces phase changes; the idle timer is disabled mid-session. Sessions are recorded locally from day one — M5 syncs them.
 
-Touches: `proto/breathe/v1/technique_service.proto`, `crates/api/src/features/technique/`, `crates/migrate/`, new `ios/Breathe/Features/Session/`, `OndKit`.
+Touches: `proto/ond/v1/technique_service.proto`, `crates/api/src/features/technique/`, `crates/migrate/`, new `ios/Breathe/Features/Session/`, `OndKit`.
 
 ## M2 — Catalogue expansion + advanced dials
 
@@ -24,7 +24,7 @@ Seed the science-led set from the business plan (coherent breathing, extended ex
 - **Advanced dials.** `Phase` gains `min_duration_ms` / `max_duration_ms` — the evidence-based safe range, seeded per phase, so every client renders dials from data instead of hardcoding limits. User overrides stay client-side (UserDefaults) until M4 profiles exist, then sync.
 - **Breathing foundations.** The nose/belly/posture/eyes guidance from the business plan as seeded reference data: `foundation_topics` table (`slug, question, answer, sort_order`) served by a new `TechniqueService.ListFoundations` RPC (public reference data, same no-auth stance). The session UI shows suggestion-framed hints from it; M6's assistant cites the same rows.
 
-Touches: `proto/breathe/v1/technique_service.proto`, migration `0003`, `crates/migrate/src/seed.rs`, `crates/api/src/features/technique/`, `OndKit` (`Technique.swift` grows stages; `SessionTimeline` flattens stages × cycles into its absolute-time boundary list — open-ended stages pause the clock until the user taps).
+Touches: `proto/ond/v1/technique_service.proto`, migration `0003`, `crates/migrate/src/seed.rs`, `crates/api/src/features/technique/`, `OndKit` (`Technique.swift` grows stages; `SessionTimeline` flattens stages × cycles into its absolute-time boundary list — open-ended stages pause the clock until the user taps).
 
 ## M3 — Adaptive theme
 
@@ -41,7 +41,7 @@ Replace the four hardcoded `Color` literals in `ios/Packages/OndCore/Sources/Ond
 
 All free by product decision; requires M4's identity header on every RPC.
 
-- **Proto** — new `proto/breathe/v1/journey_service.proto`, one service, four RPCs:
+- **Proto** — new `proto/ond/v1/journey_service.proto`, one service, four RPCs:
   - `RecordSessions(repeated SessionRecord) returns (RecordSessionsResponse)` — batch, because M1 records sessions locally and the client syncs opportunistically. `SessionRecord { client_session_id (uuid, idempotency key), technique_slug, started_at, duration_ms, cycles_completed, breath_count, completed }`. Server upserts on `(user_id, client_session_id)` so retries and double-syncs are harmless.
   - `GetJourney` → totals (sessions, breaths, minutes), current and best streak, last N sessions. Streaks are computed on read in SQL from calendar days in the user's UTC offset (sent per request, not stored) — no denormalised counters to drift.
   - `RecordBoltScore(seconds)` — the BOLT-style controlled-breath test, measured client-side in its own small guided flow; server keeps history and best.

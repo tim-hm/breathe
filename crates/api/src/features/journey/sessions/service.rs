@@ -20,7 +20,7 @@ use super::types::{
     TechniquePractice,
 };
 use crate::identity::UserId;
-use crate::proto::breathe::v1 as pb;
+use crate::proto::ond::v1 as pb;
 
 /// How many sessions one call may carry.
 ///

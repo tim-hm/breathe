@@ -107,7 +107,7 @@ Logs must never contain secrets, and this repo has two specific exposures worth 
 
 - **`OPENROUTER_API_KEY`.** The only secret the backend reads. Check that it never reaches a log, an error message, or a `Debug` derive on a struct that holds it. A `#[derive(Debug)]` on a config struct containing the key will print it the first time anyone logs that struct.
 - **`DATABASE_URL`.** Carries credentials. Logging a connection string on a failed connect is the classic way this leaks — check `crates/migrate/src/main.rs` and any pool construction.
-- **The user id.** `breathe-user-id` is an anonymous UUID rather than a name or an email, so it is fine to log and useful for correlation. Do not flag it as PII; do flag it appearing in a place that is shared or exported.
+- **The user id.** `ond-user-id` is an anonymous UUID rather than a name or an email, so it is fine to log and useful for correlation. Do not flag it as PII; do flag it appearing in a place that is shared or exported.
 - **Prompt and completion text.** The assistant handles free text a person wrote about how they feel. Logging a prompt or a completion body — even at `debug` — puts that text in the log aggregator. Flag any body-level logging of model input or output; log token counts, durations, and outcomes instead.
 - **sqlx errors reaching the client.** The inverse of the log-before-converting rule: the detail belongs in the log and must not be forwarded in the `tonic::Status` message, because it can carry table and column names.
 

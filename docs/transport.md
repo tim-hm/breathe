@@ -4,7 +4,7 @@ How a value gets from a Postgres row to a SwiftUI view, and why the pipeline is 
 
 ## The contract is the source of truth
 
-`proto/breathe/v1/` holds the only definition of the API. Nothing else describes it — there is no OpenAPI document, no hand-written Swift model, no shared types package. Two generators read it:
+`proto/ond/v1/` holds the only definition of the API. Nothing else describes it — there is no OpenAPI document, no hand-written Swift model, no shared types package. Two generators read it:
 
 | Target       | Generator                                                        | Output                                               | Committed? |
 | :----------- | :--------------------------------------------------------------- | :--------------------------------------------------- | :--------- |
@@ -47,7 +47,7 @@ Ok(http::router(state)
     .layer(TraceLayer::new_for_http()))
 ```
 
-gRPC paths are `/breathe.v1.<Service>/<Method>` and can never collide with `/health` or `/about`, so axum matches its own routes first and everything else falls through to gRPC. One port means one thing to configure, one thing to port-forward, and one thing to point the app at.
+gRPC paths are `/ond.v1.<Service>/<Method>` and can never collide with `/health` or `/about`, so axum matches its own routes first and everything else falls through to gRPC. One port means one thing to configure, one thing to port-forward, and one thing to point the app at.
 
 Tower applies the outermost `.layer` last, so `identity::resolve` sits _inside_ `GrpcWebLayer`: it sees a plain gRPC request, and the `Status` it returns for a header it cannot parse is re-framed as gRPC-Web on the way out. Outside the layer it would answer an `UNAUTHENTICATED` the client could not read as one. It is also on the gRPC router alone — `/health` must answer with an unreachable database, and resolving an identity upserts a `users` row, which is exactly the dependency that would break it.
 
@@ -74,7 +74,7 @@ The rule in both languages: **generated types stop at the repository boundary.**
 ## Changing the contract
 
 ```bash
-# 1. Edit proto/breathe/v1/…
+# 1. Edit proto/ond/v1/…
 mise run generate     # 2. Regenerate Swift + refresh the SQLx cache
 mise run check        # 3. buf lint, buf breaking, clippy, tests
 ```

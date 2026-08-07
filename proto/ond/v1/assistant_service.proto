@@ -1,13 +1,13 @@
 syntax = "proto3";
 
-package breathe.v1;
+package ond.v1;
 
 // AssistantService turns what somebody told us at onboarding into guidance: a
 // short ranked list of techniques to try, and an explanation of why a technique
 // works, written for how much breathwork they have done before.
 //
 // Scoped to the caller exactly like ProfileService — the anonymous identity
-// travels in the `breathe-user-id` header and no request message carries a
+// travels in the `ond-user-id` header and no request message carries a
 // profile, so one client can never ask for guidance shaped by another's
 // answers.
 //

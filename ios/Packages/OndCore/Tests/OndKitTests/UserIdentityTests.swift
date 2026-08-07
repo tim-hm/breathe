@@ -26,7 +26,7 @@ struct UserIdentityTests {
 
     private func request() throws -> HTTPRequest<Data?> {
         let url = try #require(
-            URL(string: "http://localhost:18100/breathe.v1.ProfileService/GetProfile")
+            URL(string: "http://localhost:18100/ond.v1.ProfileService/GetProfile")
         )
         return HTTPRequest(
             url: url,
@@ -81,6 +81,6 @@ struct UserIdentityTests {
     /// over HTTP/2 rather than merely unconventional.
     @Test("The header name matches what the server reads")
     func usesTheAgreedHeaderName() {
-        #expect(IdentityInterceptor.headerName == "breathe-user-id")
+        #expect(IdentityInterceptor.headerName == "ond-user-id")
     }
 }

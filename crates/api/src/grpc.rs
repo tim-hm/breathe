@@ -10,12 +10,12 @@ use crate::features::entitlement::handlers::grpc::EntitlementServiceImpl;
 use crate::features::journey::handlers::grpc::JourneyServiceImpl;
 use crate::features::profile::handlers::grpc::ProfileServiceImpl;
 use crate::features::technique::handlers::grpc::TechniqueServiceImpl;
-use crate::proto::breathe::v1::FILE_DESCRIPTOR_SET;
-use crate::proto::breathe::v1::assistant_service_server::AssistantServiceServer;
-use crate::proto::breathe::v1::entitlement_service_server::EntitlementServiceServer;
-use crate::proto::breathe::v1::journey_service_server::JourneyServiceServer;
-use crate::proto::breathe::v1::profile_service_server::ProfileServiceServer;
-use crate::proto::breathe::v1::technique_service_server::TechniqueServiceServer;
+use crate::proto::ond::v1::FILE_DESCRIPTOR_SET;
+use crate::proto::ond::v1::assistant_service_server::AssistantServiceServer;
+use crate::proto::ond::v1::entitlement_service_server::EntitlementServiceServer;
+use crate::proto::ond::v1::journey_service_server::JourneyServiceServer;
+use crate::proto::ond::v1::profile_service_server::ProfileServiceServer;
+use crate::proto::ond::v1::technique_service_server::TechniqueServiceServer;
 use crate::state::AppState;
 
 /// The largest request body any service will decode.

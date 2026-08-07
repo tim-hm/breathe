@@ -49,7 +49,7 @@ public protocol AssistantReading: Sendable {
 }
 
 public struct AssistantRepository: AssistantReading {
-    private let client: Breathe_V1_AssistantServiceClient
+    private let client: Ond_V1_AssistantServiceClient
     private let healthContext: @Sendable () async -> CoachHealthContext?
 
     /// `healthContext` is asked immediately before each request and its answer
@@ -67,7 +67,7 @@ public struct AssistantRepository: AssistantReading {
     }
 
     public func recommendations() async throws -> Guidance {
-        var request = Breathe_V1_GetRecommendationRequest()
+        var request = Ond_V1_GetRecommendationRequest()
         if let context = await healthContext() {
             request.healthContext = Self.wire(context)
         }
@@ -103,7 +103,7 @@ public struct AssistantRepository: AssistantReading {
         of techniqueSlug: String
     ) -> AsyncThrowingStream<AssistantChunk, Error> {
         bridged(client.explainTechnique(), request: { [healthContext] in
-            var request = Breathe_V1_ExplainTechniqueRequest()
+            var request = Ond_V1_ExplainTechniqueRequest()
             request.techniqueSlug = techniqueSlug
             if let context = await healthContext() {
                 request.healthContext = Self.wire(context)
@@ -117,7 +117,7 @@ public struct AssistantRepository: AssistantReading {
         message: String
     ) -> AsyncThrowingStream<AssistantChunk, Error> {
         bridged(client.chat(), request: { [healthContext] in
-            var request = Breathe_V1_ChatRequest()
+            var request = Ond_V1_ChatRequest()
             request.history = history.map(Self.wire)
             request.message = message
             if let context = await healthContext() {
@@ -204,7 +204,7 @@ public struct AssistantRepository: AssistantReading {
     /// a guess.
     private static func chunk(
         text: String,
-        source proto: Breathe_V1_AssistantSource
+        source proto: Ond_V1_AssistantSource
     ) -> Result<AssistantChunk, AssistantRepositoryError> {
         guard let source = GuidanceSource(proto: proto) else {
             return .failure(.malformedResponse("unrecognised guidance source `\(proto)`"))
@@ -215,8 +215,8 @@ public struct AssistantRepository: AssistantReading {
     /// The domain turn as the wire message. Total in this direction: every
     /// domain role has a wire value, so nothing the app holds can fail to be
     /// read back.
-    private static func wire(_ turn: ChatTurn) -> Breathe_V1_ChatTurn {
-        var wire = Breathe_V1_ChatTurn()
+    private static func wire(_ turn: ChatTurn) -> Ond_V1_ChatTurn {
+        var wire = Ond_V1_ChatTurn()
         wire.role =
             switch turn.role {
             case .person: .person
@@ -231,8 +231,8 @@ public struct AssistantRepository: AssistantReading {
     /// little evidence", which is exactly what it was. `clamping` because the
     /// values are whole-unit physiological means: anything an `Int32` cannot
     /// hold is a corrupt reading, and the server's range clamp drops it there.
-    private static func wire(_ context: CoachHealthContext) -> Breathe_V1_HealthContext {
-        var wire = Breathe_V1_HealthContext()
+    private static func wire(_ context: CoachHealthContext) -> Ond_V1_HealthContext {
+        var wire = Ond_V1_HealthContext()
         if let resting = context.restingHeartRate {
             wire.restingHrBpm = Int32(clamping: resting.sevenDayMean)
             if let trend = resting.trendFromBaseline {
@@ -254,7 +254,7 @@ extension GuidanceSource {
     /// shipped — the same rule every enum on this boundary follows. Guessing
     /// `.fallback` would be the safer-looking default and the wrong one: it
     /// would have the app claim the server said something it did not.
-    init?(proto: Breathe_V1_AssistantSource) {
+    init?(proto: Ond_V1_AssistantSource) {
         switch proto {
         case .model: self = .model
         case .fallback: self = .fallback

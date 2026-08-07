@@ -15,7 +15,7 @@ use api::assistant::{
 };
 use api::entitlement::Tier;
 use api::identity::USER_ID_HEADER;
-use api::proto::breathe::v1 as pb;
+use api::proto::ond::v1 as pb;
 use chrono::Utc;
 
 use crate::harness::{
@@ -23,9 +23,9 @@ use crate::harness::{
     subscribe,
 };
 
-const GET_RECOMMENDATION: &str = "/breathe.v1.AssistantService/GetRecommendation";
-const EXPLAIN_TECHNIQUE: &str = "/breathe.v1.AssistantService/ExplainTechnique";
-const CHAT: &str = "/breathe.v1.AssistantService/Chat";
+const GET_RECOMMENDATION: &str = "/ond.v1.AssistantService/GetRecommendation";
+const EXPLAIN_TECHNIQUE: &str = "/ond.v1.AssistantService/ExplainTechnique";
+const CHAT: &str = "/ond.v1.AssistantService/Chat";
 
 const USER: &str = "5c4d3e2f-0000-4000-8000-000000000001";
 const OTHER_USER: &str = "5c4d3e2f-0000-4000-8000-000000000002";
@@ -991,7 +991,7 @@ async fn set_profile(
 ) {
     let response: crate::harness::GrpcWebResponse<pb::UpdateProfileResponse> = call_grpc_web_with(
         db.app(),
-        "/breathe.v1.ProfileService/UpdateProfile",
+        "/ond.v1.ProfileService/UpdateProfile",
         &pb::UpdateProfileRequest {
             profile: Some(pb::Profile {
                 goals: goals.iter().map(|goal| *goal as i32).collect(),
@@ -1031,7 +1031,7 @@ async fn record_practice(db: &TestDatabase, user: &str, sessions: &[(&str, u32)]
 
     let response: crate::harness::GrpcWebResponse<pb::RecordSessionsResponse> = call_grpc_web_with(
         db.app(),
-        "/breathe.v1.JourneyService/RecordSessions",
+        "/ond.v1.JourneyService/RecordSessions",
         &pb::RecordSessionsRequest { sessions: records },
         &[(USER_ID_HEADER, user)],
     )
@@ -1044,7 +1044,7 @@ async fn record_bolt(db: &TestDatabase, user: &str, seconds: u32) {
     let response: crate::harness::GrpcWebResponse<pb::RecordBoltScoreResponse> =
         call_grpc_web_with(
             db.app(),
-            "/breathe.v1.JourneyService/RecordBoltScore",
+            "/ond.v1.JourneyService/RecordBoltScore",
             &pb::RecordBoltScoreRequest {
                 client_score_id: format!("7b2e0000-0000-4000-9000-{seconds:012}"),
                 seconds,

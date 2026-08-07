@@ -2,13 +2,13 @@
 //! client uses.
 
 use api::identity::USER_ID_HEADER;
-use api::proto::breathe::v1 as pb;
+use api::proto::ond::v1 as pb;
 
 use crate::harness::{GrpcWebResponse, TestDatabase, call_grpc_web, call_grpc_web_with};
 
-const GET_PROFILE: &str = "/breathe.v1.ProfileService/GetProfile";
-const UPDATE_PROFILE: &str = "/breathe.v1.ProfileService/UpdateProfile";
-const LIST_TECHNIQUES: &str = "/breathe.v1.TechniqueService/ListTechniques";
+const GET_PROFILE: &str = "/ond.v1.ProfileService/GetProfile";
+const UPDATE_PROFILE: &str = "/ond.v1.ProfileService/UpdateProfile";
+const LIST_TECHNIQUES: &str = "/ond.v1.TechniqueService/ListTechniques";
 
 /// A stable, valid identity. Fixed rather than random so a failing test leaves a
 /// row someone can go and look at.

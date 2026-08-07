@@ -12,7 +12,7 @@ use super::repository::{self, EntitlementRow, TransactionHolder};
 use super::types::{Entitlement, Tier};
 use super::verifier::{TransactionVerifier, VerifiedTransaction};
 use crate::identity::UserId;
-use crate::proto::breathe::v1 as pb;
+use crate::proto::ond::v1 as pb;
 
 /// The largest token this server will look at.
 ///

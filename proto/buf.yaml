@@ -1,13 +1,13 @@
 version: v2
 modules:
   - path: .
-    name: buf.build/breathe/platform
+    name: buf.build/ond/platform
 lint:
   use:
     - STANDARD
   except:
     # STANDARD wants the proto package to end in a version suffix that matches
-    # the directory. `breathe.v1` in `breathe/v1/` already carries the version;
+    # the directory. `ond.v1` in `ond/v1/` already carries the version;
     # the rule fires on the *file* path convention we don't follow.
     - PACKAGE_VERSION_SUFFIX
   ignore_only:
@@ -17,7 +17,7 @@ lint:
     # Scoped to the one file rather than excepted outright, so every other enum
     # still has to carry an UNSPECIFIED zero.
     ENUM_ZERO_VALUE_SUFFIX:
-      - breathe/v1/profile_service.proto
+      - ond/v1/profile_service.proto
 breaking:
   use:
     - FILE

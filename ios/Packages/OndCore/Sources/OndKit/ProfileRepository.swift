@@ -56,14 +56,14 @@ public protocol ProfileSyncing: Sendable {
 /// The only type that touches the generated profile types, mirroring
 /// `TechniqueRepository`.
 public struct ProfileRepository: ProfileSyncing {
-    private let client: Breathe_V1_ProfileServiceClient
+    private let client: Ond_V1_ProfileServiceClient
 
     public init(baseURL: URL, identity: any UserIdentityStore) {
         client = OndClients.profileService(baseURL: baseURL, userId: identity.userId)
     }
 
     public func fetch() async throws -> Profile {
-        let response = await client.getProfile(request: Breathe_V1_GetProfileRequest())
+        let response = await client.getProfile(request: Ond_V1_GetProfileRequest())
 
         guard let message = response.message else {
             throw Self.failure(refused: response.code == .invalidArgument, response.error)
@@ -74,7 +74,7 @@ public struct ProfileRepository: ProfileSyncing {
 
     @discardableResult
     public func update(_ profile: Profile) async throws -> Profile {
-        var request = Breathe_V1_UpdateProfileRequest()
+        var request = Ond_V1_UpdateProfileRequest()
         request.profile = profile.proto
 
         let response = await client.updateProfile(request: request)
@@ -103,7 +103,7 @@ public struct ProfileRepository: ProfileSyncing {
 }
 
 extension Profile {
-    init(proto: Breathe_V1_Profile) throws {
+    init(proto: Ond_V1_Profile) throws {
         // A goal this app has no case for is a decode failure rather than a gap
         // in the list: silently shortening someone's goals gives them back a
         // profile they did not choose and cannot tell apart from one they did.
@@ -133,8 +133,8 @@ extension Profile {
         )
     }
 
-    var proto: Breathe_V1_Profile {
-        var message = Breathe_V1_Profile()
+    var proto: Ond_V1_Profile {
+        var message = Ond_V1_Profile()
         message.goals = goals.map(\.proto)
         message.experienceLevel = experienceLevel?.proto ?? .unspecified
         message.reminderIntensity = reminderIntensity.proto
@@ -150,7 +150,7 @@ extension Gender {
     /// The same two non-answers as `BirthYearBand.decoded(from:)`, reported the
     /// same way: `nil` means they did not say, and throwing means a gender
     /// added to the proto after this app shipped.
-    static func decoded(from proto: Breathe_V1_Gender) throws -> Self? {
+    static func decoded(from proto: Ond_V1_Gender) throws -> Self? {
         switch proto {
         case .female: .female
         case .male: .male
@@ -163,7 +163,7 @@ extension Gender {
         }
     }
 
-    var proto: Breathe_V1_Gender {
+    var proto: Ond_V1_Gender {
         switch self {
         case .female: .female
         case .male: .male
@@ -176,7 +176,7 @@ extension BirthYearBand {
     /// Two non-answers, one initialiser cannot report both — the same shape as
     /// `ExperienceLevel.decoded(from:)`: `nil` means they did not say, and
     /// throwing means a band added to the proto after this app shipped.
-    static func decoded(from proto: Breathe_V1_BirthYearBand) throws -> Self? {
+    static func decoded(from proto: Ond_V1_BirthYearBand) throws -> Self? {
         switch proto {
         case .bornBefore1960: .before1960
         case .born1960S: .sixties
@@ -193,7 +193,7 @@ extension BirthYearBand {
         }
     }
 
-    var proto: Breathe_V1_BirthYearBand {
+    var proto: Ond_V1_BirthYearBand {
         switch self {
         case .before1960: .bornBefore1960
         case .sixties: .born1960S
@@ -211,7 +211,7 @@ extension ExperienceLevel {
     /// distinct non-answers and one initialiser cannot report both: `nil` means
     /// nobody has been asked, and throwing means a level added to the proto
     /// after this app shipped.
-    static func decoded(from proto: Breathe_V1_ExperienceLevel) throws -> Self? {
+    static func decoded(from proto: Ond_V1_ExperienceLevel) throws -> Self? {
         switch proto {
         case .new: .new
         case .occasional: .occasional
@@ -224,7 +224,7 @@ extension ExperienceLevel {
         }
     }
 
-    var proto: Breathe_V1_ExperienceLevel {
+    var proto: Ond_V1_ExperienceLevel {
         switch self {
         case .new: .new
         case .occasional: .occasional
@@ -238,7 +238,7 @@ extension ReminderIntensity {
     /// case here rather than the boundary's failure state, because it is the
     /// proto's zero value — an unset field, an older server, and a truncated
     /// write all have to arrive as silence.
-    init?(proto: Breathe_V1_ReminderIntensity) {
+    init?(proto: Ond_V1_ReminderIntensity) {
         switch proto {
         case .never: self = .never
         case .gentle: self = .gentle
@@ -247,7 +247,7 @@ extension ReminderIntensity {
         }
     }
 
-    var proto: Breathe_V1_ReminderIntensity {
+    var proto: Ond_V1_ReminderIntensity {
         switch self {
         case .never: .never
         case .gentle: .gentle

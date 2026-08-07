@@ -6,11 +6,11 @@ import Testing
 @Suite("Decoding proto techniques into domain types")
 struct TechniqueDecodingTests {
     private static func phase(
-        _ kind: Breathe_V1_PhaseKind,
+        _ kind: Ond_V1_PhaseKind,
         _ ms: UInt32,
         range: (UInt32, UInt32)? = nil
-    ) -> Breathe_V1_Phase {
-        var phase = Breathe_V1_Phase()
+    ) -> Ond_V1_Phase {
+        var phase = Ond_V1_Phase()
         phase.kind = kind
         phase.durationMs = ms
         phase.minDurationMs = range?.0 ?? ms
@@ -19,11 +19,11 @@ struct TechniqueDecodingTests {
     }
 
     private static func stage(
-        _ phases: [Breathe_V1_Phase],
+        _ phases: [Ond_V1_Phase],
         cycles: UInt32 = 8,
         openEnded: Bool = false
-    ) -> Breathe_V1_Stage {
-        var stage = Breathe_V1_Stage()
+    ) -> Ond_V1_Stage {
+        var stage = Ond_V1_Stage()
         stage.phases = phases
         stage.cycles = cycles
         stage.openEnded = openEnded
@@ -34,12 +34,12 @@ struct TechniqueDecodingTests {
     /// spelling it here rather than in a default argument keeps the fixture
     /// readable and unambiguous.
     private func protoTechnique(
-        goal: Breathe_V1_TechniqueGoal = .calm,
-        stages: [Breathe_V1_Stage]? = nil,
+        goal: Ond_V1_TechniqueGoal = .calm,
+        stages: [Ond_V1_Stage]? = nil,
         recommendedRounds: UInt32 = 1,
         safetyNote: String = ""
-    ) -> Breathe_V1_Technique {
-        var technique = Breathe_V1_Technique()
+    ) -> Ond_V1_Technique {
+        var technique = Ond_V1_Technique()
         technique.id = "id"
         technique.slug = "box-breathing"
         technique.name = "Box Breathing"

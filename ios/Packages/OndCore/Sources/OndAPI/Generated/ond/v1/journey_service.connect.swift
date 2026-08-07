@@ -2,7 +2,7 @@
 // swift-format-ignore-file
 // swiftlint:disable all
 //
-// Source: breathe/v1/journey_service.proto
+// Source: ond/v1/journey_service.proto
 //
 
 import Connect
@@ -14,9 +14,9 @@ import SwiftProtobuf
 /// against everyone who has chosen to be visible.
 ///
 /// Scoped to the caller exactly like ProfileService — the anonymous identity
-/// travels in the `breathe-user-id` header and no request message carries an id,
+/// travels in the `ond-user-id` header and no request message carries an id,
 /// so one client can never read another's journey by guessing a value.
-public protocol Breathe_V1_JourneyServiceClientInterface: Sendable {
+public protocol Ond_V1_JourneyServiceClientInterface: Sendable {
 
     /// Records a batch of finished sessions.
     ///
@@ -30,7 +30,7 @@ public protocol Breathe_V1_JourneyServiceClientInterface: Sendable {
     /// rows. The response says how many were new so a client can trust its own
     /// bookkeeping without reading anything back.
     @available(iOS 13, *)
-    func `recordSessions`(request: Breathe_V1_RecordSessionsRequest, headers: Connect.Headers) async -> ResponseMessage<Breathe_V1_RecordSessionsResponse>
+    func `recordSessions`(request: Ond_V1_RecordSessionsRequest, headers: Connect.Headers) async -> ResponseMessage<Ond_V1_RecordSessionsResponse>
 
     /// Forgets sessions the person deleted on their device.
     ///
@@ -43,7 +43,7 @@ public protocol Breathe_V1_JourneyServiceClientInterface: Sendable {
     /// error, because the client is entitled to ask twice and a tombstone is only
     /// dropped once the server has definitely forgotten the session.
     @available(iOS 13, *)
-    func `deleteSessions`(request: Breathe_V1_DeleteSessionsRequest, headers: Connect.Headers) async -> ResponseMessage<Breathe_V1_DeleteSessionsResponse>
+    func `deleteSessions`(request: Ond_V1_DeleteSessionsRequest, headers: Connect.Headers) async -> ResponseMessage<Ond_V1_DeleteSessionsResponse>
 
     /// Returns the caller's totals, streaks, and recent history.
     ///
@@ -56,7 +56,7 @@ public protocol Breathe_V1_JourneyServiceClientInterface: Sendable {
     /// the sessions file does not — and pages through it with `page_token` until
     /// no token comes back.
     @available(iOS 13, *)
-    func `getJourney`(request: Breathe_V1_GetJourneyRequest, headers: Connect.Headers) async -> ResponseMessage<Breathe_V1_GetJourneyResponse>
+    func `getJourney`(request: Ond_V1_GetJourneyRequest, headers: Connect.Headers) async -> ResponseMessage<Ond_V1_GetJourneyResponse>
 
     /// Records one BOLT-style controlled-pause measurement.
     ///
@@ -64,7 +64,7 @@ public protocol Breathe_V1_JourneyServiceClientInterface: Sendable {
     /// and stops — so the server's job is to keep the history and answer whether
     /// this one is their best.
     @available(iOS 13, *)
-    func `recordBoltScore`(request: Breathe_V1_RecordBoltScoreRequest, headers: Connect.Headers) async -> ResponseMessage<Breathe_V1_RecordBoltScoreResponse>
+    func `recordBoltScore`(request: Ond_V1_RecordBoltScoreRequest, headers: Connect.Headers) async -> ResponseMessage<Ond_V1_RecordBoltScoreResponse>
 
     /// Returns a board's leading entries plus where the caller stands on it.
     ///
@@ -72,11 +72,11 @@ public protocol Breathe_V1_JourneyServiceClientInterface: Sendable {
     /// with a score is counted in the ranking. Someone with no display name is
     /// therefore invisible to others and still knows their own position.
     @available(iOS 13, *)
-    func `getLeaderboard`(request: Breathe_V1_GetLeaderboardRequest, headers: Connect.Headers) async -> ResponseMessage<Breathe_V1_GetLeaderboardResponse>
+    func `getLeaderboard`(request: Ond_V1_GetLeaderboardRequest, headers: Connect.Headers) async -> ResponseMessage<Ond_V1_GetLeaderboardResponse>
 }
 
-/// Concrete implementation of `Breathe_V1_JourneyServiceClientInterface`.
-public final class Breathe_V1_JourneyServiceClient: Breathe_V1_JourneyServiceClientInterface, Sendable {
+/// Concrete implementation of `Ond_V1_JourneyServiceClientInterface`.
+public final class Ond_V1_JourneyServiceClient: Ond_V1_JourneyServiceClientInterface, Sendable {
     private let client: Connect.ProtocolClientInterface
 
     public init(client: Connect.ProtocolClientInterface) {
@@ -84,37 +84,37 @@ public final class Breathe_V1_JourneyServiceClient: Breathe_V1_JourneyServiceCli
     }
 
     @available(iOS 13, *)
-    public func `recordSessions`(request: Breathe_V1_RecordSessionsRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Breathe_V1_RecordSessionsResponse> {
-        return await self.client.unary(path: "/breathe.v1.JourneyService/RecordSessions", idempotencyLevel: .unknown, request: request, headers: headers)
+    public func `recordSessions`(request: Ond_V1_RecordSessionsRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Ond_V1_RecordSessionsResponse> {
+        return await self.client.unary(path: "/ond.v1.JourneyService/RecordSessions", idempotencyLevel: .unknown, request: request, headers: headers)
     }
 
     @available(iOS 13, *)
-    public func `deleteSessions`(request: Breathe_V1_DeleteSessionsRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Breathe_V1_DeleteSessionsResponse> {
-        return await self.client.unary(path: "/breathe.v1.JourneyService/DeleteSessions", idempotencyLevel: .unknown, request: request, headers: headers)
+    public func `deleteSessions`(request: Ond_V1_DeleteSessionsRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Ond_V1_DeleteSessionsResponse> {
+        return await self.client.unary(path: "/ond.v1.JourneyService/DeleteSessions", idempotencyLevel: .unknown, request: request, headers: headers)
     }
 
     @available(iOS 13, *)
-    public func `getJourney`(request: Breathe_V1_GetJourneyRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Breathe_V1_GetJourneyResponse> {
-        return await self.client.unary(path: "/breathe.v1.JourneyService/GetJourney", idempotencyLevel: .unknown, request: request, headers: headers)
+    public func `getJourney`(request: Ond_V1_GetJourneyRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Ond_V1_GetJourneyResponse> {
+        return await self.client.unary(path: "/ond.v1.JourneyService/GetJourney", idempotencyLevel: .unknown, request: request, headers: headers)
     }
 
     @available(iOS 13, *)
-    public func `recordBoltScore`(request: Breathe_V1_RecordBoltScoreRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Breathe_V1_RecordBoltScoreResponse> {
-        return await self.client.unary(path: "/breathe.v1.JourneyService/RecordBoltScore", idempotencyLevel: .unknown, request: request, headers: headers)
+    public func `recordBoltScore`(request: Ond_V1_RecordBoltScoreRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Ond_V1_RecordBoltScoreResponse> {
+        return await self.client.unary(path: "/ond.v1.JourneyService/RecordBoltScore", idempotencyLevel: .unknown, request: request, headers: headers)
     }
 
     @available(iOS 13, *)
-    public func `getLeaderboard`(request: Breathe_V1_GetLeaderboardRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Breathe_V1_GetLeaderboardResponse> {
-        return await self.client.unary(path: "/breathe.v1.JourneyService/GetLeaderboard", idempotencyLevel: .unknown, request: request, headers: headers)
+    public func `getLeaderboard`(request: Ond_V1_GetLeaderboardRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Ond_V1_GetLeaderboardResponse> {
+        return await self.client.unary(path: "/ond.v1.JourneyService/GetLeaderboard", idempotencyLevel: .unknown, request: request, headers: headers)
     }
 
     public enum Metadata {
         public enum Methods {
-            public static let recordSessions = Connect.MethodSpec(name: "RecordSessions", service: "breathe.v1.JourneyService", type: .unary)
-            public static let deleteSessions = Connect.MethodSpec(name: "DeleteSessions", service: "breathe.v1.JourneyService", type: .unary)
-            public static let getJourney = Connect.MethodSpec(name: "GetJourney", service: "breathe.v1.JourneyService", type: .unary)
-            public static let recordBoltScore = Connect.MethodSpec(name: "RecordBoltScore", service: "breathe.v1.JourneyService", type: .unary)
-            public static let getLeaderboard = Connect.MethodSpec(name: "GetLeaderboard", service: "breathe.v1.JourneyService", type: .unary)
+            public static let recordSessions = Connect.MethodSpec(name: "RecordSessions", service: "ond.v1.JourneyService", type: .unary)
+            public static let deleteSessions = Connect.MethodSpec(name: "DeleteSessions", service: "ond.v1.JourneyService", type: .unary)
+            public static let getJourney = Connect.MethodSpec(name: "GetJourney", service: "ond.v1.JourneyService", type: .unary)
+            public static let recordBoltScore = Connect.MethodSpec(name: "RecordBoltScore", service: "ond.v1.JourneyService", type: .unary)
+            public static let getLeaderboard = Connect.MethodSpec(name: "GetLeaderboard", service: "ond.v1.JourneyService", type: .unary)
         }
     }
 }

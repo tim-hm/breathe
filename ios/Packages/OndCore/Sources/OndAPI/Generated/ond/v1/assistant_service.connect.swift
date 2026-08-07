@@ -2,7 +2,7 @@
 // swift-format-ignore-file
 // swiftlint:disable all
 //
-// Source: breathe/v1/assistant_service.proto
+// Source: ond/v1/assistant_service.proto
 //
 
 import Connect
@@ -14,7 +14,7 @@ import SwiftProtobuf
 /// works, written for how much breathwork they have done before.
 ///
 /// Scoped to the caller exactly like ProfileService — the anonymous identity
-/// travels in the `breathe-user-id` header and no request message carries a
+/// travels in the `ond-user-id` header and no request message carries a
 /// profile, so one client can never ask for guidance shaped by another's
 /// answers.
 ///
@@ -23,7 +23,7 @@ import SwiftProtobuf
 /// the server falls back to a rule-based answer derived from the same profile
 /// rather than failing the call. `AssistantSource` on the response says which
 /// happened, so a client can be honest about it instead of guessing.
-public protocol Breathe_V1_AssistantServiceClientInterface: Sendable {
+public protocol Ond_V1_AssistantServiceClientInterface: Sendable {
 
     /// Returns techniques to try next, best first.
     ///
@@ -31,7 +31,7 @@ public protocol Breathe_V1_AssistantServiceClientInterface: Sendable {
     /// ranking is derived from, and a client that sent its own copy would let a
     /// stale one decide what it is told.
     @available(iOS 13, *)
-    func `getRecommendation`(request: Breathe_V1_GetRecommendationRequest, headers: Connect.Headers) async -> ResponseMessage<Breathe_V1_GetRecommendationResponse>
+    func `getRecommendation`(request: Ond_V1_GetRecommendationRequest, headers: Connect.Headers) async -> ResponseMessage<Ond_V1_GetRecommendationResponse>
 
     /// Streams an explanation of why one technique works.
     ///
@@ -40,7 +40,7 @@ public protocol Breathe_V1_AssistantServiceClientInterface: Sendable {
     /// immediately, where a unary call would show a spinner for as long as the
     /// model takes to finish.
     @available(iOS 13, *)
-    func `explainTechnique`(headers: Connect.Headers) -> any Connect.ServerOnlyAsyncStreamInterface<Breathe_V1_ExplainTechniqueRequest, Breathe_V1_ExplainTechniqueResponse>
+    func `explainTechnique`(headers: Connect.Headers) -> any Connect.ServerOnlyAsyncStreamInterface<Ond_V1_ExplainTechniqueRequest, Ond_V1_ExplainTechniqueResponse>
 
     /// Streams the coach's reply to one message in a conversation.
     ///
@@ -53,11 +53,11 @@ public protocol Breathe_V1_AssistantServiceClientInterface: Sendable {
     /// no reply is persisted or logged anywhere. The transcript lives on the
     /// device, and each call carries as much of it as the client wants read back.
     @available(iOS 13, *)
-    func `chat`(headers: Connect.Headers) -> any Connect.ServerOnlyAsyncStreamInterface<Breathe_V1_ChatRequest, Breathe_V1_ChatResponse>
+    func `chat`(headers: Connect.Headers) -> any Connect.ServerOnlyAsyncStreamInterface<Ond_V1_ChatRequest, Ond_V1_ChatResponse>
 }
 
-/// Concrete implementation of `Breathe_V1_AssistantServiceClientInterface`.
-public final class Breathe_V1_AssistantServiceClient: Breathe_V1_AssistantServiceClientInterface, Sendable {
+/// Concrete implementation of `Ond_V1_AssistantServiceClientInterface`.
+public final class Ond_V1_AssistantServiceClient: Ond_V1_AssistantServiceClientInterface, Sendable {
     private let client: Connect.ProtocolClientInterface
 
     public init(client: Connect.ProtocolClientInterface) {
@@ -65,25 +65,25 @@ public final class Breathe_V1_AssistantServiceClient: Breathe_V1_AssistantServic
     }
 
     @available(iOS 13, *)
-    public func `getRecommendation`(request: Breathe_V1_GetRecommendationRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Breathe_V1_GetRecommendationResponse> {
-        return await self.client.unary(path: "/breathe.v1.AssistantService/GetRecommendation", idempotencyLevel: .unknown, request: request, headers: headers)
+    public func `getRecommendation`(request: Ond_V1_GetRecommendationRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Ond_V1_GetRecommendationResponse> {
+        return await self.client.unary(path: "/ond.v1.AssistantService/GetRecommendation", idempotencyLevel: .unknown, request: request, headers: headers)
     }
 
     @available(iOS 13, *)
-    public func `explainTechnique`(headers: Connect.Headers = [:]) -> any Connect.ServerOnlyAsyncStreamInterface<Breathe_V1_ExplainTechniqueRequest, Breathe_V1_ExplainTechniqueResponse> {
-        return self.client.serverOnlyStream(path: "/breathe.v1.AssistantService/ExplainTechnique", headers: headers)
+    public func `explainTechnique`(headers: Connect.Headers = [:]) -> any Connect.ServerOnlyAsyncStreamInterface<Ond_V1_ExplainTechniqueRequest, Ond_V1_ExplainTechniqueResponse> {
+        return self.client.serverOnlyStream(path: "/ond.v1.AssistantService/ExplainTechnique", headers: headers)
     }
 
     @available(iOS 13, *)
-    public func `chat`(headers: Connect.Headers = [:]) -> any Connect.ServerOnlyAsyncStreamInterface<Breathe_V1_ChatRequest, Breathe_V1_ChatResponse> {
-        return self.client.serverOnlyStream(path: "/breathe.v1.AssistantService/Chat", headers: headers)
+    public func `chat`(headers: Connect.Headers = [:]) -> any Connect.ServerOnlyAsyncStreamInterface<Ond_V1_ChatRequest, Ond_V1_ChatResponse> {
+        return self.client.serverOnlyStream(path: "/ond.v1.AssistantService/Chat", headers: headers)
     }
 
     public enum Metadata {
         public enum Methods {
-            public static let getRecommendation = Connect.MethodSpec(name: "GetRecommendation", service: "breathe.v1.AssistantService", type: .unary)
-            public static let explainTechnique = Connect.MethodSpec(name: "ExplainTechnique", service: "breathe.v1.AssistantService", type: .serverStream)
-            public static let chat = Connect.MethodSpec(name: "Chat", service: "breathe.v1.AssistantService", type: .serverStream)
+            public static let getRecommendation = Connect.MethodSpec(name: "GetRecommendation", service: "ond.v1.AssistantService", type: .unary)
+            public static let explainTechnique = Connect.MethodSpec(name: "ExplainTechnique", service: "ond.v1.AssistantService", type: .serverStream)
+            public static let chat = Connect.MethodSpec(name: "Chat", service: "ond.v1.AssistantService", type: .serverStream)
         }
     }
 }

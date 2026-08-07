@@ -25,7 +25,7 @@ ondbreathe.app {
 	# file_server and 404s. Stated here as well as there because an unset
 	# BREATHE_ENV falls back to dev — the gate in the binary fails open, and this
 	# is what still says no to a box booted without it.
-	@api path /breathe.v1.* /health /about
+	@api path /ond.v1.* /health /about
 
 	handle @api {
 		reverse_proxy api:18100

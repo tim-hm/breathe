@@ -1,13 +1,13 @@
 syntax = "proto3";
 
-package breathe.v1;
+package ond.v1;
 
-import "breathe/v1/technique_service.proto";
+import "ond/v1/technique_service.proto";
 
 // ProfileService reads and writes the answers a person gave at onboarding.
 //
 // Unlike TechniqueService, every RPC here is scoped to a caller: the anonymous
-// identity travels in the `breathe-user-id` header, and a call without one is
+// identity travels in the `ond-user-id` header, and a call without one is
 // UNAUTHENTICATED. There is no id in any request message, so one client can
 // never read another's profile by guessing a value.
 service ProfileService {

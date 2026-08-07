@@ -73,7 +73,7 @@ use crate::state::AppState;
 
 /// Assembles the one router that answers both protocols.
 ///
-/// gRPC paths are `/breathe.v1.<Service>/<Method>` and can never collide with
+/// gRPC paths are `/ond.v1.<Service>/<Method>` and can never collide with
 /// the JSON routes (`/health`, `/about`), so HTTP matches first and anything
 /// unmatched falls through to gRPC.
 pub fn build_app(state: Arc<AppState>) -> Result<Router> {

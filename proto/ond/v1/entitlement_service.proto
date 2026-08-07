@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package breathe.v1;
+package ond.v1;
 
 import "google/protobuf/timestamp.proto";
 
@@ -20,7 +20,7 @@ import "google/protobuf/timestamp.proto";
 // enforces what does not.
 //
 // Scoped to the caller exactly like ProfileService — the anonymous identity
-// travels in the `breathe-user-id` header and no request message carries an id.
+// travels in the `ond-user-id` header and no request message carries an id.
 service EntitlementService {
   // Verifies a StoreKit signed transaction and stores what it grants.
   //

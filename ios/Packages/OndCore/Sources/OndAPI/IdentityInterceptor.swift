@@ -14,7 +14,7 @@ import Foundation
 /// minted after the client was built is still picked up.
 public final class IdentityInterceptor: UnaryInterceptor {
     /// The header the server reads. Lowercase because gRPC metadata keys are.
-    public static let headerName = "breathe-user-id"
+    public static let headerName = "ond-user-id"
 
     private let userId: @Sendable () -> UUID?
 

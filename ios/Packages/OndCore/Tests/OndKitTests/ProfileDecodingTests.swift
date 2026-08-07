@@ -6,13 +6,13 @@ import Testing
 @Suite("Decoding proto profiles into domain types")
 struct ProfileDecodingTests {
     private func protoProfile(
-        goals: [Breathe_V1_TechniqueGoal] = [],
-        experienceLevel: Breathe_V1_ExperienceLevel = .unspecified,
-        reminderIntensity: Breathe_V1_ReminderIntensity = .never,
+        goals: [Ond_V1_TechniqueGoal] = [],
+        experienceLevel: Ond_V1_ExperienceLevel = .unspecified,
+        reminderIntensity: Ond_V1_ReminderIntensity = .never,
         intentNote: String = "",
-        gender: Breathe_V1_Gender = .unspecified
-    ) -> Breathe_V1_Profile {
-        var profile = Breathe_V1_Profile()
+        gender: Ond_V1_Gender = .unspecified
+    ) -> Ond_V1_Profile {
+        var profile = Ond_V1_Profile()
         profile.goals = goals
         profile.experienceLevel = experienceLevel
         profile.reminderIntensity = reminderIntensity

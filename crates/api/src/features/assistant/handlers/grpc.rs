@@ -6,8 +6,8 @@ use tonic::{Request, Response, Status};
 
 use crate::features::assistant::service::{self, ExplanationStream};
 use crate::identity;
-use crate::proto::breathe::v1::assistant_service_server::AssistantService;
-use crate::proto::breathe::v1::{
+use crate::proto::ond::v1::assistant_service_server::AssistantService;
+use crate::proto::ond::v1::{
     ChatRequest, ExplainTechniqueRequest, GetRecommendationRequest, GetRecommendationResponse,
 };
 use crate::state::AppState;

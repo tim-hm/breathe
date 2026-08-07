@@ -27,9 +27,9 @@ use crate::state::AppState;
 /// The header every client sends its anonymous id in.
 ///
 /// Lowercase because gRPC metadata keys are, and a client that sends
-/// `Breathe-User-Id` over HTTP/2 sends an invalid header rather than a
+/// `Ond-User-Id` over HTTP/2 sends an invalid header rather than a
 /// mixed-case one.
-pub const USER_ID_HEADER: &str = "breathe-user-id";
+pub const USER_ID_HEADER: &str = "ond-user-id";
 
 /// The caller, placed in the request extensions for handlers to read.
 ///

@@ -2,7 +2,7 @@ import Foundation
 
 /// The outcome a technique is chosen for.
 ///
-/// Distinct from the generated `Breathe_V1_TechniqueGoal` on purpose: that type
+/// Distinct from the generated `Ond_V1_TechniqueGoal` on purpose: that type
 /// carries an `UNSPECIFIED` case the wire format can always produce, and every
 /// view that switched over it would need a branch for a value that means
 /// "the server and this app disagree". Decoding resolves that once, here.

@@ -12,7 +12,7 @@ use super::repository::{self, LeaderboardRow};
 use super::types::{LeaderboardBoard, LeaderboardScope};
 use crate::features::profile::service as profile;
 use crate::identity::UserId;
-use crate::proto::breathe::v1 as pb;
+use crate::proto::ond::v1 as pb;
 
 /// How many named entries a board returns.
 const LEADERBOARD_LIMIT: i64 = 20;

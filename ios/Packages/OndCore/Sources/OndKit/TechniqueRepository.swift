@@ -31,7 +31,7 @@ public protocol TechniqueReading: Sendable {
 }
 
 public struct TechniqueRepository: TechniqueReading {
-    private let client: Breathe_V1_TechniqueServiceClient
+    private let client: Ond_V1_TechniqueServiceClient
 
     /// Takes the identity even though the catalogue is public: the server
     /// creates a person's row on the first RPC of any kind, and this is the
@@ -41,7 +41,7 @@ public struct TechniqueRepository: TechniqueReading {
     }
 
     public func listTechniques() async throws -> [Technique] {
-        let response = await client.listTechniques(request: Breathe_V1_ListTechniquesRequest())
+        let response = await client.listTechniques(request: Ond_V1_ListTechniquesRequest())
 
         guard let message = response.message else {
             // `ResponseMessage` carries either a message or an error; a nil
@@ -56,7 +56,7 @@ public struct TechniqueRepository: TechniqueReading {
     }
 
     public func listFoundations() async throws -> [FoundationTopic] {
-        let response = await client.listFoundations(request: Breathe_V1_ListFoundationsRequest())
+        let response = await client.listFoundations(request: Ond_V1_ListFoundationsRequest())
 
         guard let message = response.message else {
             throw TechniqueRepositoryError.transport(
@@ -69,7 +69,7 @@ public struct TechniqueRepository: TechniqueReading {
 }
 
 extension Technique {
-    init(proto: Breathe_V1_Technique) throws {
+    init(proto: Ond_V1_Technique) throws {
         guard let goal = TechniqueGoal(proto: proto.goal) else {
             throw TechniqueRepositoryError.malformedResponse(
                 "technique `\(proto.slug)` has unrecognised goal `\(proto.goal)`"
@@ -116,7 +116,7 @@ extension Technique {
 extension Stage {
     /// Takes the technique's slug only to name it in a failure — a stage has no
     /// identity of its own beyond its position.
-    init(proto: Breathe_V1_Stage, slug: String) throws {
+    init(proto: Ond_V1_Stage, slug: String) throws {
         guard !proto.phases.isEmpty else {
             throw TechniqueRepositoryError.malformedResponse(
                 "technique `\(slug)` has a stage with no phases"
@@ -138,7 +138,7 @@ extension Stage {
 }
 
 extension Phase {
-    init(proto: Breathe_V1_Phase) throws {
+    init(proto: Ond_V1_Phase) throws {
         guard let kind = PhaseKind(proto: proto.kind) else {
             throw TechniqueRepositoryError.malformedResponse(
                 "unrecognised phase kind `\(proto.kind)`"
@@ -170,7 +170,7 @@ extension Phase {
 extension FoundationTopic {
     /// Total, unlike the technique decoders: every field is a string this app
     /// only ever displays, so there is no value here it could fail to represent.
-    init(proto: Breathe_V1_FoundationTopic) {
+    init(proto: Ond_V1_FoundationTopic) {
         self.init(slug: proto.slug, question: proto.question, answer: proto.answer)
     }
 }
@@ -179,7 +179,7 @@ extension TechniqueGoal {
     /// Returns nil for `UNSPECIFIED` and for any case added to the proto after
     /// this app shipped — both mean the same thing to a running client, and both
     /// must be a decode failure rather than a silent default.
-    init?(proto: Breathe_V1_TechniqueGoal) {
+    init?(proto: Ond_V1_TechniqueGoal) {
         switch proto {
         case .calm: self = .calm
         case .sleep: self = .sleep
@@ -195,7 +195,7 @@ extension TechniqueGoal {
     /// both halves of this mapping have to change together, and the asymmetry
     /// over `unspecified` — rejected coming in, unrepresentable going out — is
     /// only reviewable if they sit next to each other.
-    var proto: Breathe_V1_TechniqueGoal {
+    var proto: Ond_V1_TechniqueGoal {
         switch self {
         case .calm: .calm
         case .sleep: .sleep
@@ -207,7 +207,7 @@ extension TechniqueGoal {
 }
 
 extension PhaseKind {
-    init?(proto: Breathe_V1_PhaseKind) {
+    init?(proto: Ond_V1_PhaseKind) {
         switch proto {
         case .inhale: self = .inhale
         case .holdIn: self = .holdIn

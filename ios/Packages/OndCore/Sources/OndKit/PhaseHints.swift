@@ -11,7 +11,7 @@ import Foundation
 /// drops the hints rather than pinning "left nostril" to the wrong breath.
 ///
 /// Client-side because the contract has nowhere to put it yet. Its home is a
-/// `hint` field on `breathe.v1.Phase`, seeded beside the durations; that
+/// `hint` field on `ond.v1.Phase`, seeded beside the durations; that
 /// change retires this table and its shape check together.
 public enum PhaseHints {
     /// Hints for `technique`, indexed `[stage][phase]` to match

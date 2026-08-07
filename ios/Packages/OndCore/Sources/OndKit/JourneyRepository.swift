@@ -98,14 +98,14 @@ public protocol JourneySyncing: Sendable {
 /// The only type that touches the generated journey types, mirroring
 /// `TechniqueRepository` and `ProfileRepository`.
 public struct JourneyRepository: JourneySyncing {
-    private let client: Breathe_V1_JourneyServiceClient
+    private let client: Ond_V1_JourneyServiceClient
 
     public init(baseURL: URL, identity: any UserIdentityStore) {
         client = OndClients.journeyService(baseURL: baseURL, userId: identity.userId)
     }
 
     public func record(_ sessions: [SessionRecord]) async throws {
-        var request = Breathe_V1_RecordSessionsRequest()
+        var request = Ond_V1_RecordSessionsRequest()
         // One unrepresentable session fails the batch rather than being dropped
         // from it, matching what the server does with a batch it cannot accept:
         // a send silently short of what the caller handed over is worse than a
@@ -122,7 +122,7 @@ public struct JourneyRepository: JourneySyncing {
     }
 
     public func delete(_ ids: [SessionRecord.ID]) async throws {
-        var request = Breathe_V1_DeleteSessionsRequest()
+        var request = Ond_V1_DeleteSessionsRequest()
         request.clientSessionIds = ids.map(\.uuidString)
 
         let response = await client.deleteSessions(request: request)
@@ -135,7 +135,7 @@ public struct JourneyRepository: JourneySyncing {
     }
 
     public func record(_ score: BoltScore) async throws {
-        var request = Breathe_V1_RecordBoltScoreRequest()
+        var request = Ond_V1_RecordBoltScoreRequest()
         request.clientScoreID = score.id.uuidString
         request.seconds = try onTheWire(score.seconds, "a pause in seconds", of: score.id)
         let measured = try timestampParts(score.measuredAt)
@@ -152,7 +152,7 @@ public struct JourneyRepository: JourneySyncing {
     }
 
     public func storedSessions(after pageToken: String?) async throws -> StoredSessionPage {
-        var request = Breathe_V1_GetJourneyRequest()
+        var request = Ond_V1_GetJourneyRequest()
         request.utcOffsetMinutes = Self.utcOffsetMinutes
         request.limit = Self.restorePageSize
         if let pageToken {
@@ -177,7 +177,7 @@ public struct JourneyRepository: JourneySyncing {
         _ board: LeaderboardBoard,
         scope: LeaderboardScope
     ) async throws -> Leaderboard {
-        var request = Breathe_V1_GetLeaderboardRequest()
+        var request = Ond_V1_GetLeaderboardRequest()
         request.board = board.proto
         request.scope = scope.proto
         request.utcOffsetMinutes = Self.utcOffsetMinutes
@@ -241,7 +241,7 @@ public struct JourneyRepository: JourneySyncing {
 }
 
 extension SessionRecord {
-    init(proto: Breathe_V1_SessionRecord) throws {
+    init(proto: Ond_V1_SessionRecord) throws {
         guard let id = UUID(uuidString: proto.clientSessionID) else {
             throw JourneyRepositoryError.malformedResponse(
                 "`\(proto.clientSessionID)` is not a session id"
@@ -263,9 +263,9 @@ extension SessionRecord {
     /// arrives from `sessions.json` — a file `SessionRecord`'s own doc promises
     /// a person can read, which a backup can restore and `JSONFileStore.load()`
     /// range-checks not at all — and lands in an unsigned 32-bit field.
-    var proto: Breathe_V1_SessionRecord {
+    var proto: Ond_V1_SessionRecord {
         get throws {
-            var message = Breathe_V1_SessionRecord()
+            var message = Ond_V1_SessionRecord()
             message.clientSessionID = id.uuidString
             message.techniqueSlug = techniqueSlug
             let started = try timestampParts(startedAt)
@@ -327,7 +327,7 @@ private func onTheWire(_ value: Int, _ name: String, of owner: UUID) throws -> U
 }
 
 extension LeaderboardBoard {
-    var proto: Breathe_V1_LeaderboardBoard {
+    var proto: Ond_V1_LeaderboardBoard {
         switch self {
         case .streak: .streak
         case .minutes30d: .minutes30D
@@ -337,7 +337,7 @@ extension LeaderboardBoard {
 }
 
 extension LeaderboardScope {
-    var proto: Breathe_V1_LeaderboardScope {
+    var proto: Ond_V1_LeaderboardScope {
         switch self {
         case .global: .global
         case .ageBand: .ageBand

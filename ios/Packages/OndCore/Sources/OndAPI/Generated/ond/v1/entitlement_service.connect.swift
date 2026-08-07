@@ -2,7 +2,7 @@
 // swift-format-ignore-file
 // swiftlint:disable all
 //
-// Source: breathe/v1/entitlement_service.proto
+// Source: ond/v1/entitlement_service.proto
 //
 
 import Connect
@@ -25,8 +25,8 @@ import SwiftProtobuf
 /// enforces what does not.
 ///
 /// Scoped to the caller exactly like ProfileService — the anonymous identity
-/// travels in the `breathe-user-id` header and no request message carries an id.
-public protocol Breathe_V1_EntitlementServiceClientInterface: Sendable {
+/// travels in the `ond-user-id` header and no request message carries an id.
+public protocol Ond_V1_EntitlementServiceClientInterface: Sendable {
 
     /// Verifies a StoreKit signed transaction and stores what it grants.
     ///
@@ -38,18 +38,18 @@ public protocol Breathe_V1_EntitlementServiceClientInterface: Sendable {
     /// JWS on every launch — which is exactly what the retry-on-next-launch client
     /// does — writes the same entitlement rather than a second one or an error.
     @available(iOS 13, *)
-    func `submitAppStoreTransaction`(request: Breathe_V1_SubmitAppStoreTransactionRequest, headers: Connect.Headers) async -> ResponseMessage<Breathe_V1_SubmitAppStoreTransactionResponse>
+    func `submitAppStoreTransaction`(request: Ond_V1_SubmitAppStoreTransactionRequest, headers: Connect.Headers) async -> ResponseMessage<Ond_V1_SubmitAppStoreTransactionResponse>
 
     /// Returns what the server currently believes the caller is entitled to.
     ///
     /// Never NOT_FOUND: a caller who has never purchased anything is FREE, which is
     /// a state rather than an absence.
     @available(iOS 13, *)
-    func `getEntitlement`(request: Breathe_V1_GetEntitlementRequest, headers: Connect.Headers) async -> ResponseMessage<Breathe_V1_GetEntitlementResponse>
+    func `getEntitlement`(request: Ond_V1_GetEntitlementRequest, headers: Connect.Headers) async -> ResponseMessage<Ond_V1_GetEntitlementResponse>
 }
 
-/// Concrete implementation of `Breathe_V1_EntitlementServiceClientInterface`.
-public final class Breathe_V1_EntitlementServiceClient: Breathe_V1_EntitlementServiceClientInterface, Sendable {
+/// Concrete implementation of `Ond_V1_EntitlementServiceClientInterface`.
+public final class Ond_V1_EntitlementServiceClient: Ond_V1_EntitlementServiceClientInterface, Sendable {
     private let client: Connect.ProtocolClientInterface
 
     public init(client: Connect.ProtocolClientInterface) {
@@ -57,19 +57,19 @@ public final class Breathe_V1_EntitlementServiceClient: Breathe_V1_EntitlementSe
     }
 
     @available(iOS 13, *)
-    public func `submitAppStoreTransaction`(request: Breathe_V1_SubmitAppStoreTransactionRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Breathe_V1_SubmitAppStoreTransactionResponse> {
-        return await self.client.unary(path: "/breathe.v1.EntitlementService/SubmitAppStoreTransaction", idempotencyLevel: .unknown, request: request, headers: headers)
+    public func `submitAppStoreTransaction`(request: Ond_V1_SubmitAppStoreTransactionRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Ond_V1_SubmitAppStoreTransactionResponse> {
+        return await self.client.unary(path: "/ond.v1.EntitlementService/SubmitAppStoreTransaction", idempotencyLevel: .unknown, request: request, headers: headers)
     }
 
     @available(iOS 13, *)
-    public func `getEntitlement`(request: Breathe_V1_GetEntitlementRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Breathe_V1_GetEntitlementResponse> {
-        return await self.client.unary(path: "/breathe.v1.EntitlementService/GetEntitlement", idempotencyLevel: .unknown, request: request, headers: headers)
+    public func `getEntitlement`(request: Ond_V1_GetEntitlementRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Ond_V1_GetEntitlementResponse> {
+        return await self.client.unary(path: "/ond.v1.EntitlementService/GetEntitlement", idempotencyLevel: .unknown, request: request, headers: headers)
     }
 
     public enum Metadata {
         public enum Methods {
-            public static let submitAppStoreTransaction = Connect.MethodSpec(name: "SubmitAppStoreTransaction", service: "breathe.v1.EntitlementService", type: .unary)
-            public static let getEntitlement = Connect.MethodSpec(name: "GetEntitlement", service: "breathe.v1.EntitlementService", type: .unary)
+            public static let submitAppStoreTransaction = Connect.MethodSpec(name: "SubmitAppStoreTransaction", service: "ond.v1.EntitlementService", type: .unary)
+            public static let getEntitlement = Connect.MethodSpec(name: "GetEntitlement", service: "ond.v1.EntitlementService", type: .unary)
         }
     }
 }

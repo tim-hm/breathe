@@ -38,14 +38,14 @@ public protocol EntitlementSyncing: Sendable {
 /// The only type that touches the generated entitlement types, mirroring
 /// `ProfileRepository`.
 public struct EntitlementRepository: EntitlementSyncing {
-    private let client: Breathe_V1_EntitlementServiceClient
+    private let client: Ond_V1_EntitlementServiceClient
 
     public init(baseURL: URL, identity: any UserIdentityStore) {
         client = OndClients.entitlementService(baseURL: baseURL, userId: identity.userId)
     }
 
     public func submit(_ signedTransaction: String) async throws {
-        var request = Breathe_V1_SubmitAppStoreTransactionRequest()
+        var request = Ond_V1_SubmitAppStoreTransactionRequest()
         request.signedTransaction = signedTransaction
 
         let response = await client.submitAppStoreTransaction(request: request)
