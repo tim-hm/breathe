@@ -14,7 +14,13 @@ cargo-binstall = "latest"
 
 # Kept in lockstep with Cargo.toml's `rust-version`. A dependency can raise the
 # real floor without declaring it, and then only a fresh clone finds out.
-rust = "1.96"
+#
+# The components are load-bearing: mise installs Rust through rustup, and a
+# toolchain it installs itself carries neither rustfmt nor clippy, so `check:rs`
+# dies with "'cargo-fmt' is not installed for the toolchain". A machine that
+# already has its own rustup never sees this — mise adopts that installation,
+# components and all — which is why this only ever failed on CI.
+rust = { version = "1.96", components = ["rustfmt", "clippy"] }
 
 buf = "latest"
 # Load-bearing despite buf handling Swift generation: crates/api/build.rs runs
