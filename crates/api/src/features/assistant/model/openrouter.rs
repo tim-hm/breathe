@@ -239,7 +239,18 @@ impl ModelClient for OpenRouterClient {
             // whole line is in hand.
             let mut buffer: Vec<u8> = Vec::new();
 
-            loop {
+            // A stream that opens and then yields nothing is a failure, not an
+            // empty answer. Without this the receiver completes cleanly with no
+            // frames, the RPC ends OK, and the client — which appends the
+            // running total and only speaks up on a thrown error — shows the
+            // person nothing at all for a message they watched themselves send.
+            let mut answered = false;
+
+            // Broken out of rather than returned from, so that the silence
+            // check below sees every clean end. The `return`s inside are the
+            // paths that must skip it: either nobody is listening any more, or
+            // a failure is already on its way down the channel.
+            'stream: loop {
                 // Races the next frame against the client going away. Without
                 // the second arm, a reader who closed the screen mid-answer is
                 // only noticed on the following `send`, which for a slow
@@ -249,9 +260,9 @@ impl ModelClient for OpenRouterClient {
                     () = sender.closed() => return,
                 };
 
-                let Some(frame) = frame else {
-                    return;
-                };
+                // End of body without a `[DONE]`, which this endpoint sends
+                // often enough that it is not itself a failure.
+                let Some(frame) = frame else { break 'stream };
 
                 let frame = match frame {
                     Ok(frame) => frame,
@@ -273,7 +284,15 @@ impl ModelClient for OpenRouterClient {
                     buffer.drain(..=newline);
 
                     match event {
-                        Event::Done => return,
+                        Event::Done => break 'stream,
+                        Event::Failed(code) => {
+                            // Sent without logging it here: `model_chunks` logs
+                            // every `Err` it forwards, and this message carries
+                            // the code, so a line here would be the same event
+                            // recorded twice.
+                            drop(sender.send(Err(mid_stream_failure(code.as_ref()))).await);
+                            return;
+                        }
                         Event::Text(text) if !text.is_empty() => {
                             if let Some(started) = started.take() {
                                 tracing::info!(
@@ -284,13 +303,31 @@ impl ModelClient for OpenRouterClient {
                                 );
                             }
 
+                            // Whitespace is forwarded — it is the space between
+                            // words — but it does not count as having answered,
+                            // the same judgement `complete` makes with `trim`.
+                            // A stream of nothing but blanks is silence with
+                            // extra steps, and lands as an empty coach turn.
+                            let said_something = !text.trim().is_empty();
+
                             if sender.send(Ok(text)).await.is_err() {
                                 return;
                             }
+                            answered = answered || said_something;
                         }
                         Event::Text(_) | Event::Ignored => {}
                     }
                 }
+            }
+
+            if !answered {
+                drop(
+                    sender
+                        .send(Err(ModelError::Failed(
+                            "the provider's stream carried no content".to_owned(),
+                        )))
+                        .await,
+                );
             }
         });
 
@@ -300,12 +337,27 @@ impl ModelClient for OpenRouterClient {
     }
 }
 
+/// A failure the provider reported inside an open stream, named by its code.
+///
+/// Named rather than inline to keep the decoder's `Failed` arm a single line;
+/// the code is all there is to report, for the reason [`StreamError`] gives.
+fn mid_stream_failure(code: Option<&ErrorCode>) -> ModelError {
+    ModelError::Failed(match code.and_then(ErrorCode::reported) {
+        Some(code) => format!("the provider reported {code} mid-stream"),
+        None => "the provider reported a failure mid-stream".to_owned(),
+    })
+}
+
 /// One SSE line, reduced to what matters.
 enum Event {
     /// Text to append to the explanation.
     Text(String),
     /// The provider said the stream is over.
     Done,
+    /// The provider reported a failure inside a stream it had already opened —
+    /// how a rate limit or an upstream outage arrives once the response is
+    /// committed to a 200 and the headers are long gone.
+    Failed(Option<ErrorCode>),
     /// A comment, a blank line, or a frame carrying no delta — every stream has
     /// several, and none of them is an error.
     Ignored,
@@ -324,6 +376,13 @@ fn parse_event(line: &str) -> Event {
     let Ok(frame) = serde_json::from_str::<StreamFrame>(payload) else {
         return Event::Ignored;
     };
+
+    // Before the deltas: a frame carrying both is not a thing this endpoint
+    // sends, and an error that fell through to `Ignored` is the failure mode
+    // this arm exists to stop.
+    if let Some(error) = frame.error {
+        return Event::Failed(error.code);
+    }
 
     frame
         .choices
@@ -409,14 +468,67 @@ struct ChoiceMessage {
 struct StreamFrame {
     #[serde(default)]
     choices: Vec<StreamChoice>,
+    /// Present only on a failure the provider reports mid-stream. Absent on
+    /// every ordinary frame, which is why it is optional rather than a separate
+    /// type tried in turn.
+    #[serde(default)]
+    error: Option<StreamError>,
+}
+
+/// A mid-stream failure, reduced to the one field that is safe to keep.
+///
+/// The sibling `message` is deliberately not read. It is the same hazard the
+/// non-success branch of [`OpenRouterClient::post`] documents: a moderation
+/// refusal quotes the input back, so the message is the person's own words and
+/// must not reach a log or an error string.
+#[derive(Deserialize)]
+struct StreamError {
+    #[serde(default)]
+    code: Option<ErrorCode>,
+}
+
+/// The code on a mid-stream failure, in whichever shape it arrives.
+///
+/// Total by construction, and that is the point rather than tolerance for its
+/// own sake: `serde` applies `default` only to an absent field, never to one
+/// whose type surprised it, so a `code` this enum could refuse would fail the
+/// whole frame's parse — and a frame that fails to parse reads as [`Event::Ignored`],
+/// which is precisely the silent truncation the error arm exists to prevent.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum ErrorCode {
+    /// An HTTP-ish status, the common shape.
+    Number(i64),
+    /// A slug such as `rate_limit_exceeded`.
+    Text(String),
+    /// Any other shape, matched only so it cannot fail the frame. The value is
+    /// deliberately discarded as it is read: nothing here may be reported,
+    /// because a nested object could carry the provider's `message`.
+    Unknown(serde::de::IgnoredAny),
+}
+
+impl ErrorCode {
+    /// The code as it can safely be named, or `None` for a shape that might
+    /// carry prose.
+    fn reported(&self) -> Option<String> {
+        match self {
+            Self::Number(code) => Some(code.to_string()),
+            Self::Text(code) => Some(code.clone()),
+            Self::Unknown(_) => None,
+        }
+    }
 }
 
 #[derive(Deserialize)]
 struct StreamChoice {
+    /// Absent on the frames that carry a `finish_reason` and nothing else.
+    /// Required, those frames fail to parse — and an error frame that also
+    /// carries one would take the failure down with it.
+    #[serde(default)]
     delta: Delta,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 struct Delta {
     #[serde(default)]
     content: Option<String>,
@@ -453,5 +565,77 @@ mod tests {
     #[test]
     fn a_malformed_frame_is_skipped() {
         assert!(matches!(parse_event("data: {not json"), Event::Ignored));
+    }
+
+    /// How a rate limit or an upstream outage arrives once the response has
+    /// already committed to a 200. Read as `Ignored` this decodes as a stream
+    /// that simply stopped, which the caller cannot tell from a finished answer.
+    ///
+    /// Both frames carry a `message` and neither result does: the code is the
+    /// only field [`StreamError`] takes, which is what keeps a moderation
+    /// refusal's quoted input out of the error string.
+    #[test]
+    fn a_mid_stream_error_frame_fails_the_stream() {
+        assert!(matches!(
+            parse_event(r#"data: {"error":{"code":429,"message":"rate limited"}}"#),
+            Event::Failed(Some(ErrorCode::Number(429)))
+        ));
+        assert!(matches!(
+            parse_event(r#"data: {"error":{"message":"upstream is unwell"}}"#),
+            Event::Failed(None)
+        ));
+    }
+
+    /// Every one of these decodes as `Ignored` if the frame's types are drawn
+    /// tighter than the provider actually sends — and `Ignored` is the silent
+    /// truncation the error arm exists to prevent, so a shape surprise here
+    /// costs the whole fix rather than one field.
+    #[test]
+    fn an_error_frame_survives_every_shape_its_code_arrives_in() {
+        for frame in [
+            r#"data: {"error":{"code":"rate_limit_exceeded"}}"#,
+            r#"data: {"error":{"code":{"kind":"nested"}}}"#,
+            r#"data: {"error":{"code":null}}"#,
+            // An error alongside the finish_reason-only choice it arrives with.
+            r#"data: {"error":{"code":429},"choices":[{"index":0,"finish_reason":"error"}]}"#,
+        ] {
+            assert!(
+                matches!(parse_event(frame), Event::Failed(_)),
+                "read as anything but a failure, this frame is silence: {frame}"
+            );
+        }
+    }
+
+    /// A slug is reported as itself; a shape that could nest the provider's
+    /// `message` is reported as no code at all rather than rendered.
+    #[test]
+    fn only_a_scalar_code_is_named() {
+        let reported = |frame: &str| match parse_event(frame) {
+            Event::Failed(code) => mid_stream_failure(code.as_ref()).to_string(),
+            _ => panic!("an error frame fails the stream: {frame}"),
+        };
+
+        assert!(
+            reported(r#"data: {"error":{"code":"rate_limit_exceeded"}}"#)
+                .contains("rate_limit_exceeded")
+        );
+
+        let nested = reported(r#"data: {"error":{"code":{"note":"flagged: my private words"}}}"#);
+        assert!(!nested.contains("my private words"));
+        assert!(
+            nested.ends_with("the provider reported a failure mid-stream"),
+            "a shape that could nest prose is named as no code at all: {nested}"
+        );
+    }
+
+    /// The frames that carry a `finish_reason` and no `delta` at all. Required,
+    /// `delta` makes these fail to parse, and every one of them then reads as a
+    /// stream that simply stopped.
+    #[test]
+    fn a_frame_with_no_delta_is_merely_ignored() {
+        assert!(matches!(
+            parse_event(r#"data: {"choices":[{"index":0,"finish_reason":"stop"}]}"#),
+            Event::Ignored
+        ));
     }
 }

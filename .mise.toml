@@ -114,6 +114,42 @@ run = "cargo run -p migrate"
 description = "Query the local database (SQL on stdin)"
 run = "docker compose exec -T db psql -U postgres -d ond"
 
+[tasks."dev:coach"]
+description = "Grant Coach to a local user for a year (arg: user id, or the newest user)"
+depends = ["dev:db"]
+# Writes what a real App Store purchase would have. A simulator purchase cannot
+# — docs/contributing.md explains why under things that will bite you.
+#
+# Both columns together: `users_subscription_is_whole` requires the tier and the
+# expiry to be set or absent as a pair.
+usage = 'arg "[user]" help="The user id to grant. Defaults to the most recently created user."'
+run = """
+set -e
+# `-q` so a command tag ("UPDATE 0") stays out of the captured output below.
+db() { docker compose exec -T db psql -qv ON_ERROR_STOP=1 -U postgres -d ond "$@"; }
+
+id="${usage_user:-}"
+if [ -z "$id" ]; then
+  id=$(db -tAc 'select id from users order by created_at desc limit 1')
+  if [ -z "$id" ]; then
+    echo "no users yet — open the app once so it creates one" >&2
+    exit 1
+  fi
+  echo "no user id given, using the newest: $id"
+fi
+
+# `returning` rather than trusting the exit status: psql reports UPDATE 0 as a
+# success, so a typo'd id would otherwise look exactly like a granted one — and
+# this task exists for the case where the coach already appears broken.
+granted=$(db -tAc "update users set subscription_tier = 'COACH', \
+  subscription_until = now() + interval '1 year' where id = '$id' returning id;")
+if [ -z "$granted" ]; then
+  echo "no user with id $id" >&2
+  exit 1
+fi
+echo "granted Coach to $granted for a year"
+"""
+
 [tasks."build:release"]
 description = "Build the API release binary (what a deployment ships)"
 env = { CARGO_TARGET_DIR = "{{env.CHECK_TARGET_DIR}}" }
