@@ -208,10 +208,6 @@ struct SessionView: View {
                     // conveys.
                     .accessibilityElement(children: .combine)
                 }
-
-                ProgressView(value: model.progress(at: elapsed))
-                    .tint(model.technique.goal.accent)
-                    .accessibilityLabel("Session progress")
             }
         }
     }
@@ -229,6 +225,7 @@ struct SessionView: View {
                 BreathVisual(
                     beat: model.currentBeat,
                     elapsed: model.elapsed,
+                    progress: model.progress(at: model.elapsed),
                     accent: model.technique.goal.accent
                 )
                 .accessibilityHidden(true)
@@ -307,7 +304,12 @@ struct SessionView: View {
     /// only phase display there is, so it carries the label itself.
     @ViewBuilder
     private func breathVisual(beat: SessionTimeline.Beat?, elapsed: Duration) -> some View {
-        let visual = BreathVisual(beat: beat, elapsed: elapsed, accent: model.technique.goal.accent)
+        let visual = BreathVisual(
+            beat: beat,
+            elapsed: elapsed,
+            progress: model.progress(at: elapsed),
+            accent: model.technique.goal.accent
+        )
 
         if settings.guidance == .full {
             visual.accessibilityHidden(true)
