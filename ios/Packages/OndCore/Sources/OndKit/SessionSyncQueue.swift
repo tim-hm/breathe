@@ -38,6 +38,20 @@ public actor SessionSyncQueue {
     private let tombstones: (any TombstoneStoring)?
     private let ledger: SyncLedger
 
+    /// Whether a restore has walked the server's history to the end since this
+    /// queue was built.
+    ///
+    /// Restore is the one step here that reaches the server whether or not
+    /// anything is outstanding: it asks for history this device may have lost,
+    /// and nothing local can predict the answer. That question is worth asking
+    /// once a run — only a reinstall makes it return anything — and `sync()` is
+    /// called on every visit to the journey, which under a tab bar is as often
+    /// as somebody taps it.
+    ///
+    /// Set only where the walk finished. A run that threw leaves this false, so
+    /// a device that launched with no signal still restores on a later one.
+    private var hasRestored = false
+
     /// - Parameter tombstones: where deletions wait for the server. Optional
     ///   because `SessionRecording` cannot express it — a caller that has only
     ///   the recording seam still syncs, it just never drains deletions, which
@@ -59,9 +73,10 @@ public actor SessionSyncQueue {
     /// Sends whatever the server has not acknowledged, then takes back anything
     /// it holds that this device has lost.
     ///
-    /// Safe to call on every foreground and after every session: it returns
-    /// almost immediately when there is nothing outstanding, and being an actor
-    /// is what stops two of those overlapping into a double send.
+    /// Safe to call on every foreground, after every session, and on every
+    /// appearance of the journey: with nothing outstanding it touches the
+    /// network not at all once the restore below has run, and being an actor is
+    /// what stops two of those overlapping into a double send.
     ///
     /// - Returns: whether the local stores changed, which only a restore can do.
     ///   Sending changes nothing on this device, so a caller that re-reads on
@@ -76,6 +91,8 @@ public actor SessionSyncQueue {
         await sendDeletions()
         await sendSessions()
         await sendScores()
+
+        guard !hasRestored else { return false }
         return await restore()
     }
 
@@ -189,7 +206,10 @@ public actor SessionSyncQueue {
                     ledger.acknowledge(page.sessions.map(\.id), at: Self.acknowledgedSessionsKey)
                 }
 
-                guard let next = page.nextPageToken else { return changed }
+                guard let next = page.nextPageToken else {
+                    hasRestored = true
+                    return changed
+                }
                 pageToken = next
             } catch {
                 Self.logger
@@ -200,6 +220,11 @@ public actor SessionSyncQueue {
             }
         }
 
+        // Counted as restored even though the history was not exhausted. The
+        // ceiling can only mean the server is handing back a token it should
+        // not, and retrying on every appearance would multiply that bug by
+        // every tap on the tab rather than by every launch.
+        hasRestored = true
         Self.logger.error("journey restore stopped at the page ceiling")
         return changed
     }

@@ -74,6 +74,10 @@ struct SessionSyncQueueTests {
         private(set) var received: [UUID] = []
         private(set) var receivedScores: [UUID] = []
         private(set) var deleted: [UUID] = []
+        /// How many times the restore has asked for a page, reachable or not —
+        /// what tells a sync that skipped the round trip from one that made it
+        /// and found nothing.
+        private(set) var restoreCalls = 0
         private var isReachable: Bool
         private var held: [SessionRecord]
 
@@ -110,6 +114,7 @@ struct SessionSyncQueueTests {
         /// a queue that stopped after the first page fails here rather than
         /// only against Postgres.
         func storedSessions(after pageToken: String?) async throws -> StoredSessionPage {
+            restoreCalls += 1
             guard isReachable else { throw Offline() }
 
             let start = pageToken.flatMap(Int.init) ?? 0
@@ -249,8 +254,58 @@ struct SessionSyncQueueTests {
         )
         #expect(await server.received.isEmpty, "and none of it was echoed back")
 
-        #expect(await !queue.sync(), "a second run finds nothing new on any page")
+        #expect(await !queue.sync(), "and a second run brings nothing new back")
         #expect(await sessions.stored.count == held.count)
+    }
+
+    /// The journey tab is a `.task`, so it re-runs on every switch back to it.
+    /// Restore is the one step that reaches the server with nothing outstanding
+    /// — left unguarded it turned every tap on the tab into a round trip, and a
+    /// paging one on any install with real history.
+    @Test("A restore that has already run does not question the server again")
+    func aCompletedRestoreIsNotRepeated() async {
+        let server = ServerSpy(held: [session(-48)])
+        let queue = SessionSyncQueue(
+            sessions: SessionSpy(),
+            scores: ScoreSpy(),
+            journeys: server,
+            ledger: SyncLedger(defaults: defaults())
+        )
+
+        await queue.sync()
+        let afterFirst = await server.restoreCalls
+        #expect(afterFirst > 0, "the first run has to ask, or a reinstall stays empty")
+
+        await queue.sync()
+        await queue.sync()
+        #expect(
+            await server.restoreCalls == afterFirst,
+            "two further appearances cost nothing on the wire"
+        )
+    }
+
+    /// The other half of that guard: "already run" has to mean the walk
+    /// finished, not that it was attempted. A device launched in a tunnel would
+    /// otherwise never restore, and a reinstall on it would stay empty for the
+    /// life of the install.
+    @Test("A restore that failed is asked again on the next run")
+    func aFailedRestoreIsRetried() async {
+        let theirs = session(-48)
+        let sessions = SessionSpy()
+        let server = ServerSpy(isReachable: false, held: [theirs])
+        let queue = SessionSyncQueue(
+            sessions: sessions,
+            scores: ScoreSpy(),
+            journeys: server,
+            ledger: SyncLedger(defaults: defaults())
+        )
+
+        await queue.sync()
+        #expect(await sessions.stored.isEmpty)
+
+        await server.comeBackOnline()
+        #expect(await queue.sync(), "the retry is what brings the history back")
+        #expect(await sessions.stored.map(\.id) == [theirs.id])
     }
 
     /// The deletion round trip, and the reason it is a round trip at all: the
