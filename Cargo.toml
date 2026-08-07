@@ -12,7 +12,7 @@ axum = "0.8"
 # The three base64url segments of an App Store signed transaction. Already in
 # the binary through rustls; named here because `features/entitlement` decodes
 # a JWS itself rather than through a library that hides the encoding.
-base64 = "0.22"
+base64 = "0.23"
 chrono = { version = "0.4", features = ["serde"] }
 cuid2 = "0.1"
 prost = "0.14"
