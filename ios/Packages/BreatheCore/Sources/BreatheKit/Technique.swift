@@ -194,11 +194,12 @@ public extension TechniqueGoal {
 
     /// The intent without its "I want to" prefix, for the home screen's
     /// wheel, which renders the prefix as a fixed label beside the options.
+    /// One word each, so the spun-past neighbours read at a glance.
     var intentObject: String {
         switch self {
-        case .calm: "calm down"
-        case .sleep: "go to sleep"
-        case .energy: "wake up"
+        case .calm: "relax"
+        case .sleep: "sleep"
+        case .energy: "wake"
         case .reset: "reset"
         case .focus: "focus"
         }
@@ -206,6 +207,18 @@ public extension TechniqueGoal {
 }
 
 public extension PhaseKind {
+    /// Whether the breath is being held rather than moving.
+    ///
+    /// The distinction both breath guides key their colour off: a hold is the
+    /// one phase where nothing is scaling, so with cues off the colour is all
+    /// that marks the change.
+    var isHold: Bool {
+        switch self {
+        case .holdIn, .holdOut: true
+        case .inhale, .exhale: false
+        }
+    }
+
     /// What to do, on screen. Two words, present tense, legible at a glance
     /// through half-closed eyes.
     var instruction: String {

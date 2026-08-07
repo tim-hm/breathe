@@ -118,42 +118,8 @@ struct BreathRhythmChart: View {
     }
 }
 
-/// The rhythm at row scale: the same line the detail screen draws, small
-/// enough to sit at the trailing edge of a catalogue card. No captions, no
-/// area wash — at this size the line is the whole message.
-struct BreathRhythmSparkline: View {
-    let technique: Technique
-
-    private static let lineWidth: CGFloat = 1.5
-
-    var body: some View {
-        let rhythm = BreathRhythm(technique: technique)
-        let accent = technique.goal.accent
-
-        GeometryReader { geometry in
-            RhythmGeometry.line(rhythm, in: geometry.size, dashed: false, inset: Self.lineWidth)
-                .stroke(
-                    accent.opacity(0.85),
-                    style: StrokeStyle(
-                        lineWidth: Self.lineWidth,
-                        lineCap: .round,
-                        lineJoin: .round
-                    )
-                )
-            RhythmGeometry.line(rhythm, in: geometry.size, dashed: true, inset: Self.lineWidth)
-                .stroke(
-                    accent.opacity(0.5),
-                    style: StrokeStyle(lineWidth: Self.lineWidth, lineCap: .round, dash: [3, 4])
-                )
-        }
-        .frame(width: 64, height: 28)
-        // Decoration for the row it sits in; the row's text carries the facts.
-        .accessibilityHidden(true)
-    }
-}
-
-/// Path building shared by the chart and the sparkline, so the two can never
-/// draw the same technique differently.
+/// Path building for the chart's line and the wash under it, so the stroke and
+/// the fill can never disagree about where the curve goes.
 private enum RhythmGeometry {
     /// The rhythm's line. Solid and dashed segments are separate paths because
     /// one stroke style applies per path — the pen still travels through every

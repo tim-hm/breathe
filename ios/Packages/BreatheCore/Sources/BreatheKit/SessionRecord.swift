@@ -46,6 +46,33 @@ public struct SessionRecord: Sendable, Codable, Equatable, Identifiable {
     public var duration: Duration {
         .milliseconds(durationMs)
     }
+
+    /// What a summary leads with.
+    ///
+    /// Here rather than in either summary screen because the product's copy
+    /// rule is a rule: celebrate what happened, never grade it. Two views of
+    /// the same session — one in the hand, one on the wrist — saying different
+    /// things about it is exactly the drift that turns a rule into a habit
+    /// somebody remembered.
+    public var headline: String {
+        if completed {
+            "Nicely done."
+        } else if cyclesCompleted > 0 {
+            "Every cycle counts."
+        } else {
+            "Every breath counts."
+        }
+    }
+
+    /// "cycle" or "cycles", for the count beside it.
+    public var cyclesLabel: String {
+        cyclesCompleted == 1 ? "cycle" : "cycles"
+    }
+
+    /// "breath" or "breaths", for the count beside it.
+    public var breathsLabel: String {
+        breathCount == 1 ? "breath" : "breaths"
+    }
 }
 
 /// Somewhere to keep finished sessions until there is a server to send them to.

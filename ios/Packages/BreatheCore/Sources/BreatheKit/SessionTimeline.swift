@@ -58,6 +58,39 @@ public struct SessionTimeline: Sendable, Equatable {
             let offset = Double(elapsed.milliseconds - start.milliseconds) / Double(span)
             return min(max(offset, 0), 1)
         }
+
+        /// How empty a breath ever looks. Not zero: lungs at rest still hold
+        /// air, and a visual that collapsed to a point would say otherwise.
+        public static let emptyLungs = 0.45
+
+        /// How full the lungs are at `elapsed`, from `emptyLungs` to 1.
+        ///
+        /// The number both apps draw their breath guide from — the phone scales
+        /// an orb with it, the watch a disc — which is why it is arithmetic here
+        /// rather than in either view. A shape is a rendering decision; how full
+        /// somebody's lungs are at a given instant is not.
+        ///
+        /// Smoothstepped rather than linear: a breath does not change pace at
+        /// its boundaries, and a linear ramp visibly stops dead at the top of an
+        /// inhale.
+        public func lungFullness(at elapsed: Duration) -> Double {
+            let full = 1.0
+            let progress = fraction(at: elapsed)
+            let eased = progress * progress * (3 - 2 * progress)
+
+            return switch kind {
+            case .inhale: Self.emptyLungs + (full - Self.emptyLungs) * eased
+            case .exhale: full - (full - Self.emptyLungs) * eased
+            case .holdIn: full
+            case .holdOut: Self.emptyLungs
+            }
+        }
+
+        /// Whole seconds left in this beat, counting down and never below one —
+        /// the last second of a phase is still a second of it.
+        public func secondsRemaining(at elapsed: Duration) -> Int {
+            max(Int((end - elapsed).seconds.rounded(.up)), 1)
+        }
     }
 
     /// Every beat of the session, in play order.

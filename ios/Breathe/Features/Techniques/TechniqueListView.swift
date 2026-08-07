@@ -108,7 +108,8 @@ private struct TechniqueRow: View {
 
             Spacer(minLength: 0)
 
-            BreathRhythmSparkline(technique: technique)
+            TechniqueGlyph(technique: technique)
+                .frame(width: 64, height: 34)
         }
         .padding(.vertical, Theme.Spacing.close)
     }

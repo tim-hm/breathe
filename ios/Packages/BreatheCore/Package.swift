@@ -15,7 +15,11 @@ let package = Package(
     // seconds. Without it SwiftPM assumes macOS 10.13 and refuses to link
     // Connect, leaving a booted simulator as the only way to run a unit test —
     // which is not a dependency a decoding test should have.
-    platforms: [.iOS(.v18), .macOS(.v14)],
+    //
+    // watchOS 11 is the floor that pairs with iOS 18 — the watch app ships
+    // alongside the phone app, so the two move together rather than the wrist
+    // dragging a lower floor into the shared targets.
+    platforms: [.iOS(.v18), .macOS(.v14), .watchOS(.v11)],
     products: [
         .library(name: "BreatheKit", targets: ["BreatheKit"]),
         .library(name: "BreatheUI", targets: ["BreatheUI"]),
