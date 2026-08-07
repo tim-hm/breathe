@@ -163,8 +163,8 @@ private struct TechniqueRow: View {
 
             Spacer(minLength: 0)
 
-            TechniqueGlyph(technique: technique)
-                .frame(width: 64, height: 34)
+            BreathRhythmMark(technique: technique)
+                .frame(width: 88, height: 40)
         }
         .padding(.vertical, Theme.Spacing.close)
     }

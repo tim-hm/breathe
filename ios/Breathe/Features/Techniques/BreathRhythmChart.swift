@@ -3,12 +3,17 @@ import BreatheStyle
 import BreatheUI
 import SwiftUI
 
-/// The technique's rhythm as a line — lung fullness across one round, drawn
-/// from the same dialled values the session will play. Because it reads the
-/// dialled technique, it redraws live as the Advanced dials move, which is
-/// half the point: the exhale visibly lengthens while the person drags it.
+/// The exercise's rhythm as a line — lung fullness across one round, drawn from
+/// the same dialled values the session will play. Because it reads the dialled
+/// exercise, it redraws live as the Advanced dials move, which is half the
+/// point: the exhale visibly lengthens while the person drags it.
+///
+/// The list row draws the same curve at row size through `BreathRhythmMark`.
+/// Both stand on `RhythmGeometry` and `RhythmInk`, so an exercise is the same
+/// shape in the same colours wherever it appears; what this one adds is the
+/// stage dividers, the repeat counts, the nostril hints, and the key.
 struct BreathRhythmChart: View {
-    /// The dialled technique, not the curated one — the chart is a preview of
+    /// The dialled exercise, not the curated one — the chart is a preview of
     /// the session the Begin button starts.
     let technique: Technique
 
@@ -32,20 +37,9 @@ struct BreathRhythmChart: View {
                         )
                     )
 
-                RhythmGeometry.line(rhythm, in: size, dashed: false, inset: Self.lineWidth)
-                    .stroke(
-                        accent,
-                        style: StrokeStyle(
-                            lineWidth: Self.lineWidth,
-                            lineCap: .round,
-                            lineJoin: .round
-                        )
-                    )
-                RhythmGeometry.line(rhythm, in: size, dashed: true, inset: Self.lineWidth)
-                    .stroke(
-                        accent.opacity(0.7),
-                        style: StrokeStyle(lineWidth: Self.lineWidth, lineCap: .round, dash: [4, 5])
-                    )
+                ForEach(RhythmInk.allCases, id: \.self) { ink in
+                    strokes(of: rhythm, ink: ink, accent: accent, in: size)
+                }
 
                 ForEach(Array(rhythm.bands.dropFirst().enumerated()), id: \.offset) { _, band in
                     Path { path in
@@ -59,14 +53,47 @@ struct BreathRhythmChart: View {
 
             bandCaptions(of: rhythm)
             hintCaptions(of: rhythm, hints: hints)
+            key(of: rhythm, accent: accent)
         }
-        // The phase capsules directly below say the same thing as text, so
-        // VoiceOver gets one description instead of a picture of it.
+        // The key below names the colours, and the phase capsules further down
+        // say the same thing as text, so VoiceOver gets a description rather
+        // than a picture of one.
         .accessibilityHidden(true)
     }
 
+    /// One ink's share of the line, in two passes: the segments the clock owns
+    /// and the segments the person does. Dashing is a separate axis from colour
+    /// — it marks an open-ended stage, where the durations describe a typical
+    /// pass rather than a scheduled one.
+    private func strokes(
+        of rhythm: BreathRhythm,
+        ink: RhythmInk,
+        accent: Color,
+        in size: CGSize
+    ) -> some View {
+        let colour = ink.colour(on: accent)
+
+        return ZStack {
+            RhythmGeometry.line(rhythm, in: size, inset: Self.lineWidth) { segment in
+                RhythmInk(segment.kind) == ink && !segment.dashed
+            }
+            .stroke(
+                colour,
+                style: StrokeStyle(lineWidth: Self.lineWidth, lineCap: .round, lineJoin: .round)
+            )
+
+            RhythmGeometry.line(rhythm, in: size, inset: Self.lineWidth) { segment in
+                RhythmInk(segment.kind) == ink && segment.dashed
+            }
+            .stroke(
+                colour,
+                style: StrokeStyle(lineWidth: Self.lineWidth, lineCap: .round, dash: [4, 5])
+            )
+        }
+    }
+
     /// "×30" under each stage that repeats, aligned to its band. Only drawn
-    /// when there are stages to tell apart — a cyclic technique's repeat count
+    /// when there are stages to tell apart — a cyclic exercise's repeat count
     /// is already the headline of the length control.
     @ViewBuilder
     private func bandCaptions(of rhythm: BreathRhythm) -> some View {
@@ -117,94 +144,26 @@ struct BreathRhythmChart: View {
             .frame(height: 14)
         }
     }
-}
 
-/// Path building for the chart's line and the wash under it, so the stroke and
-/// the fill can never disagree about where the curve goes.
-private enum RhythmGeometry {
-    /// The rhythm's line. Solid and dashed segments are separate paths because
-    /// one stroke style applies per path — the pen still travels through every
-    /// segment so each piece starts where the previous one ended.
-    static func line(
-        _ rhythm: BreathRhythm,
-        in size: CGSize,
-        dashed: Bool,
-        inset: CGFloat
-    ) -> Path {
-        Path { path in
-            for segment in rhythm.segments {
-                let start = point(
-                    x: segment.start,
-                    level: segment.startLevel,
-                    in: size,
-                    inset: inset
-                )
-                let end = point(x: segment.end, level: segment.endLevel, in: size, inset: inset)
-
-                if segment.dashed != dashed {
-                    path.move(to: end)
-                    continue
+    /// What the colours mean, in three words or fewer.
+    ///
+    /// The direction of the curve says it too, but only once you know to look;
+    /// a dash of each colour beside its word is what makes the first glance
+    /// legible. Deliberately not repeated in the list row, where there is no
+    /// room and nothing to decide.
+    private func key(of rhythm: BreathRhythm, accent: Color) -> some View {
+        HStack(spacing: Theme.Spacing.standard) {
+            ForEach(RhythmInk.present(in: rhythm), id: \.self) { ink in
+                HStack(spacing: Theme.Spacing.tight) {
+                    Capsule()
+                        .fill(ink.colour(on: accent))
+                        .frame(width: 12, height: 3)
+                    Text(ink.word)
+                        .font(.caption2)
+                        .foregroundStyle(Theme.Ink.tertiary)
                 }
-                if path.currentPoint != start {
-                    path.move(to: start)
-                }
-
-                add(segment, from: start, to: end, into: &path)
             }
         }
-    }
-
-    /// The full line regardless of dashing, closed down to the baseline, so
-    /// the wash under the curve never splits where the stroke does.
-    static func area(_ rhythm: BreathRhythm, in size: CGSize, inset: CGFloat) -> Path {
-        var path = Path()
-        guard let first = rhythm.segments.first else { return path }
-
-        path.move(to: CGPoint(x: 0, y: size.height))
-        path.addLine(to: point(x: first.start, level: first.startLevel, in: size, inset: inset))
-        for segment in rhythm.segments {
-            let start = point(x: segment.start, level: segment.startLevel, in: size, inset: inset)
-            let end = point(x: segment.end, level: segment.endLevel, in: size, inset: inset)
-            add(segment, from: start, to: end, into: &path)
-        }
-        path.addLine(to: CGPoint(x: size.width, y: size.height))
-        path.closeSubpath()
-        return path
-    }
-
-    private static func add(
-        _ segment: BreathRhythm.Segment,
-        from start: CGPoint,
-        to end: CGPoint,
-        into path: inout Path
-    ) {
-        switch segment.kind {
-        case .inhale, .exhale:
-            // An S-curve, like the orb's smoothstepped scale: a breath does
-            // not change pace at its boundaries.
-            let middle = (start.x + end.x) / 2
-            path.addCurve(
-                to: end,
-                control1: CGPoint(x: middle, y: start.y),
-                control2: CGPoint(x: middle, y: end.y)
-            )
-        case .holdIn, .holdOut:
-            path.addLine(to: end)
-        }
-    }
-
-    /// Normalised rhythm coordinates to points. The vertical inset keeps a
-    /// full-lung plateau's stroke inside the frame instead of shaving its top
-    /// half off.
-    private static func point(
-        x: Double,
-        level: Double,
-        in size: CGSize,
-        inset: CGFloat
-    ) -> CGPoint {
-        CGPoint(
-            x: x * size.width,
-            y: inset + (1 - level) * (size.height - inset * 2)
-        )
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
