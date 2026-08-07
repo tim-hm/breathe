@@ -30,6 +30,21 @@ pub mod assistant {
     pub use crate::features::assistant::types::daily_model_calls;
 }
 
+/// The journey feature's practice snapshot, published on the same terms as
+/// `assistant`.
+///
+/// No RPC serves it — it is prompt input for the assistant, which reads it
+/// in-crate — so `tests/e2e` has to name it here to drive the aggregates over
+/// real inserts. The window and top-`N` behaviours live in SQL, which no unit
+/// test can reach.
+pub mod journey {
+    pub use crate::features::journey::bolt::types::BoltSnapshot;
+    pub use crate::features::journey::sessions::service::practice_snapshot;
+    pub use crate::features::journey::sessions::types::{
+        MAX_SNAPSHOT_TECHNIQUES, PRACTICE_WINDOW_DAYS, PracticeSnapshot, TechniquePractice,
+    };
+}
+
 /// The App Store signature seam, published on the same terms as `assistant`.
 ///
 /// `Tier` travels with it because the allowance is a function of one, so a test

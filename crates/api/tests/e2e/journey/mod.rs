@@ -1,10 +1,11 @@
 //! `JourneyService` over the wire the iOS client uses.
 //!
-//! Split the three ways the feature is: the history a person records, the
-//! controlled pauses they measure, and the boards that rank everyone. The
-//! fixtures sit here rather than in each file because all three build sessions
-//! and identities the same way, and three copies of `session()` would be three
-//! places for a test's arithmetic to drift.
+//! Split the ways the feature is: the history a person records, the controlled
+//! pauses they measure, the boards that rank everyone — and the practice
+//! snapshot derived from the first two. The fixtures sit here rather than in
+//! each file because all of them build sessions and identities the same way,
+//! and four copies of `session()` would be four places for a test's arithmetic
+//! to drift.
 
 use api::identity::USER_ID_HEADER;
 use api::proto::breathe::v1 as pb;
@@ -15,6 +16,7 @@ use crate::harness::{GrpcWebResponse, TestDatabase, call_grpc_web_with};
 mod bolt;
 mod leaderboard;
 mod sessions;
+mod snapshot;
 
 const RECORD_SESSIONS: &str = "/breathe.v1.JourneyService/RecordSessions";
 const DELETE_SESSIONS: &str = "/breathe.v1.JourneyService/DeleteSessions";
@@ -120,8 +122,8 @@ async fn journey_page(
 
 /// Derives the score id from the measurement, so it is stable across runs and a
 /// failing test leaves a row someone can go and look at. Distinct scores get
-/// distinct ids, which is all any test here needs; `bolt_with` is for the one
-/// that deliberately resends the same id.
+/// distinct ids, which is all any test here needs; `bolt_with` is for the ones
+/// that deliberately resend an id or place a measurement in time.
 async fn bolt_score(
     db: &TestDatabase,
     user: &str,
@@ -132,6 +134,7 @@ async fn bolt_score(
         user,
         &format!("aaaaaaaa-0000-4000-8000-{seconds:012}"),
         seconds,
+        None,
     )
     .await
 }
@@ -141,6 +144,7 @@ async fn bolt_with(
     user: &str,
     client_score_id: &str,
     seconds: u32,
+    measured_at: Option<DateTime<Utc>>,
 ) -> GrpcWebResponse<pb::RecordBoltScoreResponse> {
     call_grpc_web_with(
         db.app(),
@@ -148,7 +152,7 @@ async fn bolt_with(
         &pb::RecordBoltScoreRequest {
             client_score_id: client_score_id.to_owned(),
             seconds,
-            measured_at: None,
+            measured_at: measured_at.map(prost_timestamp),
         },
         &[(USER_ID_HEADER, user)],
     )

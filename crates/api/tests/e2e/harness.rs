@@ -2,7 +2,6 @@
 
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use api::assistant::{
@@ -156,12 +155,14 @@ pub async fn subscribe(pool: &PgPool, user: &str, tier: &str) {
     .expect("the subscription is written");
 }
 
-/// A model that answers from a script and counts how often it was asked.
+/// A model that answers from a script and records every request it was asked.
 ///
-/// The count is what makes the quota and the breaker observable: both are
-/// supposed to stop a call from happening at all, and a test that only checked
-/// the response could not tell "answered from the rules" apart from "called the
-/// model and ignored it".
+/// The record is what makes the rest of the feature observable from outside.
+/// The quota and the breaker are supposed to stop a call from happening at all,
+/// and a test that only checked the response could not tell "answered from the
+/// rules" apart from "called the model and ignored it" — that is [`Self::calls`].
+/// The prompt builder decides what the model is told about a person, and a test
+/// that only checked the reply could not see it — that is [`Self::requests`].
 ///
 /// In the harness rather than in one suite because two of them need it — the
 /// assistant's, which is about what the model says, and the entitlement's, which
@@ -169,7 +170,8 @@ pub async fn subscribe(pool: &PgPool, user: &str, tier: &str) {
 pub struct ScriptedModel {
     /// Replies in order; the last one repeats once the script runs out.
     replies: Mutex<Vec<Result<String, ModelError>>>,
-    calls: AtomicUsize,
+    /// Every request received, in the order the calls arrived.
+    requests: Mutex<Vec<ModelRequest>>,
 }
 
 impl ScriptedModel {
@@ -181,16 +183,29 @@ impl ScriptedModel {
     pub fn script(replies: Vec<Result<String, ModelError>>) -> Arc<Self> {
         Arc::new(Self {
             replies: Mutex::new(replies),
-            calls: AtomicUsize::new(0),
+            requests: Mutex::new(Vec::new()),
         })
     }
 
     pub fn calls(&self) -> usize {
-        self.calls.load(Ordering::Relaxed)
+        self.lock_requests().len()
     }
 
-    fn next(&self) -> Result<String, ModelError> {
-        self.calls.fetch_add(1, Ordering::Relaxed);
+    /// What the model was asked, for asserting on the prompt itself.
+    ///
+    /// Copies rather than a guard, so no lock ever leaves the harness — a held
+    /// guard would quietly deadlock the next capture, and a test double two
+    /// suites share should not come with a locking rule.
+    pub fn requests(&self) -> Vec<ModelRequest> {
+        self.lock_requests().iter().map(copy_request).collect()
+    }
+
+    fn lock_requests(&self) -> std::sync::MutexGuard<'_, Vec<ModelRequest>> {
+        self.requests.lock().expect("the requests are not poisoned")
+    }
+
+    fn next(&self, request: &ModelRequest) -> Result<String, ModelError> {
+        self.lock_requests().push(copy_request(request));
 
         let mut replies = self.replies.lock().expect("the script is not poisoned");
         if replies.len() > 1 {
@@ -204,16 +219,26 @@ impl ScriptedModel {
     }
 }
 
+/// Field by field because `ModelRequest` does not implement `Clone`, and the
+/// production seam should not grow one for a test double's sake.
+fn copy_request(request: &ModelRequest) -> ModelRequest {
+    ModelRequest {
+        cacheable_prefix: request.cacheable_prefix.clone(),
+        instruction: request.instruction.clone(),
+        max_tokens: request.max_tokens,
+    }
+}
+
 #[tonic::async_trait]
 impl ModelClient for ScriptedModel {
-    async fn complete(&self, _request: &ModelRequest) -> Result<String, ModelError> {
-        self.next()
+    async fn complete(&self, request: &ModelRequest) -> Result<String, ModelError> {
+        self.next(request)
     }
 
     /// One chunk per line, so a test can assert the client received them in the
     /// order the model wrote them.
-    async fn stream(&self, _request: &ModelRequest) -> Result<ModelStream, ModelError> {
-        let reply = self.next()?;
+    async fn stream(&self, request: &ModelRequest) -> Result<ModelStream, ModelError> {
+        let reply = self.next(request)?;
         let chunks: Vec<Result<String, ModelError>> =
             reply.lines().map(|line| Ok(line.to_owned())).collect();
 

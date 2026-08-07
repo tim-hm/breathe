@@ -11,10 +11,14 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::super::bolt;
+use super::super::bolt::types::BoltSnapshot;
 use super::super::errors::JourneyError;
 use super::super::wire::{counted, timestamp_from_proto, timestamp_to_proto, validated_offset};
-use super::repository::{self, SessionRow};
-use super::types::SessionCursor;
+use super::repository::{self, SessionRow, TechniquePracticeRow};
+use super::types::{
+    MAX_SNAPSHOT_TECHNIQUES, PRACTICE_WINDOW_DAYS, PracticeSnapshot, SessionCursor,
+    TechniquePractice,
+};
 use crate::identity::UserId;
 use crate::proto::breathe::v1 as pb;
 
@@ -226,6 +230,63 @@ pub async fn get_journey(
     })
 }
 
+/// The caller's recent practice, folded down to the aggregate the assistant
+/// reads.
+///
+/// Deliberately honest raw aggregates: the slugs are client-supplied free text,
+/// and nothing here checks them against the catalogue — the consumer holds the
+/// catalogue and decides what an unresolvable slug becomes. The three reads are
+/// concurrent for the same reason `get_journey`'s are: none depends on another,
+/// and this sits on the assistant's request path.
+pub async fn practice_snapshot(
+    pool: &PgPool,
+    user_id: UserId,
+) -> Result<PracticeSnapshot, JourneyError> {
+    let (practice, active_days, bolt) = tokio::try_join!(
+        repository::recent_practice(pool, user_id),
+        repository::active_days(pool, user_id),
+        bolt::service::bolt_snapshot(pool, user_id),
+    )?;
+
+    assemble_snapshot(practice, active_days, bolt)
+}
+
+/// Folds the grouped rows into the snapshot: totals over every group, names
+/// for only the busiest [`MAX_SNAPSHOT_TECHNIQUES`].
+///
+/// The totals sum the raw milliseconds before dividing, so a hundred short
+/// sessions do not each lose their remainder — which is why the total minutes
+/// can exceed the sum of the per-technique ones.
+fn assemble_snapshot(
+    practice: Vec<TechniquePracticeRow>,
+    active_days: i64,
+    bolt: Option<BoltSnapshot>,
+) -> Result<PracticeSnapshot, JourneyError> {
+    let total_sessions: i64 = practice.iter().map(|row| row.sessions).sum();
+    let total_duration_ms: i64 = practice.iter().map(|row| row.duration_ms).sum();
+
+    let by_technique = practice
+        .into_iter()
+        .take(MAX_SNAPSHOT_TECHNIQUES)
+        .map(|row| {
+            Ok(TechniquePractice {
+                technique_slug: row.technique_slug,
+                sessions: counted("technique_sessions", row.sessions)?,
+                minutes: counted("technique_minutes", row.duration_ms / 60_000)?,
+            })
+        })
+        .collect::<Result<Vec<_>, JourneyError>>()?;
+
+    Ok(PracticeSnapshot {
+        window_days: u32::from(PRACTICE_WINDOW_DAYS),
+        sessions: counted("snapshot_sessions", total_sessions)?,
+        minutes: counted("snapshot_minutes", total_duration_ms / 60_000)?,
+        active_days: counted("active_days", active_days)?,
+        by_technique,
+        bolt,
+    })
+}
+
 /// Narrows one submitted session to something the database accepts.
 ///
 /// Every rejection is a value the wire format admits and no session can produce.
@@ -378,5 +439,74 @@ mod tests {
         ));
 
         assert!(session_from_proto(&record(now)).is_ok());
+    }
+
+    fn practice_row(slug: &str, sessions: i64, duration_ms: i64) -> TechniquePracticeRow {
+        TechniquePracticeRow {
+            technique_slug: slug.to_owned(),
+            sessions,
+            duration_ms,
+        }
+    }
+
+    /// The cap bounds the prompt lines, not the arithmetic: the seventh
+    /// technique loses its name but never its minutes. A snapshot whose totals
+    /// only counted the named entries would understate exactly the scattered
+    /// practice the coach should be commenting on.
+    #[test]
+    fn the_cap_drops_names_but_never_totals() {
+        let rows: Vec<TechniquePracticeRow> = (0..7)
+            .map(|index| practice_row(&format!("technique-{index}"), 10 - index, 120_000))
+            .collect();
+
+        let snapshot = assemble_snapshot(rows, 5, None).expect("plausible aggregates assemble");
+
+        assert_eq!(snapshot.by_technique.len(), MAX_SNAPSHOT_TECHNIQUES);
+        assert_eq!(
+            snapshot.by_technique[0].technique_slug, "technique-0",
+            "the repository's busiest-first order is kept"
+        );
+        assert_eq!(snapshot.sessions, 10 + 9 + 8 + 7 + 6 + 5 + 4);
+        assert_eq!(snapshot.minutes, 14, "all seven techniques' minutes count");
+        assert_eq!(snapshot.active_days, 5);
+    }
+
+    /// The totals divide once over the summed milliseconds, so remainders are
+    /// not lost per technique: ninety seconds twice is three minutes, not two.
+    #[test]
+    fn total_minutes_come_from_summed_milliseconds() {
+        let rows = vec![
+            practice_row("box-breathing", 1, 90_000),
+            practice_row("four-seven-eight", 1, 90_000),
+        ];
+
+        let snapshot = assemble_snapshot(rows, 1, None).expect("plausible aggregates assemble");
+
+        assert_eq!(snapshot.minutes, 3);
+        assert_eq!(
+            snapshot.by_technique.iter().map(|t| t.minutes).sum::<u32>(),
+            2,
+            "each named entry still floors its own remainder"
+        );
+    }
+
+    /// No history is a zeroed snapshot, not an error — the assistant reads this
+    /// for a person who has never breathed, and "no practice recorded yet" is
+    /// an answer it has to be able to phrase.
+    #[test]
+    fn an_empty_history_is_a_zeroed_snapshot() {
+        let snapshot = assemble_snapshot(Vec::new(), 0, None).expect("an empty history assembles");
+
+        assert_eq!(
+            snapshot,
+            PracticeSnapshot {
+                window_days: 30,
+                sessions: 0,
+                minutes: 0,
+                active_days: 0,
+                by_technique: Vec::new(),
+                bolt: None,
+            }
+        );
     }
 }
