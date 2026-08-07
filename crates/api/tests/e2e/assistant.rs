@@ -484,8 +484,12 @@ async fn an_unknown_technique_is_not_explained() {
     assert_eq!(model.calls(), 0);
 }
 
-/// Both RPCs are scoped to a person, so a caller with no identity gets
+/// Every RPC here is scoped to a person, so a caller with no identity gets
 /// `UNAUTHENTICATED` rather than somebody else's guidance.
+///
+/// All three, including both streaming ones: a streaming RPC refuses on the
+/// status alone, before a single frame, so the assertion that matters is that
+/// nothing was streamed rather than that the fixed reply was.
 #[tokio::test]
 async fn guidance_requires_an_identity() {
     let db = TestDatabase::create("assistant_identity").await;
@@ -512,6 +516,23 @@ async fn guidance_requires_an_identity() {
     .await;
     assert_eq!(streamed.status, tonic::Code::Unauthenticated as i32);
     assert!(streamed.messages.is_empty());
+
+    let chatted = call_grpc_web_stream_with::<_, pb::ChatResponse>(
+        db.app(),
+        CHAT,
+        &pb::ChatRequest {
+            history: Vec::new(),
+            message: "hello coach".to_owned(),
+            health_context: None,
+        },
+        &[],
+    )
+    .await;
+    assert_eq!(chatted.status, tonic::Code::Unauthenticated as i32);
+    assert!(
+        chatted.messages.is_empty(),
+        "an unattributed chat answers nothing at all, not the fixed reply"
+    );
 }
 
 /// One person's spend and one person's answers stay theirs. The other caller

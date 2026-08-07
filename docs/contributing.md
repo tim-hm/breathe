@@ -78,14 +78,15 @@ CI (`.github/workflows/checks.yml`) runs the formatting and lint subset on every
 
 ## Common tasks
 
-| Intent                         | Command                                                                       |
-| :----------------------------- | :---------------------------------------------------------------------------- |
-| Wipe and rebuild the database  | `mise run dev:db:reset`                                                       |
-| Query the database             | `echo 'select * from techniques;' \| mise run db:psql`                        |
-| Change the technique catalogue | Edit `crates/migrate/src/seed.rs`, then `mise run migrate`                    |
-| Change the API contract        | Edit `proto/ond/v1/…`, then `mise run generate`                               |
-| Add a Swift file               | Create it under `ios/Ond/` or `ios/OndWatch/`; `mise run ios:gen` picks it up |
-| Build the apps headlessly      | `mise run ios:build`, `mise run ios:build:watch`                              |
+| Intent                          | Command                                                                       |
+| :------------------------------ | :---------------------------------------------------------------------------- |
+| Wipe and rebuild the database   | `mise run dev:db:reset`                                                       |
+| Query the database              | `echo 'select * from techniques;' \| mise run db:psql`                        |
+| Try the coach against the model | `mise run dev:coach [user-id]`                                                |
+| Change the technique catalogue  | Edit `crates/migrate/src/seed.rs`, then `mise run migrate`                    |
+| Change the API contract         | Edit `proto/ond/v1/…`, then `mise run generate`                               |
+| Add a Swift file                | Create it under `ios/Ond/` or `ios/OndWatch/`; `mise run ios:gen` picks it up |
+| Build the apps headlessly       | `mise run ios:build`, `mise run ios:build:watch`                              |
 
 ## Things that will bite you
 
@@ -98,3 +99,5 @@ CI (`.github/workflows/checks.yml`) runs the formatting and lint subset on every
 **Regenerated Swift is committed.** After editing a `.proto`, `mise run generate:proto` rewrites files under `ios/Packages/OndCore/Sources/OndAPI/Generated/`. Commit them; the Xcode build does not run `buf`.
 
 **Postgres 18 moved its data directory.** The compose volume mounts `/var/lib/postgresql`, not `/var/lib/postgresql/data`. Copying a volume line from an older project makes the container refuse to start with a long, easily-misread explanation.
+
+**A StoreKit purchase in the simulator does not reach the server.** Buying Coach against the local `.storekit` configuration convinces the _client_ — `SubscriptionStore` unlocks the Coach tab and every gate reads it from StoreKit — but the transaction it produces is signed locally, so `SubmitAppStoreTransaction` rejects it (`x5c` carries 1 certificate, not Apple's chain) and the server still resolves you to `FREE`. `AssistantService` reads the tier from the row, never from the request, so the coach answers with its fixed fallback and the assistant looks broken when it is doing exactly what it says. `mise run dev:coach` writes what a real purchase would have. Watch for `entitlement sync deferred` in the log — that is this, not a network problem.
