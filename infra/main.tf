@@ -40,7 +40,7 @@ module "security_group" {
   source  = "terraform-aws-modules/security-group/aws"
   version = "~> 5.0"
 
-  name        = "breathe-api"
+  name        = "ond-api"
   description = "HTTP(S) from everywhere, SSH from the admin CIDR"
   vpc_id      = data.aws_vpc.default.id
 
@@ -67,7 +67,7 @@ module "backups" {
   source  = "terraform-aws-modules/s3-bucket/aws"
   version = "~> 4.0"
 
-  bucket_prefix = "breathe-backups-"
+  bucket_prefix = "ond-backups-"
 
   # A nightly dump holds the whole `users` table, and under this identity model
   # every `users.id` *is* the bearer credential for that person's profile,
@@ -148,7 +148,7 @@ data "aws_iam_policy_document" "write_backups" {
 }
 
 resource "aws_iam_role" "api" {
-  name               = "breathe-api"
+  name               = "ond-api"
   assume_role_policy = data.aws_iam_policy_document.assume_ec2.json
 }
 
@@ -167,12 +167,12 @@ resource "aws_iam_role_policy_attachment" "ssm" {
 }
 
 resource "aws_iam_instance_profile" "api" {
-  name = "breathe-api"
+  name = "ond-api"
   role = aws_iam_role.api.name
 }
 
 resource "aws_key_pair" "admin" {
-  key_name   = "breathe-admin"
+  key_name   = "ond-admin"
   public_key = var.ssh_public_key
 }
 
@@ -180,7 +180,7 @@ module "instance" {
   source  = "terraform-aws-modules/ec2-instance/aws"
   version = "~> 6.0"
 
-  name = "breathe-api"
+  name = "ond-api"
 
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
@@ -244,7 +244,7 @@ resource "aws_ebs_volume" "data" {
   encrypted = true
 
   tags = {
-    Name = "breathe-data"
+    Name = "ond-data"
   }
 }
 
@@ -259,4 +259,29 @@ resource "aws_volume_attachment" "data" {
 resource "aws_eip" "api" {
   instance = module.instance.id
   domain   = "vpc"
+}
+
+# DNS. The zone lives here rather than at the registrar so the record and the
+# address it points at are applied together — that pairing was the one manual
+# step in a launch, and a record left pointing at a released address is a
+# failure nothing in this repo could have caught. The registrar keeps only the
+# NS delegation, which is set once and never again.
+#
+# The name must also match the site block in infra/box/Caddyfile. Caddy's
+# config is rsynced as a static file rather than rendered, so neither side can
+# derive the other; they are two literals that have to agree, and the Caddyfile
+# says so too.
+resource "aws_route53_zone" "primary" {
+  name = "ondbreathe.app"
+}
+
+resource "aws_route53_record" "apex" {
+  zone_id = aws_route53_zone.primary.zone_id
+  name    = aws_route53_zone.primary.name
+  type    = "A"
+  # Short, because the value worth changing quickly is exactly this one: an
+  # elastic IP means the record is stable in normal operation, so the only time
+  # it moves is the time somebody is waiting on it.
+  ttl     = 300
+  records = [aws_eip.api.public_ip]
 }

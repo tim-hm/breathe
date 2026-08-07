@@ -1,5 +1,5 @@
-# What runs on the box, rsynced to /srv/breathe by `mise run deploy`. The
-# ${POSTGRES_PASSWORD} interpolations read /srv/breathe/.env — a symlink onto
+# What runs on the box, rsynced to /srv/ond by `mise run deploy`. The
+# ${POSTGRES_PASSWORD} interpolations read /srv/ond/.env — a symlink onto
 # the data volume, written once at first boot by cloud-init.
 
 # Docker's json-file driver keeps everything for ever by default, and the only
@@ -36,7 +36,7 @@ services:
 
   api:
     <<: *logging
-    image: breathe-api:latest
+    image: ond-api:latest
     restart: unless-stopped
     environment:
       BREATHE_ENV: production
@@ -53,7 +53,7 @@ services:
 
   # One-shot, run by `mise run deploy` before the api restarts — never resident.
   migrate:
-    image: breathe-api:latest
+    image: ond-api:latest
     profiles:
       - tools
     command: migrate

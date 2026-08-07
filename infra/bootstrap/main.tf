@@ -100,6 +100,6 @@ output "state_bucket" {
 }
 
 output "tofu_user" {
-  description = "Run `aws iam create-access-key --user-name <this>` to mint the credential for the `breathe` profile."
+  description = "Run `aws iam create-access-key --user-name <this>` to mint the credential for the `ond` profile."
   value       = aws_iam_user.tofu.name
 }

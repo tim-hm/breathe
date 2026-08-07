@@ -3,9 +3,14 @@
 # HTTPS redirect. gRPC-Web is plain HTTP POST underneath, so an ordinary
 # reverse proxy is all the transport needs.
 #
-# The hostname's A record must point at the elastic_ip output of infra/ before
-# first boot, or certificate issuance fails and retries with backoff.
-cadence.holmie.xyz {
+# The hostname must resolve before first boot, or certificate issuance fails
+# and retries with backoff. Its A record is applied from infra/main.tf, so what
+# is actually being waited on is the NS delegation at the registrar.
+#
+# This name is the same literal as the Route53 zone in infra/main.tf. Nothing
+# renders this file — deploy rsyncs it as-is — so the two are kept in step by
+# hand, and both say so.
+ondbreathe.app {
 	# One host serves both the API and the marketing page, split by path rather
 	# than by hostname — one A record, one certificate.
 	#

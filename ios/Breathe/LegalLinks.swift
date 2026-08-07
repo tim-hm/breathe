@@ -17,12 +17,12 @@ enum LegalLinks {
     /// a page that already exists and is already agreed.
     static let termsOfUse = url("https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")
 
-    /// The page this points at does not exist yet. `cadence.holmie.xyz` is
-    /// served by the same box as the API (`infra/box/Caddyfile`), so publishing
-    /// it is a file in `web/`; App Review rejects a paywall whose privacy link
-    /// 404s, which makes it a prerequisite for the first submission rather than
-    /// for the screen that links to it.
-    static let privacyPolicy = url("https://cadence.holmie.xyz/privacy")
+    /// The page this points at does not exist yet. `ondbreathe.app` is served
+    /// by the same box as the API (`infra/box/Caddyfile`), so publishing it is
+    /// a file in `web/`; App Review rejects a paywall whose privacy link 404s,
+    /// which makes it a prerequisite for the first submission rather than for
+    /// the screen that links to it.
+    static let privacyPolicy = url("https://ondbreathe.app/privacy")
 
     private static func url(_ raw: String) -> URL {
         guard let url = URL(string: raw) else {
