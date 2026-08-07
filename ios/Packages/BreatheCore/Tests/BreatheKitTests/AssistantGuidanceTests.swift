@@ -27,7 +27,7 @@ struct AssistantGuidanceTests {
         let script = Script()
         let model = ExplanationModel(assistant: script.assistant, techniqueSlug: "extended-exhale")
 
-        model.start()
+        model.startIfNeeded()
         script.yield(ExplanationChunk(text: "A longer exhale ", source: .model))
         try await settle()
 
@@ -71,7 +71,7 @@ struct AssistantGuidanceTests {
         let script = Script()
         let model = ExplanationModel(assistant: script.assistant, techniqueSlug: "box-breathing")
 
-        model.start()
+        model.startIfNeeded()
         script.yield(ExplanationChunk(text: "The mechanism is ", source: .fallback))
         script.finish(throwing: AssistantRepositoryError.transport("the stream broke"))
         try await settle()
@@ -92,7 +92,7 @@ struct AssistantGuidanceTests {
         let script = Script()
         let model = ExplanationModel(assistant: script.assistant, techniqueSlug: "box-breathing")
 
-        model.start()
+        model.startIfNeeded()
         script.finish(throwing: AssistantRepositoryError.transport("no network"))
         try await settle()
 
@@ -106,10 +106,12 @@ struct AssistantGuidanceTests {
     func guidanceFailsQuietly() async {
         let model = GuidanceModel(assistant: FailingAssistant())
 
-        await model.load()
+        await model.loadIfNeeded()
 
-        #expect(model.guidance == nil)
-        #expect(model.isLoading == false)
+        guard case .unavailable = model.state else {
+            Issue.record("an unreachable server leaves nothing to show, not an error")
+            return
+        }
     }
 
     /// Lets the model's reader task drain what the script has yielded.
