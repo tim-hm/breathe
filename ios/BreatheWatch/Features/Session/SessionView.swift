@@ -145,7 +145,11 @@ struct SessionView: View {
 
             Text(beat?.kind.instruction ?? "")
                 .font(.caption2)
-                .foregroundStyle(Theme.Ink.secondary)
+                // Primary ink with a soft shadow, because this word sits on the
+                // disc: the accent behind it is mid-luminance, where secondary
+                // grey disappears into the colour it is read against.
+                .foregroundStyle(Theme.Ink.primary)
+                .shadow(color: .black.opacity(0.4), radius: 3)
                 .accessibilityElement()
                 .accessibilityLabel(beat?.kind.spokenInstruction ?? "")
                 .accessibilityValue(beat.map { "\($0.secondsRemaining(at: elapsed))" } ?? "")
@@ -163,7 +167,10 @@ struct SessionView: View {
                 Text(model.holdElapsed.formatted(.time(pattern: .minuteSecond)))
                     .font(.system(.title3, design: .rounded).weight(.light))
                     .monospacedDigit()
-                    .foregroundStyle(Theme.Ink.secondary)
+                    // Same contrast rule as the phase word: this count sits on
+                    // the frozen disc, not on the black ground.
+                    .foregroundStyle(Theme.Ink.primary)
+                    .shadow(color: .black.opacity(0.4), radius: 3)
                     .accessibilityLabel(model.currentBeat?.kind.spokenInstruction ?? "")
                     .accessibilityValue(model.holdElapsed.formatted(.time(pattern: .minuteSecond)))
 
