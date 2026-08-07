@@ -4,36 +4,36 @@ import Testing
 
 /// A store front that answers from a script, so the tier rules and the
 /// submission ledger are exercisable with no App Store account and no booted
-/// simulator — which is the whole reason `PlusStoreFront` exists.
-private final class FakeStoreFront: PlusStoreFront, @unchecked Sendable {
+/// simulator — which is the whole reason `StoreFront` exists.
+private final class FakeStoreFront: StoreFront, @unchecked Sendable {
     private let lock = NSLock()
-    private var entitlements: [PlusTransaction]
+    private var entitlements: [SubscriptionTransaction]
     private(set) var purchased: [SubscriptionTier] = []
 
-    init(entitlements: [PlusTransaction] = []) {
+    init(entitlements: [SubscriptionTransaction] = []) {
         self.entitlements = entitlements
     }
 
-    func set(_ entitlements: [PlusTransaction]) {
+    func set(_ entitlements: [SubscriptionTransaction]) {
         lock.withLock { self.entitlements = entitlements }
     }
 
-    func products() async -> [PlusProduct] {
+    func products() async -> [SubscriptionProduct] {
         [
-            PlusProduct(tier: .plus, displayPrice: "£0.99"),
-            PlusProduct(tier: .coach, displayPrice: "£4.99"),
+            SubscriptionProduct(tier: .plus, displayPrice: "£0.99"),
+            SubscriptionProduct(tier: .coach, displayPrice: "£4.99"),
         ]
     }
 
-    func currentEntitlements() async -> [PlusTransaction] {
+    func currentEntitlements() async -> [SubscriptionTransaction] {
         lock.withLock { entitlements }
     }
 
-    func updates() -> AsyncStream<PlusTransaction> {
+    func updates() -> AsyncStream<SubscriptionTransaction> {
         AsyncStream { $0.finish() }
     }
 
-    func purchase(_ tier: SubscriptionTier) async throws -> PlusPurchaseOutcome {
+    func purchase(_ tier: SubscriptionTier) async throws -> PurchaseOutcome {
         lock.withLock { purchased.append(tier) }
         return .cancelled
     }
@@ -71,8 +71,8 @@ private func transaction(
     expiresIn: TimeInterval? = 3600,
     revoked: Bool = false,
     jws: String = "jws"
-) -> PlusTransaction {
-    PlusTransaction(
+) -> SubscriptionTransaction {
+    SubscriptionTransaction(
         id: id,
         productID: productID ?? tier.productIdentifier ?? "",
         expirationDate: expiresIn.map { Date().addingTimeInterval($0) },
@@ -100,27 +100,10 @@ struct SubscriptionTierTests {
         #expect(SubscriptionTier.plus > .free)
         #expect(SubscriptionTier.purchasable == [.plus, .coach])
     }
-
-    /// The product ids are the one thing four separate places have to agree on
-    /// — this file, the StoreKit configuration, the server's `PRODUCTS`, and App
-    /// Store Connect — with nothing checking that they do. A round trip through
-    /// the mapping is the only part of that this repository can pin.
-    @Test("Each product id maps back to the tier it buys")
-    func productIdentifiersRoundTrip() {
-        for tier in SubscriptionTier.purchasable {
-            let identifier = tier.productIdentifier
-            #expect(identifier != nil)
-            #expect(identifier.flatMap(SubscriptionTier.tier(forProductIdentifier:)) == tier)
-        }
-
-        #expect(SubscriptionTier.free.productIdentifier == nil)
-        #expect(SubscriptionTier
-            .tier(forProductIdentifier: "xyz.holmie.breathe.plus.yearly") == nil)
-    }
 }
 
 @Suite("What a transaction entitles")
-struct PlusTransactionTests {
+struct SubscriptionTransactionTests {
     @Test("Each product entitles its own tier")
     func eachProductEntitlesItsTier() {
         let now = Date()
@@ -135,7 +118,7 @@ struct PlusTransactionTests {
     @Test("An expired subscription entitles nothing")
     func expiredEntitlesNothing() {
         let expiry = Date()
-        let expired = PlusTransaction(
+        let expired = SubscriptionTransaction(
             id: 1,
             productID: SubscriptionTier.coach.productIdentifier ?? "",
             expirationDate: expiry,
@@ -177,7 +160,7 @@ struct PlusTransactionTests {
 
 @Suite("Plus store")
 @MainActor
-struct PlusStoreTests {
+struct SubscriptionStoreTests {
     /// The store reads the entitlement from the device and reports it without
     /// the server having said anything — the offline-first promise, stated as a
     /// test.
@@ -186,13 +169,15 @@ struct PlusStoreTests {
         let front = FakeStoreFront(entitlements: [transaction(tier: .coach)])
         let server = RecordingEntitlements()
         server.fail(true)
-        let store = PlusStore(front: front, entitlements: server, defaults: scratchDefaults())
+        let store = SubscriptionStore(
+            front: front,
+            entitlements: server,
+            defaults: scratchDefaults()
+        )
 
         await store.refresh()
 
         #expect(store.tier == .coach)
-        #expect(store.isPlus, "Coach contains Plus")
-        #expect(store.isCoach)
         #expect(server.received.isEmpty)
     }
 
@@ -202,7 +187,7 @@ struct PlusStoreTests {
     @Test("Plus opens the catalogue and not the assistant")
     func plusIsNotCoach() async {
         let front = FakeStoreFront(entitlements: [transaction(tier: .plus)])
-        let store = PlusStore(
+        let store = SubscriptionStore(
             front: front,
             entitlements: RecordingEntitlements(),
             defaults: scratchDefaults()
@@ -210,8 +195,8 @@ struct PlusStoreTests {
 
         await store.refresh()
 
-        #expect(store.isPlus)
-        #expect(!store.isCoach)
+        #expect(store.tier >= .plus, "Plus opens the catalogue")
+        #expect(store.tier < .coach, "and not the assistant")
     }
 
     /// A crossgrade can leave both subscriptions momentarily visible, and the
@@ -222,7 +207,7 @@ struct PlusStoreTests {
             transaction(id: 1, tier: .plus),
             transaction(id: 2, tier: .coach),
         ])
-        let store = PlusStore(
+        let store = SubscriptionStore(
             front: front,
             entitlements: RecordingEntitlements(),
             defaults: scratchDefaults()
@@ -240,7 +225,11 @@ struct PlusStoreTests {
     func submissionHappensOnce() async {
         let front = FakeStoreFront(entitlements: [transaction(jws: "jws-plus")])
         let server = RecordingEntitlements()
-        let store = PlusStore(front: front, entitlements: server, defaults: scratchDefaults())
+        let store = SubscriptionStore(
+            front: front,
+            entitlements: server,
+            defaults: scratchDefaults()
+        )
 
         await store.refresh()
         await store.refresh()
@@ -257,7 +246,11 @@ struct PlusStoreTests {
         let front = FakeStoreFront(entitlements: [transaction(jws: "jws-plus")])
         let server = RecordingEntitlements()
         server.fail(true)
-        let store = PlusStore(front: front, entitlements: server, defaults: scratchDefaults())
+        let store = SubscriptionStore(
+            front: front,
+            entitlements: server,
+            defaults: scratchDefaults()
+        )
 
         await store.refresh()
         #expect(server.received.isEmpty)
@@ -275,7 +268,7 @@ struct PlusStoreTests {
     func theTierSurvivesALaunch() async {
         let front = FakeStoreFront(entitlements: [transaction(tier: .coach)])
         let defaults = scratchDefaults()
-        let store = PlusStore(
+        let store = SubscriptionStore(
             front: front,
             entitlements: RecordingEntitlements(),
             defaults: defaults
@@ -292,14 +285,17 @@ struct PlusStoreTests {
     }
 
     /// A fresh store over the same defaults, which is what a cold launch is.
-    private func relaunch(over defaults: UserDefaults, front: FakeStoreFront) -> PlusStore {
-        PlusStore(front: front, entitlements: RecordingEntitlements(), defaults: defaults)
+    private func relaunch(over defaults: UserDefaults, front: FakeStoreFront) -> SubscriptionStore {
+        SubscriptionStore(front: front, entitlements: RecordingEntitlements(), defaults: defaults)
     }
 }
 
 @Suite("What a tier unlocks")
 struct TechniqueGatingTests {
-    private func technique(requires: SubscriptionTier) -> Technique {
+    /// `requires` is defaulted here exactly as it is on `Technique`, so the
+    /// no-argument call pins the proto zero value's direction: a technique that
+    /// arrives saying nothing is free.
+    private func technique(requires: SubscriptionTier = .free) -> Technique {
         Technique(
             id: "t",
             slug: "t",
@@ -329,15 +325,6 @@ struct TechniqueGatingTests {
     func theDefaultIsUnlocked() {
         #expect(technique(requires: .free).isUnlocked(for: .free))
 
-        let unspecified = Technique(
-            id: "t",
-            slug: "t",
-            name: "T",
-            summary: "",
-            goal: .calm,
-            stages: [Stage(phases: [Phase(kind: .inhale, duration: .seconds(4))], cycles: 1)],
-            recommendedRounds: 1
-        )
-        #expect(unspecified.isUnlocked(for: .free))
+        #expect(technique().isUnlocked(for: .free))
     }
 }

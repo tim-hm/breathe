@@ -554,21 +554,17 @@ mod tests {
     /// meet after deciding this app is for them.
     #[test]
     fn the_free_techniques_are_the_two_that_cannot_go_wrong() {
-        let free: Vec<&str> = TECHNIQUES
-            .iter()
-            .filter(|technique| !technique.requires_subscription)
-            .map(|technique| technique.slug)
-            .collect();
-
-        assert_eq!(free, vec!["box-breathing", "physiological-sigh"]);
-
+        let mut free = Vec::new();
         for technique in TECHNIQUES.iter().filter(|t| !t.requires_subscription) {
             assert!(
                 technique.safety_note.is_empty(),
                 "`{}` is free and carries a safety note",
                 technique.slug
             );
+            free.push(technique.slug);
         }
+
+        assert_eq!(free, vec!["box-breathing", "physiological-sigh"]);
     }
 
     /// A technique with no stages — or a stage with no phases — would leave the

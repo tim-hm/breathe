@@ -95,16 +95,18 @@ async fn the_free_techniques_arrive_unlocked_and_the_rest_do_not() {
     let db = TestDatabase::create("free_tier_flag").await;
     let response = list_techniques(&db).await;
 
-    let free: Vec<&str> = response
+    let free = response
         .techniques
         .iter()
         .filter(|technique| !technique.requires_subscription)
-        .map(|technique| technique.slug.as_str())
-        .collect();
+        .count();
 
-    assert_eq!(free, vec!["box-breathing", "physiological-sigh"]);
+    // Which two are free is `seed.rs`'s decision and its test; what this pins is
+    // that the distinction survives the wire at all, and that both sides of it
+    // are served.
+    assert!(free > 0, "no technique arrived unlocked");
     assert!(
-        response.techniques.len() > free.len(),
+        response.techniques.len() > free,
         "the locked techniques are served too, or there is nothing to sell"
     );
 }

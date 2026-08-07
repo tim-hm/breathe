@@ -2,7 +2,7 @@ import BreatheKit
 import BreatheUI
 import SwiftUI
 
-/// One line offering a subscription, wherever the current tier has just met its
+/// One line offering an upgrade, wherever the current tier has just met its
 /// edge.
 ///
 /// Draws nothing at all for somebody who already holds `tier`, so a caller never
@@ -10,7 +10,7 @@ import SwiftUI
 /// surface that could mention a subscription. The affordance is a line of text
 /// and a tap, not a banner — this appears next to something somebody is reading,
 /// and a card would take the screen away from what they came for.
-struct PlusUpsell: View {
+struct UpgradePrompt: View {
     /// What just happened, in the caller's own words. Passed in rather than
     /// fixed here because "today's answers are from the rules" and "this one is
     /// in the full catalogue" are different moments, and one generic sentence
@@ -21,7 +21,7 @@ struct PlusUpsell: View {
     /// the paywall opens on.
     let tier: SubscriptionTier
 
-    @Environment(PlusStore.self) private var store
+    @Environment(SubscriptionStore.self) private var store
 
     @State private var isShowingPaywall = false
 
@@ -38,7 +38,7 @@ struct PlusUpsell: View {
                 HStack(spacing: Theme.Spacing.tight) {
                     Text(reason)
                         .foregroundStyle(Theme.Ink.secondary)
-                    Text(label)
+                    Text(tier.brandedTitle)
                         .foregroundStyle(Theme.Accent.brand)
                     Image(systemName: "chevron.right")
                         .font(.caption2)
@@ -48,16 +48,7 @@ struct PlusUpsell: View {
                 .multilineTextAlignment(.leading)
             }
             .buttonStyle(.plain)
-            .sheet(isPresented: $isShowingPaywall) {
-                PaywallView(highlighting: tier)
-            }
-        }
-    }
-
-    private var label: String {
-        switch tier {
-        case .coach: "Breathe Coach"
-        case .plus, .free: "Breathe Plus"
+            .paywall(highlighting: tier, isPresented: $isShowingPaywall)
         }
     }
 }

@@ -56,7 +56,7 @@ struct SuggestedForYouView: View {
                         // can see the difference Plus makes, which is a better
                         // place to ask than a banner they did not come for.
                         if case .fallback = suggestion.source {
-                            PlusUpsell(reason: "Want this written for you?", offering: .coach)
+                            UpgradePrompt(reason: "Want this written for you?", offering: .coach)
                         }
                     }
                 }

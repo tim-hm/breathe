@@ -78,7 +78,7 @@ impl Entitlement {
     /// `now` is a parameter rather than read here so the boundary is testable
     /// and so one request resolves every entitlement it touches against a single
     /// instant.
-    pub fn resolve(
+    fn resolve(
         tier: Option<SubscriptionTier>,
         until: Option<DateTime<Utc>>,
         now: DateTime<Utc>,
@@ -94,6 +94,18 @@ impl Entitlement {
 
     pub fn expires_at(&self) -> Option<DateTime<Utc>> {
         self.active.map(|(_, until)| until)
+    }
+
+    /// The row as stored, read against a clock.
+    ///
+    /// The one place the two columns are put together, and it lives on the
+    /// domain type rather than in a service because two features read that row:
+    /// this one to answer `GetEntitlement`, and `assistant` to decide whether to
+    /// spend a model call. A second spelling of the pairing would be a second
+    /// place to find when "active" comes to mean something more — a grace
+    /// period, say.
+    pub fn from_row(row: &super::repository::EntitlementRow, now: DateTime<Utc>) -> Self {
+        Self::resolve(row.subscription_tier, row.subscription_until, now)
     }
 }
 
@@ -129,14 +141,12 @@ mod tests {
         assert_eq!(live.expires_at(), Some(expiry));
     }
 
-    /// Every gate in the codebase is a comparison rather than a match, so the
-    /// ordering is load-bearing rather than incidental. A Coach subscriber must
-    /// satisfy a Plus gate; a Plus subscriber must not satisfy a Coach one.
+    /// Every gate in the codebase is a comparison rather than a match, and the
+    /// ordering comes from the declaration order of a fieldless enum — so
+    /// reordering the variants silently re-prices the product. Nothing else
+    /// would notice.
     #[test]
-    fn a_higher_tier_satisfies_a_lower_gate() {
-        assert!(Tier::Coach > Tier::Plus);
-        assert!(Tier::Plus > Tier::Free);
-        assert!(Tier::Coach >= Tier::Coach);
-        assert!(Tier::Plus < Tier::Coach);
+    fn the_variants_are_declared_cheapest_first() {
+        assert!(Tier::Free < Tier::Plus && Tier::Plus < Tier::Coach);
     }
 }

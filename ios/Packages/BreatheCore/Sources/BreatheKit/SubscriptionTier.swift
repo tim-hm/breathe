@@ -53,7 +53,10 @@ public enum SubscriptionTier: Int, Sendable, Comparable, Codable, CaseIterable {
 
     /// The tiers somebody can buy, cheapest first — the order a paywall lists
     /// them in, derived from the ladder rather than written out beside it.
-    public static var purchasable: [Self] {
-        allCases.filter { $0 > .free }.sorted()
-    }
+    ///
+    /// A stored `let` rather than a computed property: it is read per
+    /// transaction and per paywall pass, and a compile-time-constant list has no
+    /// business allocating each time. `allCases` is already in declaration
+    /// order, which is the ladder, so there is nothing to sort.
+    public static let purchasable: [Self] = allCases.filter { $0 > .free }
 }

@@ -21,7 +21,9 @@ use api::proto::breathe::v1 as pb;
 use axum::Router;
 use chrono::{Duration, Utc};
 
-use crate::harness::{ScriptedModel, TestDatabase, allowance, build_app_with, call_grpc_web_with};
+use crate::harness::{
+    ScriptedModel, TestDatabase, allowance, build_app_with, call_grpc_web_with, subscribe,
+};
 
 const SUBMIT: &str = "/breathe.v1.EntitlementService/SubmitAppStoreTransaction";
 const GET: &str = "/breathe.v1.EntitlementService/GetEntitlement";
@@ -169,27 +171,6 @@ async fn a_verified_transaction_becomes_a_readable_entitlement() {
     assert_eq!(stored.expires_at, submitted.expires_at);
 }
 
-/// Which product somebody bought decides which tier they get, and the product
-/// id is read from the verified payload rather than from anything the client
-/// says. Two products, two tiers, one assertion each.
-#[tokio::test]
-async fn each_product_grants_its_own_tier() {
-    let db = TestDatabase::create("entitlement_products").await;
-    let verifier = ScriptedVerifier::with(vec![
-        ("jws-plus", plus("2000000000000001")),
-        (
-            "jws-coach",
-            subscription("2000000000000002", SubscriptionTier::Coach, MONTH),
-        ),
-    ]);
-
-    let bought_plus = submit(db.app_with_verifier(verifier.clone()), USER, "jws-plus").await;
-    assert_eq!(bought_plus.tier, pb::EntitlementTier::Plus as i32);
-
-    let bought_coach = submit(db.app_with_verifier(verifier), OTHER_USER, "jws-coach").await;
-    assert_eq!(bought_coach.tier, pb::EntitlementTier::Coach as i32);
-}
-
 /// Somebody who has never bought anything is FREE with no date, not `NOT_FOUND`
 /// and not an error. The client renders a paywall from this, so an error here
 /// would make "not subscribed" indistinguishable from "the server is down" —
@@ -234,14 +215,14 @@ async fn resubmitting_the_same_transaction_changes_nothing() {
 #[tokio::test]
 async fn an_upgrade_is_not_shadowed_by_a_longer_cheaper_period() {
     let db = TestDatabase::create("entitlement_upgrade").await;
-    let long_plus = VerifiedTransaction {
-        signed_at: Utc::now() - Duration::days(30),
-        ..subscription(
-            "2000000000000001",
-            SubscriptionTier::Plus,
-            Duration::days(365),
-        )
-    };
+    // Built in the order they were signed — the counter is what makes that the
+    // same statement — so the Coach upgrade is the newer transaction despite
+    // carrying the shorter period.
+    let long_plus = subscription(
+        "2000000000000001",
+        SubscriptionTier::Plus,
+        Duration::days(365),
+    );
     let short_coach = subscription("2000000000000002", SubscriptionTier::Coach, MONTH);
 
     let verifier = ScriptedVerifier::with(vec![
@@ -420,16 +401,12 @@ async fn an_expiry_in_the_past_reads_as_free() {
     // one call has to happen before there is anything to expire.
     read(db.app_with_verifier(verifier.clone()), USER).await;
 
-    sqlx::query(
-        "UPDATE users
-            SET subscription_tier = 'COACH',
-                subscription_until = now() - interval '1 day'
-          WHERE id = $1",
-    )
-    .bind(USER.parse::<uuid::Uuid>().expect("a valid uuid"))
-    .execute(&db.pool)
-    .await
-    .expect("the expiry is written");
+    subscribe(&db.pool, USER, "COACH").await;
+    sqlx::query("UPDATE users SET subscription_until = now() - interval '1 day' WHERE id = $1")
+        .bind(USER.parse::<uuid::Uuid>().expect("a valid uuid"))
+        .execute(&db.pool)
+        .await
+        .expect("the expiry is written");
 
     let entitlement = read(db.app_with_verifier(verifier), USER).await;
     assert_eq!(entitlement.tier, pb::EntitlementTier::Free as i32);

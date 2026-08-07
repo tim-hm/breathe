@@ -85,12 +85,7 @@ async fn read_context(
     Ok((
         catalogue,
         profile,
-        Entitlement::resolve(
-            entitlement.subscription_tier,
-            entitlement.subscription_until,
-            chrono::Utc::now(),
-        )
-        .tier(),
+        Entitlement::from_row(&entitlement, chrono::Utc::now()).tier(),
     ))
 }
 

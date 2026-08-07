@@ -66,7 +66,7 @@ struct WhyThisWorksView: View {
                     // about something they can see rather than something they
                     // are told.
                     if case .fallback = source {
-                        PlusUpsell(reason: "Want it explained for you?", offering: .coach)
+                        UpgradePrompt(reason: "Want it explained for you?", offering: .coach)
                     }
                 }
             }

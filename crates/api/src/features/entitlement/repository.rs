@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use super::errors::EntitlementError;
 use super::types::SubscriptionTier;
+use super::verifier::VerifiedTransaction;
 
 /// The subscription columns of one `users` row.
 pub struct EntitlementRow {
@@ -65,27 +66,42 @@ pub async fn find_entitlement(
 ///   transaction for a subscription group is that group's current state.
 ///
 /// A submission that loses the comparison changes nothing and is not an error —
-/// it is the ordinary result of a client sending last month's transaction after
-/// this month's, which it does on every launch.
+/// it is what a client sending the *same* transaction again gets, which it does
+/// on every launch, so it is the ordinary path rather than the exceptional one.
+/// That is why the `UNION ALL` is here rather than a second call: the caller has
+/// to be told what the row holds either way, and paying two round trips for the
+/// common case to save a CTE would be the wrong trade.
 pub async fn record_purchase(
     pool: &PgPool,
     user_id: Uuid,
-    transaction: &RecordedPurchase<'_>,
+    transaction: &VerifiedTransaction,
 ) -> Result<EntitlementRow, EntitlementError> {
     let row = sqlx::query_as!(
         EntitlementRow,
-        r#"UPDATE users
-              SET subscription_tier = $2,
-                  subscription_until = $3,
-                  app_store_original_transaction_id = $4,
-                  subscription_signed_at = $5,
-                  updated_at = now()
-            WHERE id = $1
-              AND (subscription_signed_at IS NULL OR subscription_signed_at < $5)
-        RETURNING
-            subscription_tier AS "subscription_tier?: SubscriptionTier",
-            subscription_until,
-            app_store_original_transaction_id AS original_transaction_id"#,
+        r#"WITH moved AS (
+             UPDATE users
+                SET subscription_tier = $2,
+                    subscription_until = $3,
+                    app_store_original_transaction_id = $4,
+                    subscription_signed_at = $5,
+                    updated_at = now()
+              WHERE id = $1
+                AND (subscription_signed_at IS NULL OR subscription_signed_at < $5)
+             RETURNING subscription_tier, subscription_until,
+                       app_store_original_transaction_id
+           )
+           SELECT
+             subscription_tier AS "subscription_tier?: SubscriptionTier",
+             subscription_until,
+             app_store_original_transaction_id AS original_transaction_id
+           FROM moved
+           UNION ALL
+           SELECT
+             subscription_tier AS "subscription_tier?: SubscriptionTier",
+             subscription_until,
+             app_store_original_transaction_id AS original_transaction_id
+           FROM users
+          WHERE id = $1 AND NOT EXISTS (SELECT 1 FROM moved)"#,
         user_id,
         transaction.tier as SubscriptionTier,
         transaction.expires_at,
@@ -93,27 +109,10 @@ pub async fn record_purchase(
         transaction.signed_at,
     )
     .fetch_optional(pool)
-    .await?;
+    .await?
+    .ok_or(EntitlementError::Missing)?;
 
-    match row {
-        Some(row) => Ok(row),
-        // The `WHERE` refused it as stale. Reading back is not a second attempt
-        // at the same write — it is how the caller learns what the newer
-        // transaction had already put there, which is what the response has to
-        // carry.
-        None => find_entitlement(pool, user_id).await,
-    }
-}
-
-/// One verified purchase, in the shape the statement above writes.
-///
-/// A struct rather than four positional parameters, because two of them are
-/// timestamps and the compiler cannot tell an expiry from a signing date.
-pub struct RecordedPurchase<'a> {
-    pub tier: SubscriptionTier,
-    pub expires_at: DateTime<Utc>,
-    pub signed_at: DateTime<Utc>,
-    pub original_transaction_id: &'a str,
+    Ok(row)
 }
 
 /// Ends the subscription, for a refund the service has already attributed to
@@ -122,23 +121,27 @@ pub struct RecordedPurchase<'a> {
 /// Clears the signing date along with the rest, so a person who is refunded and
 /// then buys again is not blocked by the timestamp of the purchase they no
 /// longer have.
-pub async fn clear_purchase(pool: &PgPool, user_id: Uuid) -> Result<(), EntitlementError> {
-    let affected = sqlx::query!(
-        "UPDATE users
-            SET subscription_tier = NULL,
-                subscription_until = NULL,
-                subscription_signed_at = NULL,
-                updated_at = now()
-          WHERE id = $1",
+pub async fn clear_purchase(
+    pool: &PgPool,
+    user_id: Uuid,
+) -> Result<EntitlementRow, EntitlementError> {
+    let row = sqlx::query_as!(
+        EntitlementRow,
+        r#"UPDATE users
+              SET subscription_tier = NULL,
+                  subscription_until = NULL,
+                  subscription_signed_at = NULL,
+                  updated_at = now()
+            WHERE id = $1
+        RETURNING
+            subscription_tier AS "subscription_tier?: SubscriptionTier",
+            subscription_until,
+            app_store_original_transaction_id AS original_transaction_id"#,
         user_id
     )
-    .execute(pool)
+    .fetch_optional(pool)
     .await?
-    .rows_affected();
+    .ok_or(EntitlementError::Missing)?;
 
-    if affected == 0 {
-        return Err(EntitlementError::Missing);
-    }
-
-    Ok(())
+    Ok(row)
 }

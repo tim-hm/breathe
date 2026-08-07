@@ -34,6 +34,10 @@ struct HomeView: View {
     @State private var history: [SessionRecord] = []
     @State private var started: StartedSession?
 
+    @Environment(SubscriptionStore.self) private var plus
+
+    @State private var isShowingPaywall = false
+
     var body: some View {
         NavigationStack {
             content
@@ -56,6 +60,7 @@ struct HomeView: View {
         // Refreshed on dismissal rather than left to `onAppear`, which does not
         // fire again under a cover: the session that just ended is exactly the
         // one the repeat row should now offer.
+        .paywall(highlighting: .plus, isPresented: $isShowingPaywall)
         .fullScreenCover(item: $started) {
             Task { history = await sessions.recordedSessions() }
         } content: { session in
@@ -206,15 +211,23 @@ struct HomeView: View {
 
     /// Starts `technique` as this person dialled it — the same resolution the
     /// detail screen's Begin makes, so the two cannot start different sessions.
+    /// A locked technique opens the paywall instead. The wheel suggests from the
+    /// whole catalogue, so this is a route to a session that never passes the
+    /// list's lock — `SessionModel.starting` is where that stops being something
+    /// each screen has to remember.
     private func begin(_ technique: Technique) {
         let dialled = technique.dialled(with: settings.overrides(for: technique))
-        started = StartedSession(
-            model: SessionModel(
-                technique: dialled,
-                cues: SessionCues(mode: settings.cueMode, strength: settings.hapticStrength),
-                recorder: sessions
-            )
-        )
+        guard let model = SessionModel.starting(
+            dialled,
+            for: plus.tier,
+            cues: SessionCues(mode: settings.cueMode, strength: settings.hapticStrength),
+            recorder: sessions
+        ) else {
+            isShowingPaywall = true
+            return
+        }
+
+        started = StartedSession(model: model)
     }
 
     private func chosen(from techniques: [Technique]) -> Technique? {

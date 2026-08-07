@@ -19,7 +19,7 @@ struct PaywallView: View {
 
     /// From the environment, like `SessionSettings`: `BreatheApp` owns the one
     /// instance, and the surfaces that offer a subscription are nowhere near it.
-    @Environment(PlusStore.self) private var store
+    @Environment(SubscriptionStore.self) private var store
 
     /// Which tier the sheet opens on. The surface that presented it knows why
     /// somebody is here — a locked technique means Plus, an assistant answer
@@ -48,7 +48,7 @@ struct PaywallView: View {
             }
             .background(Theme.Surface.ground)
             .safeAreaInset(edge: .bottom) { legalBar }
-            .navigationTitle("Breathe Plus")
+            .navigationTitle("Subscriptions")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -211,14 +211,6 @@ struct PaywallView: View {
 }
 
 private extension SubscriptionTier {
-    var title: String {
-        switch self {
-        case .free: "Free"
-        case .plus: "Plus"
-        case .coach: "Coach"
-        }
-    }
-
     /// What each tier opens, in the person's terms. Coach lists what it adds
     /// rather than repeating Plus, with one line saying it contains it — a
     /// second copy of the same three bullets makes the ladder harder to read,

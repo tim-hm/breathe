@@ -133,6 +133,29 @@ pub fn allowance(tier: Tier) -> usize {
     })
 }
 
+/// Puts somebody on a paid tier by writing the columns `EntitlementService`
+/// writes.
+///
+/// Straight into the row rather than through a submission, for the suites that
+/// want a subscriber without caring how they became one. In the harness because
+/// two of them do — and because the column names are a raw string here, so a
+/// schema move that renames one is a runtime failure rather than a compile
+/// error, and it should only be able to happen in one place.
+pub async fn subscribe(pool: &PgPool, user: &str, tier: &str) {
+    sqlx::query(
+        "INSERT INTO users (id, subscription_tier, subscription_until)
+         VALUES ($1, $2::subscription_tier, now() + interval '1 year')
+         ON CONFLICT (id) DO UPDATE SET
+           subscription_tier = EXCLUDED.subscription_tier,
+           subscription_until = EXCLUDED.subscription_until",
+    )
+    .bind(user.parse::<uuid::Uuid>().expect("a valid uuid"))
+    .bind(tier)
+    .execute(pool)
+    .await
+    .expect("the subscription is written");
+}
+
 /// A model that answers from a script and counts how often it was asked.
 ///
 /// The count is what makes the quota and the breaker observable: both are

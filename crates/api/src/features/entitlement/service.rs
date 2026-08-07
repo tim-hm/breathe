@@ -9,7 +9,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::errors::EntitlementError;
-use super::repository::{self, EntitlementRow, RecordedPurchase};
+use super::repository::{self, EntitlementRow};
 use super::types::{Entitlement, Tier};
 use super::verifier::{TransactionVerifier, VerifiedTransaction};
 use crate::proto::breathe::v1 as pb;
@@ -31,21 +31,11 @@ pub async fn submit_transaction(
     let stored = if transaction.revoked_at.is_some() {
         revoke(pool, user_id, &transaction).await?
     } else {
-        repository::record_purchase(
-            pool,
-            user_id,
-            &RecordedPurchase {
-                tier: transaction.tier,
-                expires_at: transaction.expires_at,
-                signed_at: transaction.signed_at,
-                original_transaction_id: &transaction.original_transaction_id,
-            },
-        )
-        .await?
+        repository::record_purchase(pool, user_id, &transaction).await?
     };
 
     Ok(pb::SubmitAppStoreTransactionResponse {
-        entitlement: Some(to_proto(resolve(&stored))),
+        entitlement: Some(to_proto(Entitlement::from_row(&stored, Utc::now()))),
     })
 }
 
@@ -68,13 +58,10 @@ async fn revoke(
         return Ok(stored);
     }
 
-    repository::clear_purchase(pool, user_id).await?;
-
-    Ok(EntitlementRow {
-        subscription_tier: None,
-        subscription_until: None,
-        original_transaction_id: stored.original_transaction_id,
-    })
+    // Returned by the statement rather than described here: a subscription
+    // column added later is cleared by `clear_purchase` and would be silently
+    // forgotten by a row this function had built from memory.
+    repository::clear_purchase(pool, user_id).await
 }
 
 pub async fn get_entitlement(
@@ -84,15 +71,8 @@ pub async fn get_entitlement(
     let stored = repository::find_entitlement(pool, user_id).await?;
 
     Ok(pb::GetEntitlementResponse {
-        entitlement: Some(to_proto(resolve(&stored))),
+        entitlement: Some(to_proto(Entitlement::from_row(&stored, Utc::now()))),
     })
-}
-
-/// The stored row read against the clock, which is the only place the two are
-/// put together — the row is what the database holds and an [`Entitlement`] is
-/// what it means right now.
-fn resolve(row: &EntitlementRow) -> Entitlement {
-    Entitlement::resolve(row.subscription_tier, row.subscription_until, Utc::now())
 }
 
 fn to_proto(entitlement: Entitlement) -> pb::Entitlement {

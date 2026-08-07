@@ -33,7 +33,7 @@ struct BreatheApp: App {
     /// assistant's two strips, and the paywall they open — are nowhere near
     /// here, and threading a parameter through every screen between would touch
     /// every one of them.
-    @State private var plus: PlusStore
+    @State private var plus: SubscriptionStore
 
     /// Holds the onboarding answers and knows whether they have been given.
     @State private var profiles: ProfileStore
@@ -85,8 +85,8 @@ struct BreatheApp: App {
         _isOnboarding = State(wrappedValue: !profiles.hasCompletedOnboarding)
 
         _plus = State(
-            wrappedValue: PlusStore(
-                front: StoreKitPlusStoreFront(),
+            wrappedValue: SubscriptionStore(
+                front: StoreKitStoreFront(),
                 entitlements: EntitlementRepository(baseURL: baseURL, identity: identity)
             )
         )

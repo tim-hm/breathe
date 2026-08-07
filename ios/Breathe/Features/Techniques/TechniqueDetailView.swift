@@ -11,7 +11,7 @@ struct TechniqueDetailView: View {
     @Environment(SessionSettings.self) private var settings
     @State private var started: StartedSession?
 
-    @Environment(PlusStore.self) private var plus
+    @Environment(SubscriptionStore.self) private var plus
 
     @State private var isShowingPaywall = false
 
@@ -38,9 +38,7 @@ struct TechniqueDetailView: View {
         .paletteGround()
         .navigationTitle(technique.name)
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $isShowingPaywall) {
-            PaywallView(highlighting: technique.requires)
-        }
+        .paywall(highlighting: technique.requires, isPresented: $isShowingPaywall)
         .fullScreenCover(item: $started) { session in
             SessionView(model: session.model)
         }
@@ -162,27 +160,28 @@ struct TechniqueDetailView: View {
 
     /// Begin, or the offer that has to come first.
     ///
-    /// The second gate, and deliberately not the only one: the list opens the
-    /// paywall instead of navigating here, but home's wheel and a watch handoff
-    /// both reach this screen directly. A person who arrives on a locked
-    /// technique should read about it — that is what the catalogue is for — and
-    /// meet the offer at the moment they try to breathe it.
+    /// The lock is `SessionModel.starting`'s to enforce — this screen only
+    /// decides what the button says and which sheet to open. A person who
+    /// arrives on a locked technique should still read about it, which is what
+    /// the catalogue is for; the offer belongs at the moment they try to
+    /// breathe it.
     private func beginButton(playing dialled: Technique) -> some View {
-        Button {
-            guard technique.isUnlocked(for: plus.tier) else {
+        let isUnlocked = technique.isUnlocked(for: plus.tier)
+
+        return Button {
+            guard let model = SessionModel.starting(
+                dialled,
+                for: plus.tier,
+                cues: SessionCues(mode: settings.cueMode, strength: settings.hapticStrength),
+                recorder: sessions
+            ) else {
                 isShowingPaywall = true
                 return
             }
 
-            started = StartedSession(
-                model: SessionModel(
-                    technique: dialled,
-                    cues: SessionCues(mode: settings.cueMode, strength: settings.hapticStrength),
-                    recorder: sessions
-                )
-            )
+            started = StartedSession(model: model)
         } label: {
-            Text(technique.isUnlocked(for: plus.tier) ? "Begin" : "Unlock to breathe this")
+            Text(isUnlocked ? "Begin" : "Unlock to breathe this")
                 .font(.headline)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, Theme.Spacing.close)

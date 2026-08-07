@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE users\n              SET subscription_tier = $2,\n                  subscription_until = $3,\n                  app_store_original_transaction_id = $4,\n                  subscription_signed_at = $5,\n                  updated_at = now()\n            WHERE id = $1\n              AND (subscription_signed_at IS NULL OR subscription_signed_at < $5)\n        RETURNING\n            subscription_tier AS \"subscription_tier?: SubscriptionTier\",\n            subscription_until,\n            app_store_original_transaction_id AS original_transaction_id",
+  "query": "UPDATE users\n              SET subscription_tier = NULL,\n                  subscription_until = NULL,\n                  subscription_signed_at = NULL,\n                  updated_at = now()\n            WHERE id = $1\n        RETURNING\n            subscription_tier AS \"subscription_tier?: SubscriptionTier\",\n            subscription_until,\n            app_store_original_transaction_id AS original_transaction_id",
   "describe": {
     "columns": [
       {
@@ -49,21 +49,7 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        {
-          "Custom": {
-            "name": "subscription_tier",
-            "kind": {
-              "Enum": [
-                "PLUS",
-                "COACH"
-              ]
-            }
-          }
-        },
-        "Timestamptz",
-        "Text",
-        "Timestamptz"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -72,5 +58,5 @@
       true
     ]
   },
-  "hash": "911737c3c7c3bc4baad07254502aea616f07bd2987f87f083a65d7381f694536"
+  "hash": "38ca7a3a5760c4c5bc4e6f9ad5ee91b5de9bbaf7107c88b515139a0ace41a46f"
 }

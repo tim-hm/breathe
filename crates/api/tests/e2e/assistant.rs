@@ -17,6 +17,7 @@ use api::proto::breathe::v1 as pb;
 
 use crate::harness::{
     ScriptedModel, TestDatabase, allowance, call_grpc_web_stream_with, call_grpc_web_with,
+    subscribe,
 };
 
 const GET_RECOMMENDATION: &str = "/breathe.v1.AssistantService/GetRecommendation";
@@ -129,14 +130,9 @@ async fn an_exhausted_quota_answers_from_the_rules() {
 /// count, because a breaker that never opened and one that never closed both
 /// still return an answer.
 ///
-/// The explicit subscription is redundant with `recommend`'s own — it is here
-/// because this test reaches the model directly through `guarded`, and reading
-/// as though a breaker test needed no entitlement would be a trap for whoever
-/// next adds a case to it.
 #[tokio::test]
 async fn the_breaker_trips_and_then_recovers() {
     let db = TestDatabase::create("assistant_breaker").await;
-    subscribe_to_coach(&db, USER).await;
 
     let model = ScriptedModel::script(vec![
         Err(ModelError::Failed("first".to_owned())),
@@ -357,7 +353,7 @@ async fn recommend(
     model: Arc<dyn ModelClient>,
     user: &str,
 ) -> pb::GetRecommendationResponse {
-    subscribe_to_coach(db, user).await;
+    subscribe(&db.pool, user, "COACH").await;
 
     call_grpc_web_with(
         db.app_with_model(model),
@@ -375,7 +371,7 @@ async fn explain(
     user: &str,
     slug: &str,
 ) -> crate::harness::GrpcWebStream<pb::ExplainTechniqueResponse> {
-    subscribe_to_coach(db, user).await;
+    subscribe(&db.pool, user, "COACH").await;
 
     call_grpc_web_stream_with(
         db.app_with_model(model),
@@ -386,26 +382,6 @@ async fn explain(
         &[(USER_ID_HEADER, user)],
     )
     .await
-}
-
-/// Puts somebody on Coach by writing the columns `EntitlementService` writes.
-///
-/// Straight into the row rather than through a submission, because this suite
-/// scripts no verifier and the only thing it wants from a subscription is
-/// permission to reach the model. Who is allowed to buy that permission, and
-/// what a real purchase does to those columns, is `entitlement.rs`'s business.
-async fn subscribe_to_coach(db: &TestDatabase, user: &str) {
-    sqlx::query(
-        "INSERT INTO users (id, subscription_tier, subscription_until)
-         VALUES ($1, 'COACH', now() + interval '1 year')
-         ON CONFLICT (id) DO UPDATE SET
-           subscription_tier = EXCLUDED.subscription_tier,
-           subscription_until = EXCLUDED.subscription_until",
-    )
-    .bind(user.parse::<uuid::Uuid>().expect("a valid uuid"))
-    .execute(&db.pool)
-    .await
-    .expect("the subscription is written");
 }
 
 /// Stores goals through the real `ProfileService`, so the rows the assistant

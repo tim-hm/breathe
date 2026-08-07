@@ -12,7 +12,7 @@ struct TechniqueListView: View {
     let model: TechniqueListModel
     let sessions: any SessionRecording
 
-    @Environment(PlusStore.self) private var plus
+    @Environment(SubscriptionStore.self) private var plus
 
     /// The locked technique somebody tapped, which is both the paywall's trigger
     /// and the reason it is being shown. `Technique` is `Identifiable`, so this

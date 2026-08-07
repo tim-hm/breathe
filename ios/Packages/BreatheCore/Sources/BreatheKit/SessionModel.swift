@@ -114,6 +114,28 @@ public final class SessionModel {
         self.recorder = recorder
     }
 
+    /// A session, if this person's tier opens this technique.
+    ///
+    /// The catalogue lock's one choke point. It sits here rather than on each
+    /// button because a session can be started from four places — the
+    /// catalogue, the detail screen, home's wheel, and the watch — and a rule
+    /// asked at the button is a rule the fifth place will forget. Two of them
+    /// already had.
+    ///
+    /// `nil` rather than a thrown error: "they have not paid for this" is not a
+    /// failure to report, it is a different screen to show, and the caller
+    /// already knows which.
+    public static func starting(
+        _ technique: Technique,
+        for tier: SubscriptionTier,
+        cues: any SessionCueing,
+        recorder: any SessionRecording
+    ) -> SessionModel? {
+        guard technique.isUnlocked(for: tier) else { return nil }
+
+        return SessionModel(technique: technique, cues: cues, recorder: recorder)
+    }
+
     /// Where the session is in its plan: frozen while paused, frozen while
     /// holding, and clamped at the end.
     public var elapsed: Duration {

@@ -19,12 +19,15 @@ import os
 /// rules until the next launch retries.
 @MainActor
 @Observable
-public final class PlusStore {
+public final class SubscriptionStore {
     private static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "BreatheKit",
-        category: "plus"
+        category: "subscription"
     )
 
+    /// The key keeps its old spelling on purpose: it names a value already
+    /// written to disk on installed builds, and renaming it would silently drop
+    /// every existing subscriber back to free for one launch.
     private static let tierKey = "plus.tier"
 
     /// What this person is entitled to right now.
@@ -49,7 +52,7 @@ public final class PlusStore {
 
     /// The subscriptions on offer, cheapest first, once the App Store has said
     /// what they cost.
-    public private(set) var products: [PlusProduct] = []
+    public private(set) var products: [SubscriptionProduct] = []
 
     /// Whether a purchase or a restore is in flight, for the buttons to disable
     /// themselves with. One flag for all of them: they are the same modal moment
@@ -62,20 +65,7 @@ public final class PlusStore {
     /// button did nothing.
     public private(set) var isAwaitingApproval = false
 
-    /// The catalogue gate. Reads as a sentence at the call site, and keeps the
-    /// comparison — rather than an equality that would lock a Coach subscriber
-    /// out of what Plus buys — in one place.
-    public var isPlus: Bool {
-        tier >= .plus
-    }
-
-    /// The assistant gate, mirrored from the server. The server enforces it;
-    /// this only decides whether to offer the upgrade.
-    public var isCoach: Bool {
-        tier >= .coach
-    }
-
-    private let front: any PlusStoreFront
+    private let front: any StoreFront
     private let entitlements: any EntitlementSyncing
     private let defaults: UserDefaults
 
@@ -90,7 +80,7 @@ public final class PlusStore {
     private var submitted: Set<String> = []
 
     public init(
-        front: any PlusStoreFront,
+        front: any StoreFront,
         entitlements: any EntitlementSyncing,
         defaults: UserDefaults = .standard
     ) {
@@ -155,7 +145,10 @@ public final class PlusStore {
     /// cold launch for the majority of people who never open the paywall. Cached
     /// after the first success, so reopening the sheet is free.
     public func loadProducts() async {
-        guard products.isEmpty else { return }
+        // Counted rather than emptiness-checked: the App Store can answer with
+        // one of the two, and latching on that would leave the other tier
+        // priceless for the life of the process.
+        guard products.count < SubscriptionTier.purchasable.count else { return }
 
         products = await front.products()
     }
@@ -222,7 +215,7 @@ public final class PlusStore {
     /// retry-on-next-launch shape the profile sync uses, and for the same
     /// reason: a purchase that reaches the server a day late costs the person
     /// only a rule-based assistant in the meantime.
-    private func submit(_ transaction: PlusTransaction) async {
+    private func submit(_ transaction: SubscriptionTransaction) async {
         guard !submitted.contains(transaction.submissionKey) else { return }
 
         do {
