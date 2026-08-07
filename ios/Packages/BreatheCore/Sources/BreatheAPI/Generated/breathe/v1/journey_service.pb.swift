@@ -247,9 +247,46 @@ public nonisolated struct Breathe_V1_GetJourneyRequest: Sendable {
   /// stored offset would be wrong the moment somebody flew somewhere.
   public var utcOffsetMinutes: Int32 = 0
 
+  /// How many sessions `recent_sessions` may carry, newest first. Absent asks
+  /// for the display default, which is what the journey screen's strip wants;
+  /// the server caps anything larger, and refuses a zero rather than serving a
+  /// page of one.
+  ///
+  /// Optional rather than defaulted to zero, because proto3 cannot tell a
+  /// client that asked for nothing from one that predates the field, and the
+  /// second must keep getting a full strip.
+  public var limit: UInt32 {
+    get {_limit ?? 0}
+    set {_limit = newValue}
+  }
+  /// Returns true if `limit` has been explicitly set.
+  public var hasLimit: Bool {self._limit != nil}
+  /// Clears the value of `limit`. Subsequent reads from it will return its default value.
+  public mutating func clearLimit() {self._limit = nil}
+
+  /// Continues where a previous response's `next_page_token` left off.
+  ///
+  /// Opaque, and a value the server minted — it encodes the position of the
+  /// last session returned, so a page is a keyset seek rather than an offset
+  /// scan that gets slower the deeper a restore goes. Absent asks for the first
+  /// page. The totals, streaks and best pause are recomputed for every page:
+  /// they are the answer to "who is this person", not part of the archive being
+  /// walked.
+  public var pageToken: String {
+    get {_pageToken ?? String()}
+    set {_pageToken = newValue}
+  }
+  /// Returns true if `pageToken` has been explicitly set.
+  public var hasPageToken: Bool {self._pageToken != nil}
+  /// Clears the value of `pageToken`. Subsequent reads from it will return its default value.
+  public mutating func clearPageToken() {self._pageToken = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _limit: UInt32? = nil
+  fileprivate var _pageToken: String? = nil
 }
 
 /// Everything a person has accumulated, in the units the screen shows.
@@ -296,8 +333,7 @@ public nonisolated struct Breathe_V1_GetJourneyResponse: Sendable {
   /// current streak pauses.
   public var bestStreakDays: UInt32 = 0
 
-  /// The most recent sessions, newest first. Bounded by the server — this is a
-  /// history strip, not a paginated archive.
+  /// One page of sessions, newest first, bounded by the request's `limit`.
   public var recentSessions: [Breathe_V1_SessionRecord] = []
 
   /// The caller's best controlled pause, absent until they have taken one.
@@ -312,12 +348,25 @@ public nonisolated struct Breathe_V1_GetJourneyResponse: Sendable {
   /// Clears the value of `bestBoltSeconds`. Subsequent reads from it will return its default value.
   public mutating func clearBestBoltSeconds() {self._bestBoltSeconds = nil}
 
+  /// Pass back as `page_token` for the next page. Absent means this page is the
+  /// end of the history, which is the only signal a restore has that it has
+  /// recovered everything.
+  public var nextPageToken: String {
+    get {_nextPageToken ?? String()}
+    set {_nextPageToken = newValue}
+  }
+  /// Returns true if `nextPageToken` has been explicitly set.
+  public var hasNextPageToken: Bool {self._nextPageToken != nil}
+  /// Clears the value of `nextPageToken`. Subsequent reads from it will return its default value.
+  public mutating func clearNextPageToken() {self._nextPageToken = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _totals: Breathe_V1_JourneyTotals? = nil
   fileprivate var _bestBoltSeconds: UInt32? = nil
+  fileprivate var _nextPageToken: String? = nil
 }
 
 public nonisolated struct Breathe_V1_RecordBoltScoreRequest: Sendable {
@@ -672,7 +721,7 @@ nonisolated extension Breathe_V1_DeleteSessionsResponse: SwiftProtobuf.Message, 
 
 nonisolated extension Breathe_V1_GetJourneyRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetJourneyRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}utc_offset_minutes\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}utc_offset_minutes\0\u{1}limit\0\u{3}page_token\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -681,20 +730,34 @@ nonisolated extension Breathe_V1_GetJourneyRequest: SwiftProtobuf.Message, Swift
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularInt32Field(value: &self.utcOffsetMinutes) }()
+      case 2: try { try decoder.decodeSingularUInt32Field(value: &self._limit) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self._pageToken) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if self.utcOffsetMinutes != 0 {
       try visitor.visitSingularInt32Field(value: self.utcOffsetMinutes, fieldNumber: 1)
     }
+    try { if let v = self._limit {
+      try visitor.visitSingularUInt32Field(value: v, fieldNumber: 2)
+    } }()
+    try { if let v = self._pageToken {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 3)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Breathe_V1_GetJourneyRequest, rhs: Breathe_V1_GetJourneyRequest) -> Bool {
     if lhs.utcOffsetMinutes != rhs.utcOffsetMinutes {return false}
+    if lhs._limit != rhs._limit {return false}
+    if lhs._pageToken != rhs._pageToken {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -742,7 +805,7 @@ nonisolated extension Breathe_V1_JourneyTotals: SwiftProtobuf.Message, SwiftProt
 
 nonisolated extension Breathe_V1_GetJourneyResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetJourneyResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}totals\0\u{3}current_streak_days\0\u{3}best_streak_days\0\u{3}recent_sessions\0\u{3}best_bolt_seconds\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}totals\0\u{3}current_streak_days\0\u{3}best_streak_days\0\u{3}recent_sessions\0\u{3}best_bolt_seconds\0\u{3}next_page_token\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -755,6 +818,7 @@ nonisolated extension Breathe_V1_GetJourneyResponse: SwiftProtobuf.Message, Swif
       case 3: try { try decoder.decodeSingularUInt32Field(value: &self.bestStreakDays) }()
       case 4: try { try decoder.decodeRepeatedMessageField(value: &self.recentSessions) }()
       case 5: try { try decoder.decodeSingularUInt32Field(value: &self._bestBoltSeconds) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self._nextPageToken) }()
       default: break
       }
     }
@@ -780,6 +844,9 @@ nonisolated extension Breathe_V1_GetJourneyResponse: SwiftProtobuf.Message, Swif
     try { if let v = self._bestBoltSeconds {
       try visitor.visitSingularUInt32Field(value: v, fieldNumber: 5)
     } }()
+    try { if let v = self._nextPageToken {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 6)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -789,6 +856,7 @@ nonisolated extension Breathe_V1_GetJourneyResponse: SwiftProtobuf.Message, Swif
     if lhs.bestStreakDays != rhs.bestStreakDays {return false}
     if lhs.recentSessions != rhs.recentSessions {return false}
     if lhs._bestBoltSeconds != rhs._bestBoltSeconds {return false}
+    if lhs._nextPageToken != rhs._nextPageToken {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -6,12 +6,12 @@
 
 use chrono::{DateTime, Duration, Utc};
 use sqlx::PgPool;
-use uuid::Uuid;
 
 use super::errors::EntitlementError;
 use super::repository::{self, EntitlementRow, TransactionHolder};
 use super::types::{Entitlement, Tier};
 use super::verifier::{TransactionVerifier, VerifiedTransaction};
+use crate::identity::UserId;
 use crate::proto::breathe::v1 as pb;
 
 /// The largest token this server will look at.
@@ -44,7 +44,7 @@ const TRANSFER_COOLDOWN: Duration = Duration::days(1);
 pub async fn submit_transaction(
     pool: &PgPool,
     verifier: &dyn TransactionVerifier,
-    user_id: Uuid,
+    user_id: UserId,
     signed_transaction: &str,
 ) -> Result<pb::SubmitAppStoreTransactionResponse, EntitlementError> {
     if signed_transaction.len() > MAX_SIGNED_TRANSACTION_BYTES {
@@ -76,14 +76,14 @@ pub async fn submit_transaction(
 /// constraint violation would produce.
 async fn claim(
     pool: &PgPool,
-    user_id: Uuid,
+    user_id: UserId,
     transaction: &VerifiedTransaction,
     now: DateTime<Utc>,
 ) -> Result<EntitlementRow, EntitlementError> {
     let held_by_another =
         repository::find_transaction_holder(pool, &transaction.original_transaction_id)
             .await?
-            .filter(|holder| holder.user_id != user_id);
+            .filter(|holder| holder.user_id != user_id.0);
 
     if let Some(holder) = held_by_another {
         if !may_transfer(&holder, now) {
@@ -96,11 +96,11 @@ async fn claim(
         tracing::info!(
             feature = "entitlement",
             from = %holder.user_id,
-            to = %user_id,
+            to = %user_id.0,
             "moved an App Store transaction to a new identity"
         );
 
-        repository::release_transaction(pool, holder.user_id).await?;
+        repository::release_transaction(pool, UserId(holder.user_id)).await?;
     }
 
     // Not one statement with the release above: the client resubmits on every
@@ -144,7 +144,7 @@ fn may_transfer(holder: &TransactionHolder, now: DateTime<Utc>) -> bool {
 /// attributable and stays unusable by anybody else.
 async fn revoke(
     pool: &PgPool,
-    user_id: Uuid,
+    user_id: UserId,
     transaction: &VerifiedTransaction,
 ) -> Result<EntitlementRow, EntitlementError> {
     let stored = repository::find_entitlement(pool, user_id).await?;
@@ -163,6 +163,19 @@ async fn revoke(
     .await
 }
 
+/// What the caller may use, right now.
+///
+/// The one decision that must not be the client's: `assistant` reads this to
+/// know whether a caller may spend a language-model call, so it is resolved from
+/// the caller's own row against the clock and never from a field on a request.
+/// `Free` for somebody who has bought nothing, and the same for a subscription
+/// that lapsed overnight — nothing runs in between to notice.
+pub async fn tier(pool: &PgPool, user_id: UserId) -> Result<Tier, EntitlementError> {
+    let stored = repository::find_entitlement(pool, user_id).await?;
+
+    Ok(Entitlement::from_row(&stored, Utc::now()).tier())
+}
+
 /// What the server believes this caller holds, right now.
 ///
 /// Never an error for somebody who has bought nothing: the client renders a
@@ -170,7 +183,7 @@ async fn revoke(
 /// "the server is unreachable".
 pub async fn get_entitlement(
     pool: &PgPool,
-    user_id: Uuid,
+    user_id: UserId,
 ) -> Result<pb::GetEntitlementResponse, EntitlementError> {
     let stored = repository::find_entitlement(pool, user_id).await?;
 

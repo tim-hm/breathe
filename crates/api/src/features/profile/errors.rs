@@ -2,6 +2,10 @@
 
 use tonic::Status;
 
+/// Why a profile could not be read or written.
+///
+/// Two of the four describe the caller's own request and travel to them
+/// verbatim; the other two are this server's faults and travel as `internal`.
 #[derive(Debug, thiserror::Error)]
 pub enum ProfileError {
     /// The client sent something the contract admits but the domain does not —

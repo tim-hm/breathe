@@ -49,6 +49,12 @@ public protocol Breathe_V1_JourneyServiceClientInterface: Sendable {
     ///
     /// Everything here is derived on read. There are no denormalised counters, so
     /// there is nothing to drift out of step with the sessions themselves.
+    ///
+    /// Serves two callers with opposite needs. The journey screen wants the last
+    /// few weeks at a glance and asks for a bounded page. A device restoring after
+    /// a reinstall wants the whole archive — the Keychain identity survives where
+    /// the sessions file does not — and pages through it with `page_token` until
+    /// no token comes back.
     @available(iOS 13, *)
     func `getJourney`(request: Breathe_V1_GetJourneyRequest, headers: Connect.Headers) async -> ResponseMessage<Breathe_V1_GetJourneyResponse>
 

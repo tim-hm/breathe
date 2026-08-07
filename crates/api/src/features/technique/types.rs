@@ -1,8 +1,9 @@
-//! Domain enums, mirroring the Postgres types declared in `0001_init.sql`.
+//! Domain enums, mirroring the Postgres types declared in `0001_init.sql`, and
+//! the one shape another feature reads.
 //!
-//! These are distinct from the generated proto enums on purpose. A proto enum is
-//! an `i32` with an `_UNSPECIFIED` zero value that the wire format can always
-//! produce; these types have no such variant, so a value that reaches the
+//! The enums are distinct from the generated proto enums on purpose. A proto
+//! enum is an `i32` with an `_UNSPECIFIED` zero value that the wire format can
+//! always produce; these types have no such variant, so a value that reaches the
 //! repository is already known to be one of the four the database accepts.
 
 /// Mirrors the `technique_goal` Postgres enum.
@@ -24,4 +25,28 @@ pub enum PhaseKind {
     HoldIn,
     Exhale,
     HoldOut,
+}
+
+/// One technique as another feature reads it.
+///
+/// The catalogue's description of a technique without the stages that make it
+/// playable: `assistant` names techniques and explains why they work, and how a
+/// session is played is the client's business. Returned by
+/// [`super::service::catalogue`] so `TechniqueRow` — and the sort order,
+/// subscription flag and surrogate id on it — stays inside this feature.
+pub struct Technique {
+    /// The stable name a client navigates by, and the only string the assistant
+    /// is ever allowed to emit as a technique.
+    pub slug: String,
+
+    pub name: String,
+
+    /// The curated sentence carrying the mechanism, which is what the
+    /// rule-based explanation is built from.
+    pub summary: String,
+
+    /// The caution it carries, empty where it carries none.
+    pub safety_note: String,
+
+    pub goal: TechniqueGoal,
 }

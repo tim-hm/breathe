@@ -41,6 +41,12 @@ service JourneyService {
   //
   // Everything here is derived on read. There are no denormalised counters, so
   // there is nothing to drift out of step with the sessions themselves.
+  //
+  // Serves two callers with opposite needs. The journey screen wants the last
+  // few weeks at a glance and asks for a bounded page. A device restoring after
+  // a reinstall wants the whole archive — the Keychain identity survives where
+  // the sessions file does not — and pages through it with `page_token` until
+  // no token comes back.
   rpc GetJourney(GetJourneyRequest) returns (GetJourneyResponse);
 
   // Records one BOLT-style controlled-pause measurement.
@@ -132,6 +138,26 @@ message GetJourneyRequest {
   // person is standing, and the only party that knows that is the client. A
   // stored offset would be wrong the moment somebody flew somewhere.
   int32 utc_offset_minutes = 1;
+
+  // How many sessions `recent_sessions` may carry, newest first. Absent asks
+  // for the display default, which is what the journey screen's strip wants;
+  // the server caps anything larger, and refuses a zero rather than serving a
+  // page of one.
+  //
+  // Optional rather than defaulted to zero, because proto3 cannot tell a
+  // client that asked for nothing from one that predates the field, and the
+  // second must keep getting a full strip.
+  optional uint32 limit = 2;
+
+  // Continues where a previous response's `next_page_token` left off.
+  //
+  // Opaque, and a value the server minted — it encodes the position of the
+  // last session returned, so a page is a keyset seek rather than an offset
+  // scan that gets slower the deeper a restore goes. Absent asks for the first
+  // page. The totals, streaks and best pause are recomputed for every page:
+  // they are the answer to "who is this person", not part of the archive being
+  // walked.
+  optional string page_token = 3;
 }
 
 // Everything a person has accumulated, in the units the screen shows.
@@ -159,14 +185,18 @@ message GetJourneyResponse {
   // current streak pauses.
   uint32 best_streak_days = 3;
 
-  // The most recent sessions, newest first. Bounded by the server — this is a
-  // history strip, not a paginated archive.
+  // One page of sessions, newest first, bounded by the request's `limit`.
   repeated SessionRecord recent_sessions = 4;
 
   // The caller's best controlled pause, absent until they have taken one.
   // Carried here so the journey screen does not need a second round trip to
   // draw the BOLT card.
   optional uint32 best_bolt_seconds = 5;
+
+  // Pass back as `page_token` for the next page. Absent means this page is the
+  // end of the history, which is the only signal a restore has that it has
+  // recovered everything.
+  optional string next_page_token = 6;
 }
 
 message RecordBoltScoreRequest {

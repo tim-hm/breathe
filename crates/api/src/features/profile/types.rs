@@ -1,10 +1,12 @@
 //! Domain enums, mirroring the Postgres types declared in
-//! `0004_users_and_profiles.sql`.
+//! `0004_users_and_profiles.sql`, and the one shape another feature reads.
 //!
-//! Neither carries an "unspecified" variant, for the same reason the technique
-//! enums don't: a value that reaches the repository is already one the database
-//! accepts. Where the proto's zero value is meaningful — an experience level
-//! nobody has answered — it is modelled as `Option`, not as a variant.
+//! No enum here carries an "unspecified" variant, for the same reason the
+//! technique enums don't: a value that reaches the repository is already one the
+//! database accepts. Where the proto's zero value is meaningful — an experience
+//! level nobody has answered — it is modelled as `Option`, not as a variant.
+
+use crate::features::technique::types::TechniqueGoal;
 
 /// Mirrors the `experience_level` Postgres enum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, sqlx::Type)]
@@ -60,4 +62,26 @@ pub enum ReminderIntensity {
     Never,
     Gentle,
     Daily,
+}
+
+/// What another feature reads off a profile.
+///
+/// The three answers `assistant` derives its prompt and its rule-based fallback
+/// from, and nothing else — no display name, no reminder setting, no birth-year
+/// band. Narrower than the row on purpose: this is the surface the feature
+/// promises to keep, so a column added to `users` for this feature's own use
+/// cannot become another feature's dependency by accident.
+pub struct ProfileSnapshot {
+    /// In the order the person picked them, which is the ranking the fallback
+    /// sorts by.
+    pub goals: Vec<TechniqueGoal>,
+
+    /// `None` until they answer. Read as "new" by the fallback and as "they
+    /// have not been asked" by the prompt, which is why it stays an `Option`
+    /// rather than being resolved here.
+    pub experience_level: Option<ExperienceLevel>,
+
+    /// What the person typed about what they want, already trimmed and bounded
+    /// by `super::service`. Empty where they typed nothing.
+    pub intent_note: String,
 }

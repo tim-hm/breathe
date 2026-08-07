@@ -5,13 +5,15 @@
 //! contains zero raw queries: SQL lives in `super::repository`.
 
 use sqlx::PgPool;
-use uuid::Uuid;
 
 use super::errors::ProfileError;
 use super::repository::{self, ProfileRow};
-use super::types::{BirthYearBand, ExperienceLevel, MAX_DISPLAY_NAME_CHARS, ReminderIntensity};
+use super::types::{
+    BirthYearBand, ExperienceLevel, MAX_DISPLAY_NAME_CHARS, ProfileSnapshot, ReminderIntensity,
+};
 use crate::features::technique::service::goal_to_proto;
 use crate::features::technique::types::TechniqueGoal;
+use crate::identity::UserId;
 use crate::proto::breathe::v1 as pb;
 
 /// Matches the `CHECK` on `users.intent_note`. Duplicated here so an over-long
@@ -51,9 +53,15 @@ const DENIED_DISPLAY_NAME_FRAGMENTS: &[&str] = &[
     "hitler",
 ];
 
+/// Every answer the caller has given, including the ones they have not.
+///
+/// Never absent: the row is created by `crate::identity` on the first RPC of any
+/// kind, so a profile that has never been written answers with the column
+/// defaults rather than with a `NOT_FOUND` the client would have to model as a
+/// third state alongside "no answers" and "no connection".
 pub async fn get_profile(
     pool: &PgPool,
-    user_id: Uuid,
+    user_id: UserId,
 ) -> Result<pb::GetProfileResponse, ProfileError> {
     let row = repository::find_profile(pool, user_id).await?;
 
@@ -62,9 +70,19 @@ pub async fn get_profile(
     })
 }
 
+/// Replaces every answer at once, and returns the profile as stored.
+///
+/// A wholesale replacement rather than a patch: the client holds the whole
+/// profile and sends it back, so a concurrent writer can lose but can never
+/// merge two callers' answers into a profile neither of them chose.
+///
+/// The response is not an echo. The stored display name can differ from the
+/// requested one — somebody already holds it, and the answer to that is a
+/// suffix rather than a refusal — so the client has to keep what comes back
+/// rather than what it sent.
 pub async fn update_profile(
     pool: &PgPool,
-    user_id: Uuid,
+    user_id: UserId,
     submitted: Option<pb::Profile>,
 ) -> Result<pb::UpdateProfileResponse, ProfileError> {
     let submitted =
@@ -79,6 +97,37 @@ pub async fn update_profile(
     Ok(pb::UpdateProfileResponse {
         profile: Some(to_proto(row)),
     })
+}
+
+/// The profile as another feature reads it.
+///
+/// `assistant` derives both its prompt and its rule-based fallback from these
+/// three answers. Routed through the service rather than letting the caller take
+/// the row: `ProfileRow` is this feature's SQL shape, and a consumer holding it
+/// would make every column on `users` part of a contract nobody wrote down.
+pub async fn snapshot(pool: &PgPool, user_id: UserId) -> Result<ProfileSnapshot, ProfileError> {
+    let row = repository::find_profile(pool, user_id).await?;
+
+    Ok(ProfileSnapshot {
+        goals: row.goals,
+        experience_level: row.experience_level,
+        intent_note: row.intent_note,
+    })
+}
+
+/// The caller's birth-year band, or `None` if they have not said.
+///
+/// A standalone lookup because the board queries need the band as a *parameter*
+/// before they run — the age-band scope is refused outright when nobody has
+/// answered, and that is a precondition rather than an empty result. Those
+/// queries then filter on the column themselves, because ranking has to happen
+/// in one statement; this is the read that has no such excuse, and routing it
+/// through the service is what keeps `journey` out of this feature's SQL.
+pub async fn birth_year_band(
+    pool: &PgPool,
+    user_id: UserId,
+) -> Result<Option<BirthYearBand>, ProfileError> {
+    repository::find_birth_year_band(pool, user_id).await
 }
 
 fn to_proto(row: ProfileRow) -> pb::Profile {

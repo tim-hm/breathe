@@ -5,7 +5,7 @@ use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
 use crate::features::profile::service;
-use crate::identity::{self, UserId};
+use crate::identity;
 use crate::proto::breathe::v1::profile_service_server::ProfileService;
 use crate::proto::breathe::v1::{
     GetProfileRequest, GetProfileResponse, UpdateProfileRequest, UpdateProfileResponse,
@@ -30,7 +30,7 @@ impl ProfileService for ProfileServiceImpl {
         &self,
         request: Request<GetProfileRequest>,
     ) -> Result<Response<GetProfileResponse>, Status> {
-        let UserId(user_id) = identity::require(&request)?;
+        let user_id = identity::require(&request)?;
         let response = service::get_profile(&self.state.pool, user_id).await?;
         Ok(Response::new(response))
     }
@@ -39,7 +39,7 @@ impl ProfileService for ProfileServiceImpl {
         &self,
         request: Request<UpdateProfileRequest>,
     ) -> Result<Response<UpdateProfileResponse>, Status> {
-        let UserId(user_id) = identity::require(&request)?;
+        let user_id = identity::require(&request)?;
         let response =
             service::update_profile(&self.state.pool, user_id, request.into_inner().profile)
                 .await?;

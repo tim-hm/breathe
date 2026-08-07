@@ -5,7 +5,7 @@ use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
 use crate::features::entitlement::service;
-use crate::identity::{self, UserId};
+use crate::identity;
 use crate::proto::breathe::v1::entitlement_service_server::EntitlementService;
 use crate::proto::breathe::v1::{
     GetEntitlementRequest, GetEntitlementResponse, SubmitAppStoreTransactionRequest,
@@ -31,7 +31,7 @@ impl EntitlementService for EntitlementServiceImpl {
         &self,
         request: Request<SubmitAppStoreTransactionRequest>,
     ) -> Result<Response<SubmitAppStoreTransactionResponse>, Status> {
-        let UserId(user_id) = identity::require(&request)?;
+        let user_id = identity::require(&request)?;
         let signed_transaction = request.into_inner().signed_transaction;
 
         let response = service::submit_transaction(
@@ -49,7 +49,7 @@ impl EntitlementService for EntitlementServiceImpl {
         &self,
         request: Request<GetEntitlementRequest>,
     ) -> Result<Response<GetEntitlementResponse>, Status> {
-        let UserId(user_id) = identity::require(&request)?;
+        let user_id = identity::require(&request)?;
         let response = service::get_entitlement(&self.state.pool, user_id).await?;
         Ok(Response::new(response))
     }
