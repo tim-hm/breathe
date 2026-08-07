@@ -18,8 +18,8 @@ struct LeaderboardStateTests {
         func delete(_: [SessionRecord.ID]) async throws {}
         func record(_: BoltScore) async throws {}
 
-        func storedSessions() async throws -> [SessionRecord] {
-            []
+        func storedSessions(after _: String?) async throws -> StoredSessionPage {
+            StoredSessionPage(sessions: [])
         }
 
         func leaderboard(

@@ -44,6 +44,26 @@ public enum JourneyRepositoryError: LocalizedError, Equatable {
     }
 }
 
+/// One page of the history the server holds, and where the next one starts.
+///
+/// A page rather than a list because the restore path asks for the whole
+/// archive, not the screen's strip: somebody with years of practice has more
+/// sessions than one response should carry, and a single bounded call would hand
+/// back the most recent few and call the restore done.
+public struct StoredSessionPage: Sendable {
+    public let sessions: [SessionRecord]
+
+    /// Pass back to `storedSessions(after:)` for the page behind this one. `nil`
+    /// means this page reached the end of the history, which is the only signal
+    /// a restore has that it has recovered everything.
+    public let nextPageToken: String?
+
+    public init(sessions: [SessionRecord], nextPageToken: String? = nil) {
+        self.sessions = sessions
+        self.nextPageToken = nextPageToken
+    }
+}
+
 /// The network side of the journey.
 ///
 /// Everything here is a sync or a genuinely online read. Nothing the journey tab
@@ -64,9 +84,13 @@ public protocol JourneySyncing: Sendable {
     /// Sends one controlled-pause score.
     func record(_ score: BoltScore) async throws
 
-    /// The sessions the server holds — the restore path after a reinstall, where
-    /// the Keychain identity outlived the local file.
-    func storedSessions() async throws -> [SessionRecord]
+    /// One page of the sessions the server holds — the restore path after a
+    /// reinstall, where the Keychain identity outlived the local file.
+    ///
+    /// - Parameter pageToken: `nil` for the newest page, otherwise the
+    ///   `nextPageToken` of the page before it. The value is the server's to
+    ///   mint and this app's only to carry.
+    func storedSessions(after pageToken: String?) async throws -> StoredSessionPage
 
     func leaderboard(_ board: LeaderboardBoard, scope: LeaderboardScope) async throws -> Leaderboard
 }
@@ -127,9 +151,13 @@ public struct JourneyRepository: JourneySyncing {
         }
     }
 
-    public func storedSessions() async throws -> [SessionRecord] {
+    public func storedSessions(after pageToken: String?) async throws -> StoredSessionPage {
         var request = Breathe_V1_GetJourneyRequest()
         request.utcOffsetMinutes = Self.utcOffsetMinutes
+        request.limit = Self.restorePageSize
+        if let pageToken {
+            request.pageToken = pageToken
+        }
 
         let response = await client.getJourney(request: request)
         guard let message = response.message else {
@@ -139,7 +167,10 @@ public struct JourneyRepository: JourneySyncing {
             )
         }
 
-        return try message.recentSessions.map { try SessionRecord(proto: $0) }
+        return try StoredSessionPage(
+            sessions: message.recentSessions.map { try SessionRecord(proto: $0) },
+            nextPageToken: message.hasNextPageToken ? message.nextPageToken : nil
+        )
     }
 
     public func leaderboard(
@@ -176,6 +207,14 @@ public struct JourneyRepository: JourneySyncing {
             )
         )
     }
+
+    /// How much history one restore page asks for.
+    ///
+    /// The server's own ceiling, so a restore costs the fewest round trips it
+    /// can. Larger than anything a screen would ask for on purpose: the journey
+    /// tab's strip is drawn from the local store, and this call exists only for
+    /// the device that has no local store yet.
+    private static let restorePageSize: UInt32 = 500
 
     /// Minutes east of UTC, which is the unit every streak the server computes is
     /// expressed in. Read per call rather than stored, so somebody who has flown

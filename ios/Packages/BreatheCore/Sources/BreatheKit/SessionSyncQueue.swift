@@ -23,6 +23,15 @@ public actor SessionSyncQueue {
     /// larger than this drains over several runs rather than being refused.
     private static let maxBatch = 200
 
+    /// How many restore pages one run will walk before giving up.
+    ///
+    /// At the page size the repository asks for this is more history than a
+    /// lifetime of daily practice, so reaching it means the server is handing
+    /// back a token it should not — and a loop that trusted the token alone
+    /// would run forever on a foreground. Logged at `error` because it can only
+    /// be a bug on one side or the other.
+    private static let maxRestorePages = 40
+
     private let sessions: any SessionRecording
     private let scores: any BoltScoreRecording
     private let journeys: any JourneySyncing
@@ -146,29 +155,53 @@ public actor SessionSyncQueue {
         }
     }
 
-    /// Pulls back sessions the server holds and this device does not.
+    /// Pulls back every session the server holds and this device does not.
     ///
     /// The Keychain identity survives a reinstall while the sessions file does
     /// not, so this is what stops somebody's streak vanishing because they
     /// changed phones. Anything restored is acknowledged on arrival — it came
     /// from the server, so sending it back would be pure noise.
+    ///
+    /// Pages until the server stops offering a token. A single call would return
+    /// only the newest page, and the totals and streaks that come back alongside
+    /// it would be right — which is what makes a truncated restore so hard to
+    /// notice, and why this loop stops only on an exhausted history or a failed
+    /// request.
+    ///
+    /// A failed page keeps whatever earlier ones brought back rather than
+    /// discarding it: the merge is idempotent on session id and the next run
+    /// starts again from the newest page, so a partial restore costs a repeat
+    /// rather than a gap.
     private func restore() async -> Bool {
-        do {
-            let stored = try await journeys.storedSessions()
-            guard !stored.isEmpty else { return false }
+        var changed = false
+        var pageToken: String?
 
-            let changed = await sessions.merge(stored)
-            // Union rather than a fresh prune: `sendSessions` has already pruned
-            // this key on the way past, and re-deriving the present ids would
-            // mean reading the whole session file again to learn what was just
-            // written to it.
-            ledger.acknowledge(stored.map(\.id), at: Self.acknowledgedSessionsKey)
-            return changed
-        } catch {
-            Self.logger
-                .notice("journey restore deferred: \(error.localizedDescription, privacy: .public)")
-            return false
+        for _ in 0 ..< Self.maxRestorePages {
+            do {
+                let page = try await journeys.storedSessions(after: pageToken)
+                if !page.sessions.isEmpty {
+                    let merged = await sessions.merge(page.sessions)
+                    changed = changed || merged
+                    // Union rather than a fresh prune: `sendSessions` has already
+                    // pruned this key on the way past, and re-deriving the present
+                    // ids would mean reading the whole session file again to learn
+                    // what was just written to it.
+                    ledger.acknowledge(page.sessions.map(\.id), at: Self.acknowledgedSessionsKey)
+                }
+
+                guard let next = page.nextPageToken else { return changed }
+                pageToken = next
+            } catch {
+                Self.logger
+                    .notice(
+                        "journey restore deferred: \(error.localizedDescription, privacy: .public)"
+                    )
+                return changed
+            }
         }
+
+        Self.logger.error("journey restore stopped at the page ceiling")
+        return changed
     }
 }
 

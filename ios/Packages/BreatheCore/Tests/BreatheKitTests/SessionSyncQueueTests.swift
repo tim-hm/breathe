@@ -77,9 +77,12 @@ struct SessionSyncQueueTests {
         private var isReachable: Bool
         private var held: [SessionRecord]
 
-        init(isReachable: Bool = true, held: [SessionRecord] = []) {
+        private let pageSize: Int
+
+        init(isReachable: Bool = true, held: [SessionRecord] = [], pageSize: Int = 500) {
             self.isReachable = isReachable
             self.held = held
+            self.pageSize = pageSize
         }
 
         func comeBackOnline() {
@@ -102,9 +105,21 @@ struct SessionSyncQueueTests {
             receivedScores.append(score.id)
         }
 
-        func storedSessions() async throws -> [SessionRecord] {
+        /// Serves the held history one page at a time, keyed on the index the
+        /// last page stopped at — the same contract the real server offers, so
+        /// a queue that stopped after the first page fails here rather than
+        /// only against Postgres.
+        func storedSessions(after pageToken: String?) async throws -> StoredSessionPage {
             guard isReachable else { throw Offline() }
-            return held
+
+            let start = pageToken.flatMap(Int.init) ?? 0
+            let end = min(start + pageSize, held.count)
+            let page = Array(held[start ..< end])
+
+            return StoredSessionPage(
+                sessions: page,
+                nextPageToken: end < held.count ? String(end) : nil
+            )
         }
 
         func leaderboard(
@@ -209,6 +224,33 @@ struct SessionSyncQueueTests {
         #expect(await !queue.sync())
         #expect(await sessions.stored.count == 1, "and is not duplicated on the way in")
         #expect(await server.received.isEmpty)
+    }
+
+    /// The restore is the only thing standing between a reinstall and a lost
+    /// journal, and the server bounds what one call returns — so a queue that
+    /// took the first page as the whole history would silently drop everything
+    /// behind it, while the totals arriving alongside kept saying it was there.
+    @Test("A restore keeps paging until the server runs out of history")
+    func aRestorePagesUntilTheHistoryIsExhausted() async {
+        let held = (1 ... 57).map { session(-$0) }
+        let sessions = SessionSpy()
+        let server = ServerSpy(held: held, pageSize: 20)
+        let queue = SessionSyncQueue(
+            sessions: sessions,
+            scores: ScoreSpy(),
+            journeys: server,
+            ledger: SyncLedger(defaults: defaults())
+        )
+
+        #expect(await queue.sync())
+        #expect(
+            await Set(sessions.stored.map(\.id)) == Set(held.map(\.id)),
+            "every page landed, not only the first"
+        )
+        #expect(await server.received.isEmpty, "and none of it was echoed back")
+
+        #expect(await !queue.sync(), "a second run finds nothing new on any page")
+        #expect(await sessions.stored.count == held.count)
     }
 
     /// The deletion round trip, and the reason it is a round trip at all: the
