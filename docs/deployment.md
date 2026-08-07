@@ -17,6 +17,18 @@ The public hostname is **`ondbreathe.app`**, named twice on purpose: as the Rout
 
 DNS is applied from `infra/`, not edited at the registrar: the hosted zone and the apex `A` record land with the address they point at, so a record aimed at a released IP is not a state this repo can reach. The registrar holds one thing, the NS delegation, set once from the `name_servers` output.
 
+The zone also carries the domain's mail, which no part of this deployment serves — the box runs no mail server. Five values across four record sets hand it to Google Workspace, where the name is enrolled as a secondary domain of a Workspace registered under a different one — the two apex `TXT` strings share one set, which is why they cannot be separate resources:
+
+| Record                         | What it does                                                                  |
+| :----------------------------- | :---------------------------------------------------------------------------- |
+| apex `TXT` `google-site-…`     | Proves control of the zone. Re-checked, so deleting it un-verifies the domain |
+| apex `TXT` `v=spf1 …`          | Names Google as the only sender. At `~all`, so other senders are marked       |
+| apex `MX` `1 smtp.google.com.` | Delivery. One host, not the five `ASPMX` records older guides give            |
+| `google._domainkey` `TXT`      | DKIM public key, split across two strings — see the comment on the resource   |
+| `_dmarc` `TXT` `p=none`        | Makes the two above enforceable. Reports only, and no `rua` yet               |
+
+**Those five values belong to one Workspace tenant.** Applying `infra/` into a fresh AWS account publishes another tenant's verification token and DKIM key, which verifies nothing and signs nothing. A second deployment replaces all five from its own Workspace admin console, or drops them if it serves no mail.
+
 The instance is disposable; the things worth keeping live elsewhere:
 
 - **Postgres data** — on a separate EBS volume (`ond-data` label, mounted at `/srv/data`), so replacing the instance replaces no data. The database password lives on that volume too (`/srv/data/ond.env`), because Postgres keeps its own hash inside the cluster files — a fresh instance regenerating it would strand the data.
@@ -65,7 +77,26 @@ The mise tasks pin `AWS_PROFILE` themselves, so neither is something to remember
 
 State lives in the S3 bucket `infra/bootstrap` creates — versioned, encrypted, private, TLS-only, and `prevent_destroy`. Locking is OpenTofu's S3-native `use_lockfile`; the DynamoDB table older Terraform documentation calls for does not exist and is not needed.
 
-The bucket is `ond-tfstate-136339248297` and the user is `ond-tofu` — both renamed from `breathe-*` after the app became önd, so nothing in the account still answers to the old name. The bucket name is written in two places that nothing reconciles: `state_bucket` in `infra/bootstrap/variables.tf`, which creates it, and the `backend "s3"` block in `infra/versions.tf`, which reads it. Renaming it again means creating the new bucket from bootstrap first, then `tofu -chdir=infra init -migrate-state`; editing the backend literal on its own points it at a bucket that does not exist and strands every resource.
+The bucket is `ond-tfstate-136339248297` and the user is `ond-tofu` — both renamed from `breathe-*` after the app became önd, so nothing in the account still answers to the old name. The bucket name is written in two places that nothing reconciles: `state_bucket` in `infra/bootstrap/variables.tf`, which creates it, and the `backend "s3"` block in `infra/versions.tf`, which reads it.
+
+Renaming it again is four steps, and the first is the one that is not obvious. `bucket` is ForceNew, so changing it plans a destroy-and-recreate — which `prevent_destroy` on that resource refuses outright, failing the whole plan before anything is created. The guard is right and stays; bootstrap has to be told to forget the old bucket instead of being asked to replace it:
+
+```sh
+# 1. Bootstrap forgets the old bucket. It stays alive, unmanaged, holding state.
+tofu -chdir=infra/bootstrap state rm \
+  aws_s3_bucket.tfstate aws_s3_bucket_policy.tfstate \
+  aws_s3_bucket_public_access_block.tfstate \
+  aws_s3_bucket_server_side_encryption_configuration.tfstate \
+  aws_s3_bucket_versioning.tfstate
+# 2. Create the new one, with the new name already in variables.tf.
+mise run infra:bootstrap:apply
+# 3. Carry state across, having edited the backend literal in infra/versions.tf.
+AWS_PROFILE=ond tofu -chdir=infra init -migrate-state
+# 4. Only once `mise run infra:plan` is a clean no-op: empty and delete the old
+#    bucket by hand. It is versioned, so every version must go before the bucket.
+```
+
+Editing the backend literal on its own — without step 2 having created the bucket it names — points the backend at nothing and strands every resource.
 
 `infra/bootstrap` keeps **local** state, because it builds the bucket the other root stores state in. Losing that file is not an incident: it manages one bucket and one IAM user, both named, both re-importable in two commands.
 

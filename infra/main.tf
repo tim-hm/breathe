@@ -286,33 +286,33 @@ resource "aws_route53_record" "apex" {
   records = [aws_eip.api.public_ip]
 }
 
-# Proves to Google that whoever holds this zone holds the domain, which is what
-# lets the name be added to a Workspace registered under a different one. Google
-# re-checks it, so removing it after enrolment un-verifies the domain.
+# Mail for the domain, and the four records that authenticate it. Every value
+# here belongs to one Google Workspace tenant — see docs/deployment.md before
+# applying this into a fresh account.
+
+# The apex TXT set. DNS keeps one TXT set per name, so every apex string lives in
+# the list below: a second `aws_route53_record` at this name does not add to this
+# one, it fights it. Only one string may start `v=spf1` — two SPF policies is a
+# `permerror`, which receivers treat as no policy at all.
 #
-# Every apex TXT string belongs in the `records` list below, not in a second
-# `aws_route53_record`. DNS keeps one TXT record set per name, so a second
-# resource pointed at the apex does not add to this one — the two fight over the
-# same set and whichever applies last wins. An SPF policy or a further
-# verification token is a new element here.
+# Google re-checks the verification token rather than reading it once, so
+# deleting it after enrolment un-verifies the domain.
 resource "aws_route53_record" "apex_txt" {
   zone_id = aws_route53_zone.primary.zone_id
   name    = aws_route53_zone.primary.name
   type    = "TXT"
-  # Long, unlike the A record above: this value changes when a provider is
-  # enrolled or retired, which is planned work, not an outage.
   ttl     = 3600
-  records = ["google-site-verification=ytC4-ZAJ7dO3fLsV52iJmQDu8h27cLFsmFcLHrwgCdg"]
+  records = [
+    "google-site-verification=ytC4-ZAJ7dO3fLsV52iJmQDu8h27cLFsmFcLHrwgCdg",
+    # `~all` rather than `-all`: forwarding breaks SPF by design, because a
+    # forwarder relays under its own address. A hard fail rejects that mail.
+    "v=spf1 include:_spf.google.com ~all",
+  ]
 }
 
-# Hands mail for the domain to Google Workspace. One host at priority 1, not the
-# five ASPMX records older guides still give: Google replaced that set with a
-# single target, and mixing the two is how a domain ends up delivering to both
-# generations of the same service.
-#
-# The box runs no mail server, so this is the only thing that will ever accept
-# mail here — the API's own outbound notifications, if they ever exist, are a
-# provider's API and not this record.
+# One host at priority 1, not the five ASPMX records older guides still give:
+# Google replaced that set, and running both generations of it delivers to two
+# places at once.
 resource "aws_route53_record" "apex_mx" {
   zone_id = aws_route53_zone.primary.zone_id
   name    = aws_route53_zone.primary.name
@@ -322,20 +322,43 @@ resource "aws_route53_record" "apex_mx" {
 }
 
 # The public half of the key Google signs outgoing mail with, under the selector
-# named in the signature's `s=` tag. Not on the apex: DKIM is always looked up at
-# `<selector>._domainkey`, which is why this is the one record here with a name
-# of its own.
+# named in a signature's `s=` tag.
 #
-# The value is one key split across two strings. A DNS character-string caps at
-# 255 bytes and a 2048-bit key's base64 runs to 408, so the `""` in the middle is
-# a real boundary, not a typo — a resolver concatenates adjacent strings back
-# into one value before any verifier sees it. Closing the gap would exceed the
-# cap and Route53 would reject the record; splitting anywhere else is equally
-# valid, since the join is byte-for-byte.
+# One key split across two strings: a DNS character-string caps at 255 bytes and
+# this key's base64 runs to 408, so the `""` in the middle is a real boundary,
+# not a typo. A resolver concatenates adjacent strings before any verifier parses
+# them.
 resource "aws_route53_record" "google_domainkey" {
   zone_id = aws_route53_zone.primary.zone_id
   name    = "google._domainkey.${aws_route53_zone.primary.name}"
   type    = "TXT"
   ttl     = 3600
   records = ["v=DKIM1;k=rsa;p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsn5him2Gh5VlT5TgFPytX39+sK9LWweR0ptYpKwkWELZrDJBGVil2ChdVKciIva5HkRUghEdqnBjEl4fSh5qZZYmePE6MvM+AWQ2KrUSU0reHvWXjZZZUzfkHzp7doUc8rw/AKfizCU4KOdVujNqHrp7rAdbxJCu2FKeSO0OMfIFUrLnhC7d1X3mnDRyeXDdq26\"\"LzDtUoArd3SLRvBEcrCq49xvJ2SnnmAodt4cKFqVUxthxe97Hi1k4rCfS3ERhCOhw06Vqtgc/F040rTQ1lBCYZ08AnmnG1lNOi4IQwfNgUfn+t0UGJz4D0weQaLYSaL/4kd/AqsgyX5rHpqj/nQIDAQAB"]
+}
+
+# What makes the two records above enforceable: without a policy, a receiver
+# holding a failing signature has nothing telling it what to do.
+#
+# This record does not enforce anything yet, and does not collect anything
+# either. `p=none` asks receivers to act on nothing, and with no `rua` there is
+# nowhere for them to report to — so today it is a placeholder that reserves the
+# name, not a control. That is deliberate on both halves: a policy written before
+# anyone has watched a week of traffic rejects the sender somebody forgot about,
+# and there is no mailbox in this domain yet to read reports at. An address in
+# another domain only receives them if that zone publishes
+# `ondbreathe.app._report._dmarc.<their-domain>`, which is why `rua` is not
+# simply pointed elsewhere.
+#
+# Turning it into a control is two edits in order: add `rua` and read the reports
+# first, then tighten `p`.
+resource "aws_route53_record" "dmarc" {
+  zone_id = aws_route53_zone.primary.zone_id
+  name    = "_dmarc.${aws_route53_zone.primary.name}"
+  type    = "TXT"
+  # Short, for the reason the apex A record is short: this is the one record here
+  # written to be changed, and tightening a DMARC policy wrong loses mail
+  # silently. At 3600 the bad version stands for an hour at every receiver that
+  # cached it, and the rollback is stale for another hour.
+  ttl     = 300
+  records = ["v=DMARC1; p=none"]
 }
