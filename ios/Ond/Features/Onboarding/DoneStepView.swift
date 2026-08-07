@@ -27,11 +27,7 @@ struct DoneStepView: View {
                 .foregroundStyle(Theme.Ink.secondary)
             }
             .padding(Theme.Spacing.standard)
-            .background(Theme.Surface.raised, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.Radius.card)
-                    .stroke(Theme.Surface.line)
-            )
+            .glassCard()
             .accessibilityElement(children: .combine)
         }
     }

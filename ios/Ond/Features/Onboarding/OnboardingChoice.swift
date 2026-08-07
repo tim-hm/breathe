@@ -34,8 +34,7 @@ struct OnboardingChoice: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(Theme.Spacing.standard)
-            .background(isSelected ? accent.opacity(0.18) : Theme.Surface.raised, in: card)
-            .overlay(card.stroke(isSelected ? accent : Theme.Surface.line, lineWidth: 1))
+            .glassCard(tinted: isSelected ? accent : nil, interactive: true)
         }
         .buttonStyle(.plain)
         // One element rather than a button wrapping two labels, so VoiceOver
@@ -43,9 +42,5 @@ struct OnboardingChoice: View {
         // selected" instead of stopping on the title.
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
-    }
-
-    private var card: RoundedRectangle {
-        RoundedRectangle(cornerRadius: Theme.Radius.card)
     }
 }

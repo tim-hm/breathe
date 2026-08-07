@@ -238,13 +238,6 @@ public final class OnboardingModel {
         step = previous
     }
 
-    /// How far through, for a progress indicator. Excludes `.done`, which is a
-    /// confirmation rather than a question.
-    public var progress: Double {
-        let questions = Double(Step.allCases.count - 1)
-        return Double(step.rawValue) / questions
-    }
-
     /// The answers as they stand. The display name is absent on purpose — the
     /// flow never asks for one, and the leaderboard screen owns it.
     public var profile: Profile {

@@ -51,7 +51,7 @@ struct WelcomeStepView: View {
                 .font(.body)
                 .foregroundStyle(Theme.Ink.secondary)
 
-                Text("Three quick questions first, then we'll get out of your way.")
+                Text("Four quick questions first, then we'll get out of your way.")
                     .font(.subheadline)
                     .foregroundStyle(Theme.Ink.tertiary)
             }
