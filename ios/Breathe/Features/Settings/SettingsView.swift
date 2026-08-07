@@ -2,9 +2,14 @@ import BreatheKit
 import BreatheUI
 import SwiftUI
 
-/// The app's few dials, and the place future ones land: reminders (M7) and
-/// the subscription (M8) get sections here rather than new chrome.
+/// The app's few dials, and the place future ones land: the subscription
+/// (M8) gets a section here rather than new chrome.
 struct SettingsView: View {
+    /// Schedules live behind a link here rather than a tab: set once, edited
+    /// rarely, and the notification tray is their daily face.
+    let schedules: ScheduleStore
+    let catalogue: TechniqueListModel
+
     @Environment(SessionSettings.self) private var settings
 
     var body: some View {
@@ -18,6 +23,21 @@ struct SettingsView: View {
                             Text(appearance.title).tag(appearance)
                         }
                     }
+                }
+                .listRowBackground(Theme.Surface.raised)
+
+                Section {
+                    NavigationLink {
+                        SchedulesView(store: schedules, catalogue: catalogue)
+                    } label: {
+                        LabeledContent("Schedules") {
+                            Text(scheduleSummary)
+                        }
+                    }
+                } footer: {
+                    Text("A standing time for a technique — box breathing every "
+                        + "weekday at 8, say. iOS asks for notification "
+                        + "permission when you set your first one.")
                 }
                 .listRowBackground(Theme.Surface.raised)
 
@@ -48,5 +68,12 @@ struct SettingsView: View {
             .paletteGround()
             .navigationTitle("Settings")
         }
+    }
+
+    /// "2 active" beside the link — enough to know the feature is in use
+    /// without opening it. Disabled schedules deliberately don't count.
+    private var scheduleSummary: String {
+        let active = schedules.schedules.count(where: \.isEnabled)
+        return active == 0 ? "None" : "\(active) active"
     }
 }

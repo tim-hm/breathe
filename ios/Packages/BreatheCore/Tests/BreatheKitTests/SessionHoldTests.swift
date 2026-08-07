@@ -146,6 +146,8 @@ final class RecordingCues: SessionCueing {
 struct DiscardingRecorder: SessionRecording {
     func record(_: SessionRecord) async {}
 
+    func remove(_: SessionRecord.ID) async {}
+
     func merge(_: [SessionRecord]) async -> Bool {
         false
     }

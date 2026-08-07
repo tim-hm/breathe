@@ -26,14 +26,6 @@ struct TechniqueDetailView: View {
                 sessionShape(of: dialled)
                 lengthControl(of: dialled)
                 advanced(of: dialled)
-
-                Picker("Cues", selection: $settings.cueMode) {
-                    ForEach(SessionCueMode.allCases) { mode in
-                        Text(mode.title).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-
                 beginButton(playing: dialled)
             }
             .padding(Theme.Spacing.standard)

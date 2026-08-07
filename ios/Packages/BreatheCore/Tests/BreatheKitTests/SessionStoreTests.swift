@@ -61,6 +61,42 @@ struct SessionStoreTests {
         #expect(sessions.isEmpty)
     }
 
+    /// Deletion has to hold against the sync: `merge` runs on every restore,
+    /// and without the tombstone it would hand a deleted-but-synced session
+    /// straight back on the next foreground.
+    @Test("A deleted session stays deleted through a merge")
+    func deletionSurvivesMerge() async {
+        let store = FileSessionStore(directory: temporaryDirectory())
+        let kept = record(slug: "box-breathing")
+        let deleted = record(slug: "bellows-breath")
+
+        await store.record(kept)
+        await store.record(deleted)
+        await store.remove(deleted.id)
+
+        #expect(await store.recordedSessions() == [kept])
+
+        // The server still holds both; only the one never deleted may return.
+        let changed = await store.merge([kept, deleted])
+        #expect(!changed)
+        #expect(await store.recordedSessions() == [kept])
+    }
+
+    /// Removing an id the store never held must not tombstone it — the same id
+    /// arriving later from the server is a session this device simply hadn't
+    /// seen yet, not one the person got rid of.
+    @Test("Removing an unknown id does not block it from a later merge")
+    func unknownRemovalLeavesNoTombstone() async {
+        let store = FileSessionStore(directory: temporaryDirectory())
+        let incoming = record()
+
+        await store.remove(incoming.id)
+        let changed = await store.merge([incoming])
+
+        #expect(changed)
+        #expect(await store.recordedSessions() == [incoming])
+    }
+
     /// Unreadable history must not take a session down with it: the person is
     /// mid-breath and there is nothing they could do about it.
     @Test("Corrupt history reads as empty rather than throwing")

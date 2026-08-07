@@ -17,6 +17,10 @@ struct JourneyView: View {
     /// its technique; the slug then stands in rather than hiding the row.
     let catalogue: TechniqueListModel
 
+    /// The row awaiting the person's confirmation before it goes — deletion
+    /// takes the stats with it, so it is asked about, not swiped away.
+    @State private var toDelete: SessionRecord?
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -88,10 +92,39 @@ struct JourneyView: View {
                 LazyVStack(spacing: 0) {
                     ForEach(model.history) { record in
                         SessionHistoryRow(record: record, name: name(for: record))
+                            // A context menu rather than a swipe: these rows
+                            // live in a ScrollView, where swipe actions do not
+                            // exist, and a visible affordance per row would
+                            // put a delete button beside every breath taken.
+                            .contextMenu {
+                                Button("Delete session", systemImage: "trash", role: .destructive) {
+                                    toDelete = record
+                                }
+                            }
                         Divider().overlay(Theme.Surface.line)
                     }
                 }
             }
+        }
+        .confirmationDialog(
+            "Delete this session?",
+            isPresented: Binding(
+                get: { toDelete != nil },
+                set: {
+                    if !$0 {
+                        toDelete = nil
+                    }
+                }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                guard let record = toDelete else { return }
+                toDelete = nil
+                Task { await model.delete(record) }
+            }
+        } message: {
+            Text("It comes out of your totals and streak too.")
         }
     }
 

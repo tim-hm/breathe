@@ -20,6 +20,10 @@ struct SessionSyncQueueTests {
             stored.append(session)
         }
 
+        func remove(_ id: SessionRecord.ID) async {
+            stored.removeAll { $0.id == id }
+        }
+
         func recordedSessions() async -> [SessionRecord] {
             stored
         }

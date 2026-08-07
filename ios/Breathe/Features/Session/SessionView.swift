@@ -29,7 +29,7 @@ struct SessionView: View {
         ZStack {
             backdrop.ignoresSafeArea()
 
-            if model.status == .finished, let record = model.record {
+            if model.status == .finished, let record = model.record, !model.wasDiscarded {
                 SessionSummaryView(record: record, technique: model.technique) { dismiss() }
             } else if let countdown {
                 getReady(countdown)
@@ -59,6 +59,13 @@ struct SessionView: View {
             }
         }
         .onChange(of: model.currentBeat?.id) { _, _ in announceCurrentPhase() }
+        // A false start — ended by hand inside the first seconds — was never
+        // recorded, so there is no summary to show; the screen just goes.
+        .onChange(of: model.status) { _, status in
+            if status == .finished, model.wasDiscarded {
+                dismiss()
+            }
+        }
     }
 
     /// The breath before the breathing: a beat to settle before the plan's

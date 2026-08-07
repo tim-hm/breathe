@@ -1,6 +1,8 @@
 import BreatheKit
 import BreatheUI
+import os
 import SwiftUI
+import UIKit
 
 /// The way in: say what you want, start breathing.
 ///
@@ -17,6 +19,11 @@ struct HomeView: View {
     let sessions: any SessionRecording
 
     @Environment(SessionSettings.self) private var settings
+
+    /// Diagnostic for the wheel haptic that a device reports never feeling:
+    /// both feedback paths log here, so a console next to a silent phone can
+    /// say which half is lying. Remove once the device mystery is solved.
+    private static let wheelLog = Logger(subsystem: "xyz.holmie.breathe", category: "wheel")
 
     /// What the wheel points at. Set once the catalogue lands — before then
     /// there is no goal known to have a technique behind it.
@@ -96,6 +103,10 @@ struct HomeView: View {
         }
     }
 
+    /// The screen's rhythm in three equal breaths of space: one above the
+    /// orb, one between orb and wheel, one between wheel and Begin. Equal
+    /// spacers are what keep the wheel exactly halfway between the breathing
+    /// and the button on any screen height.
     private func loaded(_ techniques: [Technique]) -> some View {
         let chosen = chosen(from: techniques)
 
@@ -103,29 +114,28 @@ struct HomeView: View {
             wordmark
                 .padding(.top, Theme.Spacing.standard)
 
-            Spacer()
+            Spacer(minLength: Theme.Spacing.standard)
 
-            VStack(spacing: Theme.Spacing.loose) {
-                AmbientOrb(accent: chosen?.goal.accent ?? Theme.Accent.brand)
+            AmbientOrb(accent: chosen?.goal.accent ?? Theme.Accent.brand)
 
-                intentWheel(over: goals(in: techniques))
+            Spacer(minLength: Theme.Spacing.standard)
 
-                // Begin sits directly under the wheel — it acts on what the
-                // wheel says, and the technique row is a footnote to both.
-                // The extra top padding keeps a thumb finishing a spin from
-                // landing on it.
-                if let chosen {
-                    VStack(spacing: Theme.Spacing.standard) {
-                        beginButton(chosen)
-                        chosenTechnique(chosen)
-                    }
-                    .padding(.top, Theme.Spacing.standard)
+            intentWheel(over: goals(in: techniques))
+
+            Spacer(minLength: Theme.Spacing.standard)
+
+            // The reading order is the doing order: what you want (wheel),
+            // what that resolves to (link), then Begin — which terminates the
+            // screen, with nothing beneath it for the tab bar to crowd.
+            if let chosen {
+                VStack(spacing: Theme.Spacing.standard) {
+                    chosenTechnique(chosen)
+                    beginButton(chosen)
                 }
             }
-
-            Spacer()
         }
-        .padding(Theme.Spacing.standard)
+        .padding(.horizontal, Theme.Spacing.standard)
+        .padding(.bottom, Theme.Spacing.loose)
     }
 
     /// The site's wordmark, in the site's voice: serif, letterspaced, quiet.
@@ -162,10 +172,18 @@ struct HomeView: View {
             .pickerStyle(.wheel)
             .frame(width: 205, height: 132)
         }
-        // The detent click a hardware wheel would give: one tick per option as
-        // the spin passes it. Skipped for the settle on launch — that is the
-        // app restoring state, not the person choosing.
-        .sensoryFeedback(.selection, trigger: goal) { old, _ in old != nil }
+        // One firm tap as the wheel lands on a choice. An impact rather than
+        // `.selection`, which is the lightest haptic there is — under a finger
+        // that is actively dragging the wheel it disappears entirely. Skipped
+        // for the settle on launch — that is the app restoring state, not the
+        // person choosing.
+        .sensoryFeedback(.impact(weight: .medium), trigger: goal) { old, new in
+            Self.wheelLog
+                .notice(
+                    "sensoryFeedback trigger evaluated: \(String(describing: old), privacy: .public) -> \(String(describing: new), privacy: .public)"
+                )
+            return old != nil
+        }
     }
 
     /// The technique the wheel's goal resolves to, as a way through to its
@@ -234,6 +252,14 @@ struct HomeView: View {
             set: {
                 goal = $0
                 settings.lastGoal = $0
+                // Diagnostic, not the design: a direct generator, outside
+                // .sensoryFeedback, so a silent device splits "modifier never
+                // fires" from "feedback generators are suppressed".
+                UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                Self.wheelLog
+                    .notice(
+                        "wheel settled on \($0.rawValue, privacy: .public); direct heavy impact fired"
+                    )
             }
         )
     }
