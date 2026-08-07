@@ -163,7 +163,7 @@ async fn recommend(
     call_grpc_web_with::<_, pb::GetRecommendationResponse>(
         build_app_with(db.pool.clone(), model, verifier),
         GET_RECOMMENDATION,
-        &pb::GetRecommendationRequest {},
+        &pb::GetRecommendationRequest::default(),
         &[(USER_ID_HEADER, user)],
     )
     .await

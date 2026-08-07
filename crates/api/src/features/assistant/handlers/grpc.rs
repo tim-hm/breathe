@@ -37,9 +37,17 @@ impl AssistantService for AssistantServiceImpl {
         request: Request<GetRecommendationRequest>,
     ) -> Result<Response<GetRecommendationResponse>, Status> {
         let user_id = identity::require(&request)?;
-        let response =
-            service::get_recommendation(&self.state.pool, self.state.assistant.as_ref(), user_id)
-                .await?;
+        // The health context is special-category data passing through: handed
+        // straight to the service, never logged, never stored — the request
+        // must not be formatted anywhere on this path.
+        let health = request.into_inner().health_context;
+        let response = service::get_recommendation(
+            &self.state.pool,
+            self.state.assistant.as_ref(),
+            user_id,
+            health,
+        )
+        .await?;
         Ok(Response::new(response))
     }
 
@@ -53,13 +61,14 @@ impl AssistantService for AssistantServiceImpl {
         request: Request<ExplainTechniqueRequest>,
     ) -> Result<Response<Self::ExplainTechniqueStream>, Status> {
         let user_id = identity::require(&request)?;
-        let slug = request.into_inner().technique_slug;
+        let request = request.into_inner();
 
         let stream = service::explain_technique(
             &self.state.pool,
             self.state.assistant.as_ref(),
             user_id,
-            &slug,
+            &request.technique_slug,
+            request.health_context,
         )
         .await?;
 
