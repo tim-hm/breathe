@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use api::assistant::{DisabledModelClient, ModelClient};
 use api::config::{Config, Environment};
+use api::entitlement::{AppStoreVerifier, TransactionVerifier};
 use api::state::AppState;
 use axum::Router;
 use axum::body::{Body, Bytes};
@@ -99,7 +100,31 @@ impl TestDatabase {
     /// model is the one thing that varies, and twenty unrelated tests should not
     /// carry it.
     pub fn app_with_model(&self, assistant: Arc<dyn ModelClient>) -> Router {
-        build_app_with_model(self.pool.clone(), assistant)
+        build_app_with(self.pool.clone(), assistant, Arc::new(AppStoreVerifier))
+    }
+
+    /// The same router with a scripted App Store verifier behind the seam.
+    ///
+    /// Paired with [`Self::app`] for the same reason as [`Self::app_with_model`]
+    /// — and needed for the same reason the model seam is: no test can hold an
+    /// Apple-signed transaction, so a suite driven through the real verifier
+    /// could only ever assert that everything is rejected.
+    pub fn app_with_verifier(&self, entitlement: Arc<dyn TransactionVerifier>) -> Router {
+        build_app_with(
+            self.pool.clone(),
+            Arc::new(DisabledModelClient),
+            entitlement,
+        )
+    }
+
+    /// Both seams at once, for the tests that buy a subscription and then spend
+    /// it.
+    pub fn app_with_model_and_verifier(
+        &self,
+        assistant: Arc<dyn ModelClient>,
+        entitlement: Arc<dyn TransactionVerifier>,
+    ) -> Router {
+        build_app_with(self.pool.clone(), assistant, entitlement)
     }
 }
 
@@ -108,11 +133,19 @@ impl TestDatabase {
 /// Separate from [`TestDatabase::app`] so a test can supply a pool that is
 /// deliberately broken — see `health.rs`.
 pub fn build_app(pool: PgPool) -> Router {
-    build_app_with_model(pool, Arc::new(DisabledModelClient))
+    build_app_with(
+        pool,
+        Arc::new(DisabledModelClient),
+        Arc::new(AppStoreVerifier),
+    )
 }
 
-/// [`build_app`], plus the model the assistant should call.
-pub fn build_app_with_model(pool: PgPool, assistant: Arc<dyn ModelClient>) -> Router {
+/// [`build_app`], plus both of the seams a deployment chooses at startup.
+pub fn build_app_with(
+    pool: PgPool,
+    assistant: Arc<dyn ModelClient>,
+    entitlement: Arc<dyn TransactionVerifier>,
+) -> Router {
     let config = Config {
         environment: Environment::Dev,
         // Read only while building the pool, which the caller has already done.
@@ -124,7 +157,8 @@ pub fn build_app_with_model(pool: PgPool, assistant: Arc<dyn ModelClient>) -> Ro
         openrouter_api_key: None,
     };
 
-    api::build_app(AppState::new(pool, config, assistant)).expect("the router assembles")
+    api::build_app(AppState::new(pool, config, assistant, entitlement))
+        .expect("the router assembles")
 }
 
 fn database_url() -> String {

@@ -12,8 +12,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use api::assistant::{
-    DAILY_MODEL_CALLS, GuardedModelClient, ModelClient, ModelError, ModelRequest, ModelStream,
+    GuardedModelClient, ModelClient, ModelError, ModelRequest, ModelStream, daily_model_calls,
 };
+use api::entitlement::Tier;
 use api::identity::USER_ID_HEADER;
 use api::proto::breathe::v1 as pb;
 
@@ -154,12 +155,17 @@ async fn the_fallback_ranks_by_the_goals_they_picked() {
 /// degraded answer rather than an error: the person asked a question and gets
 /// one, flagged. Without the flag a client would present rule-based copy as
 /// personalised.
+///
+/// Nobody here has bought anything, so the ceiling is the free tier's. What a
+/// subscription changes is `entitlement.rs`'s business.
 #[tokio::test]
 async fn an_exhausted_quota_answers_from_the_rules() {
     let db = TestDatabase::create("assistant_quota").await;
     let model = ScriptedModel::always(Ok("box-breathing | Steady.".to_owned()));
+    let allowance =
+        usize::try_from(daily_model_calls(Tier::Free)).expect("the allowance is positive");
 
-    for _ in 0..DAILY_MODEL_CALLS {
+    for _ in 0..allowance {
         let response = recommend(&db, model.clone(), USER).await;
         assert_eq!(response.source, pb::AssistantSource::Model as i32);
     }
@@ -170,7 +176,7 @@ async fn an_exhausted_quota_answers_from_the_rules() {
 
     assert_eq!(
         model.calls(),
-        DAILY_MODEL_CALLS as usize,
+        allowance,
         "the call past the limit must not reach the model at all"
     );
 
@@ -185,9 +191,14 @@ async fn an_exhausted_quota_answers_from_the_rules() {
 /// start again once it might not be. Both halves are asserted through the call
 /// count, because a breaker that never opened and one that never closed both
 /// still return an answer.
+///
+/// The caller is put on Plus first, so the only ceiling in play is the breaker's
+/// — five attempts is more than the free allowance, and a quota that ran out
+/// mid-test would look exactly like a breaker that never closed.
 #[tokio::test]
 async fn the_breaker_trips_and_then_recovers() {
     let db = TestDatabase::create("assistant_breaker").await;
+    subscribe(&db, USER).await;
 
     let model = ScriptedModel::script(vec![
         Err(ModelError::Failed("first".to_owned())),
@@ -430,6 +441,23 @@ async fn explain(
 
 /// Stores goals through the real `ProfileService`, so the rows the assistant
 /// reads are the ones onboarding writes.
+/// Puts somebody on Plus by writing the column `EntitlementService` writes.
+///
+/// Straight into the row rather than through a submission, because this suite
+/// scripts no verifier and the only thing it wants from a subscription is the
+/// larger allowance. What a real purchase does to that column is
+/// `entitlement.rs`'s business.
+async fn subscribe(db: &TestDatabase, user: &str) {
+    sqlx::query(
+        "INSERT INTO users (id, plus_until) VALUES ($1, now() + interval '1 year')
+         ON CONFLICT (id) DO UPDATE SET plus_until = EXCLUDED.plus_until",
+    )
+    .bind(user.parse::<uuid::Uuid>().expect("a valid uuid"))
+    .execute(&db.pool)
+    .await
+    .expect("the subscription is written");
+}
+
 async fn set_goals(db: &TestDatabase, user: &str, goals: &[pb::TechniqueGoal]) {
     let response: crate::harness::GrpcWebResponse<pb::UpdateProfileResponse> = call_grpc_web_with(
         db.app(),

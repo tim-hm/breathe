@@ -10,6 +10,7 @@ use std::path::PathBuf;
 const PROTO_ROOT: &str = "../../proto";
 const SERVICE_PROTOS: &[&str] = &[
     "../../proto/breathe/v1/assistant_service.proto",
+    "../../proto/breathe/v1/entitlement_service.proto",
     "../../proto/breathe/v1/journey_service.proto",
     "../../proto/breathe/v1/profile_service.proto",
     "../../proto/breathe/v1/technique_service.proto",

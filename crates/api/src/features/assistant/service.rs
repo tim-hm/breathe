@@ -18,9 +18,10 @@ use uuid::Uuid;
 use super::errors::AssistantError;
 use super::model::{ModelClient, ModelRequest};
 use super::types::{
-    DAILY_MODEL_CALLS, EXPLANATION_MAX_TOKENS, RECOMMENDATION_MAX_TOKENS, Recommendation,
+    EXPLANATION_MAX_TOKENS, RECOMMENDATION_MAX_TOKENS, Recommendation, daily_model_calls,
 };
 use super::{fallback, parse, prompt, repository};
+use crate::features::entitlement;
 use crate::features::profile::repository::{ProfileRow, find_profile};
 use crate::features::technique::repository::{TechniqueRow, list_techniques};
 use crate::proto::breathe::v1 as pb;
@@ -194,11 +195,20 @@ fn from_fallback(text: &str) -> ExplanationStream {
 
 /// Claims one call against the caller's daily allowance.
 ///
+/// The allowance is whatever their entitlement buys, read from their own row
+/// rather than from the request: this is the only place in the codebase where a
+/// client could otherwise talk the server into spending money, and it is two
+/// statements — the tier, then the claim — rather than one so that the rule
+/// ("Plus gets more") stays in Rust where it is testable instead of inside the
+/// `WHERE` clause.
+///
 /// A database failure here reads as "no allowance". The alternative — failing
 /// the whole RPC — would take the fallback down with the counter, and the
 /// fallback is the thing that is supposed to survive.
 async fn claim_call(pool: &PgPool, user_id: Uuid) -> bool {
-    match repository::claim_daily_call(pool, user_id, DAILY_MODEL_CALLS).await {
+    let limit = daily_model_calls(entitlement::service::tier(pool, user_id).await);
+
+    match repository::claim_daily_call(pool, user_id, limit).await {
         Ok(claimed) => {
             if !claimed {
                 tracing::info!(

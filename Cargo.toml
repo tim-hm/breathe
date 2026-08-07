@@ -9,6 +9,10 @@ rust-version = "1.96"
 [workspace.dependencies]
 anyhow = "1"
 axum = "0.8"
+# The three base64url segments of an App Store signed transaction. Already in
+# the binary through rustls; named here because `features/entitlement` decodes
+# a JWS itself rather than through a library that hides the encoding.
+base64 = "0.22"
 chrono = { version = "0.4", features = ["serde"] }
 cuid2 = "0.1"
 prost = "0.14"
@@ -19,6 +23,10 @@ prost-types = "0.14"
 # native-tls, matching the TLS stack sqlx already links — one TLS
 # implementation in the binary, and no OpenSSL on the build host.
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+# The ES256 check over an App Store transaction's signing input. rustls already
+# links it, so this adds a name to the manifest rather than a second crypto
+# implementation to the binary — the same rule the reqwest line above follows.
+ring = "0.17"
 serde = { version = "1", features = ["derive"] }
 # Bodies for the chat-completions API, and the SSE frames its stream carries.
 serde_json = "1"
@@ -46,6 +54,11 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 # generator feature is enabled — a server that could mint one would invite an
 # identity the client never sees.
 uuid = "1"
+# The certificate chain an App Store JWS carries in its header: parses the DER,
+# checks each certificate's signature against its issuer, and reads the Apple
+# marker extensions. `verify` selects ring as the backend, which is the one
+# already in the binary.
+x509-parser = { version = "0.18", features = ["verify"] }
 
 # What a deployment ships (`mise run build:release`). Thin LTO buys most of
 # fat LTO's cross-crate inlining at a fraction of the link time, and stripping

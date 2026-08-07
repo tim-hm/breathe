@@ -13,6 +13,7 @@
 #![allow(clippy::expect_used, clippy::panic)]
 
 mod assistant;
+mod entitlement;
 mod harness;
 mod health;
 mod journey;

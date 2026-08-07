@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users\n            SET plus_until = CASE\n                  WHEN app_store_original_transaction_id = $2 THEN NULL\n                  ELSE plus_until\n                END,\n                updated_at = now()\n          WHERE id = $1\n        RETURNING plus_until",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "plus_until",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "plus_until"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "78872639a7473dcde9997a2f8614097c4f58ae8e36fa38500447b49aa4793cdb"
+}
