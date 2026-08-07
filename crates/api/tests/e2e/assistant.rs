@@ -52,6 +52,33 @@ async fn only_real_slugs_reach_the_client() {
     assert_eq!(model.calls(), 1);
 }
 
+/// The harness records what the model was asked, which is what lets a test
+/// assert on the prompt rather than only on the reply. The split is the part
+/// worth checking from out here: the catalogue must ride in the cacheable
+/// prefix, shared by every caller, and the person's own data in the
+/// instruction after it — a leak the other way is invisible in behaviour and
+/// visible only on the bill.
+#[tokio::test]
+async fn the_model_request_is_captured_for_inspection() {
+    let db = TestDatabase::create("assistant_request_capture").await;
+    set_goals(&db, USER, &[pb::TechniqueGoal::Sleep]).await;
+    let model = ScriptedModel::always(Ok("box-breathing | Steady.".to_owned()));
+
+    recommend(&db, model.clone(), USER).await;
+
+    let requests = model.requests();
+    assert_eq!(requests.len(), 1, "one call captures one request");
+    assert!(
+        requests[0].cacheable_prefix.contains("box-breathing"),
+        "the catalogue rides in the shared prefix"
+    );
+    assert!(
+        requests[0].instruction.contains("PROFILE"),
+        "the per-caller half carries their profile"
+    );
+    assert!(requests[0].max_tokens > 0);
+}
+
 /// A reply naming nothing real is not an empty list — it is the fallback, and
 /// the flag says so. This is the case that decides whether a client ever has to
 /// render "the assistant had nothing to say".
