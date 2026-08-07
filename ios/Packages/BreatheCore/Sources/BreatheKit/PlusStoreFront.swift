@@ -1,0 +1,140 @@
+import Foundation
+
+/// The subscription this app sells, in the vocabulary of the app rather than of
+/// `StoreKit`.
+///
+/// Only what a paywall draws. The `Product` type carries a dozen more fields —
+/// subscription group, promotional offers, introductory periods — and every one
+/// of them would be a reason for a view to reach past this boundary.
+public struct PlusProduct: Sendable, Equatable {
+    /// Must match the product id in App Store Connect, in
+    /// `ios/Breathe/Breathe.storekit`, and in the server's
+    /// `features/entitlement/types.rs`. Four places, and there is no build-time
+    /// check that ties them together — a mismatch presents as a paywall with no
+    /// price and a purchase that never verifies.
+    public static let identifier = "xyz.holmie.breathe.plus.yearly"
+
+    /// Already formatted for the storefront the person is buying from. Never
+    /// composed here: the App Store owns the currency, the symbol's position,
+    /// and whether the amount rounds — and it varies by country.
+    public let displayPrice: String
+
+    public init(displayPrice: String) {
+        self.displayPrice = displayPrice
+    }
+}
+
+/// One `StoreKit` transaction, reduced to what this app decides from.
+///
+/// The JWS travels alongside the decoded fields rather than instead of them:
+/// this device reads the fields to decide what to show, and the server reads the
+/// JWS to decide what to spend. Neither trusts the other's reading, which is the
+/// whole arrangement.
+public struct PlusTransaction: Sendable, Equatable {
+    public let id: UInt64
+    public let productID: String
+
+    /// When the current period ends. `nil` for a product that does not expire,
+    /// which this app does not sell — treated as "no expiry" rather than
+    /// rejected, because a rule that silently dropped a transaction would be
+    /// invisible.
+    public let expirationDate: Date?
+
+    /// Set when Apple refunded or revoked the purchase. Present here at all
+    /// because `Transaction.updates` delivers revocations, and a client that
+    /// filtered them out would leave the server honouring a refund forever.
+    public let revocationDate: Date?
+
+    /// `Transaction.jwsRepresentation`, verbatim, for the server to verify.
+    public let jws: String
+
+    public init(
+        id: UInt64,
+        productID: String,
+        expirationDate: Date?,
+        revocationDate: Date?,
+        jws: String
+    ) {
+        self.id = id
+        self.productID = productID
+        self.expirationDate = expirationDate
+        self.revocationDate = revocationDate
+        self.jws = jws
+    }
+
+    /// Whether this transaction entitles somebody to Plus at `moment`.
+    ///
+    /// `Transaction.currentEntitlements` has already applied most of this, so
+    /// the checks look redundant — they are not. This is the rule the app gates
+    /// on, and a rule that lives only inside a framework is one no test can
+    /// state and no reader can find.
+    public func entitlesPlus(at moment: Date) -> Bool {
+        guard productID == PlusProduct.identifier, revocationDate == nil else { return false }
+        guard let expirationDate else { return true }
+
+        return expirationDate > moment
+    }
+
+    /// What the submission ledger records.
+    ///
+    /// The revocation is part of the key, not just the id: a refund arrives as
+    /// the *same* transaction with a date on it, and a ledger keyed on the id
+    /// alone would skip it as already sent — leaving the server paying out a
+    /// subscription Apple has refunded.
+    public var submissionKey: String {
+        revocationDate == nil ? "\(id)" : "\(id).revoked"
+    }
+}
+
+/// How a purchase attempt ended.
+///
+/// `pending` is a real outcome rather than a failure: Ask to Buy sends the
+/// request to a parent and the answer arrives hours later, through
+/// `PlusStoreFront/updates()`, which is exactly why that stream exists.
+public enum PlusPurchaseOutcome: Sendable, Equatable {
+    case purchased(PlusTransaction)
+    case cancelled
+    case pending
+}
+
+public enum PlusStoreFrontError: Error, Equatable {
+    /// The App Store has no such product. In the simulator this means the run
+    /// scheme is not pointed at `Breathe.storekit`; on a device it means the
+    /// product is not yet approved in App Store Connect.
+    case productUnavailable
+
+    /// `StoreKit` declined to vouch for the signature on a transaction it just
+    /// produced. Surfaced rather than swallowed: it should never happen, and a
+    /// silent "purchase did nothing" is the worst possible way to find out.
+    case unverified
+}
+
+/// Everything this app needs from `StoreKit`, and nothing else.
+///
+/// A seam for the same reason `assistant::ModelClient` is one on the server: the
+/// interesting logic is what the app *decides* from a set of transactions, and
+/// none of that should need a signed-in App Store account and a booted simulator
+/// to exercise. `StoreKitPlusStoreFront` is the only type in the repository that
+/// imports `StoreKit`.
+public protocol PlusStoreFront: Sendable {
+    /// The product, for the price on the paywall. `nil` rather than throwing —
+    /// the paywall has a story for a missing price, and a person with no signal
+    /// should still be able to read what Plus is.
+    func product() async -> PlusProduct?
+
+    /// What `StoreKit` currently considers this person entitled to. Answered
+    /// from the device, so it works offline, which is why no screen ever waits
+    /// on the server for this.
+    func currentEntitlements() async -> [PlusTransaction]
+
+    /// Transactions arriving after launch: a renewal, a purchase made on
+    /// another device, an Ask to Buy approval, a refund.
+    func updates() -> AsyncStream<PlusTransaction>
+
+    func purchase() async throws -> PlusPurchaseOutcome
+
+    /// Restores purchases, which App Review requires a paywall to offer. It
+    /// prompts for the App Store password, so it is only ever called from a
+    /// button somebody pressed.
+    func restore() async throws
+}

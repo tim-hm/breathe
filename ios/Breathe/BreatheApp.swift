@@ -150,6 +150,12 @@ struct BreatheApp: App {
                 async let sessions: Void = journey.sync()
                 _ = await (profile, sessions)
             }
+            // Its own task because it never returns: the first thing it does is
+            // read the entitlement and push anything the server has not
+            // acknowledged, and then it listens for renewals and refunds for as
+            // long as the app is running. Folded into the task above it would
+            // hold the other two open forever.
+            .task { await LivePlus.store.watch() }
         }
     }
 }

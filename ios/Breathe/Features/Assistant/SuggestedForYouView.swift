@@ -46,9 +46,19 @@ struct SuggestedForYouView: View {
                         .foregroundStyle(Theme.Ink.primary)
                         .textCase(nil)
                 } footer: {
-                    Text(caption(for: suggestion.source))
-                        .font(.footnote)
-                        .foregroundStyle(Theme.Ink.secondary)
+                    VStack(alignment: .leading, spacing: Theme.Spacing.close) {
+                        Text(caption(for: suggestion.source))
+                            .font(.footnote)
+                            .foregroundStyle(Theme.Ink.secondary)
+
+                        // Offered only where the free tier has actually met its
+                        // edge. A rule-based answer is the one moment somebody
+                        // can see the difference Plus makes, which is a better
+                        // place to ask than a banner they did not come for.
+                        if case .fallback = suggestion.source {
+                            PlusUpsell(reason: "Want this written for you?")
+                        }
+                    }
                 }
             }
         }

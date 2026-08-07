@@ -40,6 +40,13 @@ targets:
     platform: iOS
     sources:
       - path: Breathe
+        # The StoreKit configuration is a build-time input to the *scheme*, not
+        # a resource. Left in the glob, XcodeGen files an unrecognised extension
+        # under Resources and it would ship inside the release bundle.
+        excludes:
+          - Breathe.storekit
+      - path: Breathe/Breathe.storekit
+        buildPhase: none
     dependencies:
       # BreatheAPI is absent because it is not a product of BreatheCore at all —
       # the app cannot name that module even by accident. See the target notes in
@@ -159,6 +166,18 @@ schemes:
         - package: BreatheCore/BreatheUITests
     run:
       config: Debug
+      # The whole purchase flow works in the simulator against this file: local
+      # products, local prices, and a purchase sheet that needs no App Store
+      # Connect record and no sandbox account. It is a debug affordance and
+      # nothing else — a device or TestFlight build resolves products from the
+      # real App Store, because the scheme is not what ships.
+      #
+      # Note what a simulator purchase does *not* exercise: transactions minted
+      # here are signed by a per-machine Xcode test certificate, so the server
+      # refuses them. That is the offline-first design working — the UI is
+      # entitled locally regardless — and it is why the server half needs a
+      # sandbox tester on a real device.
+      storeKitConfiguration: Breathe/Breathe.storekit
       # `BREATHE_API_BASE_URL` is deliberately not set here, and a physical
       # device must not rely on it either: scheme environment variables exist
       # only under Xcode's debugger, so an app opened from the home screen
