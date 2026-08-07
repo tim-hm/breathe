@@ -209,9 +209,11 @@ async fn the_foundations_arrive_over_grpc_web() {
             .map(|topic| topic.slug.as_str())
             .collect::<Vec<_>>(),
         vec![
+            "why-it-works",
             "belly-or-chest",
             "nose-or-mouth",
             "how-to-exhale",
+            "how-slow",
             "sitting-or-lying",
             "eyes-open-or-closed",
         ]
