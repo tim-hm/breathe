@@ -16,6 +16,10 @@ ios/OndWatch/Info.plist
 ios/Ond/Ond.entitlements
 ios/OndWatch/OndWatch.entitlements
 ios/**/.build/
+# Xcode writes here whenever a build passes -derivedDataPath (mise run ios:build,
+# check:diagrams). Object files and asset catalogues, hundreds of them, all
+# untracked — enough to bury a `but status` and to get swept into a stray commit.
+ios/**/build/
 DerivedData/
 *.xcuserstate
 xcuserdata/
