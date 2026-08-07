@@ -27,7 +27,7 @@ public enum AssistantRepositoryError: LocalizedError, Equatable {
 ///
 /// The one type that touches the generated assistant types, mirroring
 /// `TechniqueRepository` — everything above it works in `Guidance` and
-/// `ExplanationChunk`, so a change to the wire format is a change to this file.
+/// `AssistantChunk`, so a change to the wire format is a change to this file.
 public protocol AssistantReading: Sendable {
     /// Techniques to try next, best first.
     func recommendations() async throws -> Guidance
@@ -37,7 +37,15 @@ public protocol AssistantReading: Sendable {
     /// An `AsyncThrowingStream` rather than the Connect interface itself, so
     /// the model above can be written — and tested — against something that
     /// does not need a socket.
-    func explanation(of techniqueSlug: String) -> AsyncThrowingStream<ExplanationChunk, Error>
+    func explanation(of techniqueSlug: String) -> AsyncThrowingStream<AssistantChunk, Error>
+
+    /// The coach's reply to one message, a piece at a time.
+    ///
+    /// `history` is the transcript so far, oldest first, and the new message
+    /// rides separately — the server keeps no conversation state, so every
+    /// call carries what the coach should remember. Same stream shape as
+    /// `explanation(of:)`, for the same testability reason.
+    func chat(history: [ChatTurn], message: String) -> AsyncThrowingStream<AssistantChunk, Error>
 }
 
 public struct AssistantRepository: AssistantReading {
@@ -91,32 +99,57 @@ public struct AssistantRepository: AssistantReading {
         return Guidance(recommendations: recommendations, source: source)
     }
 
-    /// Bridges the repo's first server stream into an `AsyncThrowingStream`.
+    public func explanation(
+        of techniqueSlug: String
+    ) -> AsyncThrowingStream<AssistantChunk, Error> {
+        bridged(client.explainTechnique(), request: { [healthContext] in
+            var request = Breathe_V1_ExplainTechniqueRequest()
+            request.techniqueSlug = techniqueSlug
+            if let context = await healthContext() {
+                request.healthContext = Self.wire(context)
+            }
+            return request
+        }, chunk: { Self.chunk(text: $0.text, source: $0.source) })
+    }
+
+    public func chat(
+        history: [ChatTurn],
+        message: String
+    ) -> AsyncThrowingStream<AssistantChunk, Error> {
+        bridged(client.chat(), request: { [healthContext] in
+            var request = Breathe_V1_ChatRequest()
+            request.history = history.map(Self.wire)
+            request.message = message
+            if let context = await healthContext() {
+                request.healthContext = Self.wire(context)
+            }
+            return request
+        }, chunk: { Self.chunk(text: $0.text, source: $0.source) })
+    }
+
+    /// Bridges one Connect server stream into an `AsyncThrowingStream` —
+    /// written once because the subtle parts must not be able to drift
+    /// between RPCs.
     ///
     /// Connect hands back a stream you must `send` the request on exactly once
     /// to start, then read `results()` from. Both halves are wrapped here so
     /// nothing above this file learns that shape — and, more usefully, so the
     /// terminal `.complete` carrying a non-OK code becomes a thrown error
     /// rather than a stream that simply stops, which is indistinguishable from
-    /// a short explanation.
-    public func explanation(
-        of techniqueSlug: String
-    ) -> AsyncThrowingStream<ExplanationChunk, Error> {
+    /// a short answer.
+    ///
+    /// The request is built *inside* the reader task, because the health
+    /// provider it awaits is async and the stream closure cannot suspend —
+    /// the summary is read from Health at the moment of the request.
+    private func bridged<Request, Response>(
+        _ stream: any ServerOnlyAsyncStreamInterface<Request, Response>,
+        request: @escaping @Sendable () async -> Request,
+        chunk: @escaping @Sendable (Response) -> Result<AssistantChunk, AssistantRepositoryError>
+    ) -> AsyncThrowingStream<AssistantChunk, Error> {
         AsyncThrowingStream { continuation in
-            let stream = client.explainTechnique()
-
-            // Sending happens inside the task rather than up here, because the
-            // health provider is async: the summary is read from Health at the
-            // moment of the request, and this closure cannot suspend.
             let reader = Task {
-                var request = Breathe_V1_ExplainTechniqueRequest()
-                request.techniqueSlug = techniqueSlug
-                if let context = await healthContext() {
-                    request.healthContext = Self.wire(context)
-                }
-
                 do {
-                    try stream.send(request)
+                    try await stream.send(request())
                 } catch {
                     continuation.finish(throwing: AssistantRepositoryError.transport(
                         error.localizedDescription
@@ -127,16 +160,13 @@ public struct AssistantRepository: AssistantReading {
                 for await result in stream.results() {
                     switch result {
                     case let .message(message):
-                        guard let source = GuidanceSource(proto: message.source) else {
-                            continuation
-                                .finish(throwing: AssistantRepositoryError.malformedResponse(
-                                    "unrecognised guidance source `\(message.source)`"
-                                ))
+                        switch chunk(message) {
+                        case let .success(chunk):
+                            continuation.yield(chunk)
+                        case let .failure(error):
+                            continuation.finish(throwing: error)
                             return
                         }
-                        continuation.yield(
-                            ExplanationChunk(text: message.text, source: source)
-                        )
 
                     case let .complete(code, error, _):
                         if code == .ok {
@@ -159,7 +189,7 @@ public struct AssistantRepository: AssistantReading {
                 continuation.finish()
             }
 
-            // A view that goes away mid-explanation must not leave the request
+            // A view that goes away mid-answer must not leave the request
             // running: cancelling the read stops the loop, and `cancel()` tells
             // the server to stop writing.
             continuation.onTermination = { _ in
@@ -167,6 +197,33 @@ public struct AssistantRepository: AssistantReading {
                 stream.cancel()
             }
         }
+    }
+
+    /// One wire chunk as the domain chunk, or the refusal every enum on this
+    /// boundary earns — an unrepresentable source is a decode failure, never
+    /// a guess.
+    private static func chunk(
+        text: String,
+        source proto: Breathe_V1_AssistantSource
+    ) -> Result<AssistantChunk, AssistantRepositoryError> {
+        guard let source = GuidanceSource(proto: proto) else {
+            return .failure(.malformedResponse("unrecognised guidance source `\(proto)`"))
+        }
+        return .success(AssistantChunk(text: text, source: source))
+    }
+
+    /// The domain turn as the wire message. Total in this direction: every
+    /// domain role has a wire value, so nothing the app holds can fail to be
+    /// read back.
+    private static func wire(_ turn: ChatTurn) -> Breathe_V1_ChatTurn {
+        var wire = Breathe_V1_ChatTurn()
+        wire.role =
+            switch turn.role {
+            case .person: .person
+            case .coach: .coach
+            }
+        wire.text = turn.text
+        return wire
     }
 
     /// The domain summary as the wire message, metric by metric. A snapshot's
