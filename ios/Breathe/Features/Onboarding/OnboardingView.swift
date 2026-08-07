@@ -2,12 +2,12 @@ import BreatheKit
 import BreatheUI
 import SwiftUI
 
-/// The first thing anyone sees: a welcome, three questions, and a way out.
+/// The first thing anyone sees: a welcome, four questions, and a way out.
 ///
 /// This type is the chrome around them — the step indicator, the switch that
 /// picks a step, and the Next/Back/Skip row — while each step is its own
-/// `-StepView` beside this file. They are five independent screens that share
-/// only that switch, and the layout the four questions do share is
+/// `-StepView` beside this file. They are six independent screens that share
+/// only that switch, and the layout the questions do share is
 /// `OnboardingQuestion`.
 ///
 /// Drawn in the brand accent rather than a goal's, because nothing here belongs
@@ -91,6 +91,7 @@ struct OnboardingView: View {
         case .welcome: WelcomeStepView()
         case .goals: GoalsStepView(model: model)
         case .experience: ExperienceStepView(model: model)
+        case .about: AboutYouStepView(model: model)
         case .reminders: RemindersStepView(model: model)
         case .done: DoneStepView()
         }

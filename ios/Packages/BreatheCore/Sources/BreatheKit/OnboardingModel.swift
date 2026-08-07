@@ -20,6 +20,11 @@ public final class OnboardingModel {
         case welcome
         case goals
         case experience
+        /// Age band, gender, and a note for the coach — every part of it
+        /// optional, and "rather not say" already selected. After the breathing
+        /// questions so it reads as tuning the coach rather than as a form to
+        /// get through.
+        case about
         /// The reminder dial. Ordered after the questions about breathing so it
         /// reads as a preference rather than as the price of entry, and last so
         /// that saving happens on the way out of it.
@@ -34,7 +39,7 @@ public final class OnboardingModel {
         /// The steps that ask something — what a step indicator counts.
         /// `welcome` is a greeting and `done` a confirmation; neither is a
         /// question to be part-way through.
-        public static let questions: [Step] = [.goals, .experience, .reminders]
+        public static let questions: [Step] = [.goals, .experience, .about, .reminders]
     }
 
     public private(set) var step: Step = .welcome
@@ -43,6 +48,22 @@ public final class OnboardingModel {
     public private(set) var goals: [TechniqueGoal] = []
     public var experienceLevel: ExperienceLevel?
     public var reminderIntensity: ReminderIntensity = .never
+    public var birthYearBand: BirthYearBand?
+    public var gender: Gender?
+
+    /// Why they are here, in their own words. Clamped as it is typed — the
+    /// same rule the leaderboard name follows, in the unit
+    /// `String.clamped(toScalars:)` explains — so the field stops accepting
+    /// input rather than letting someone write past the point where saving
+    /// would fail.
+    public var intentNote: String = "" {
+        didSet {
+            let clamped = intentNote.clamped(toScalars: Profile.maxIntentNoteLength)
+            if clamped != intentNote {
+                intentNote = clamped
+            }
+        }
+    }
 
     private let store: ProfileStore
     private let schedules: ScheduleStore?
@@ -114,8 +135,8 @@ public final class OnboardingModel {
     ///
     /// Goals and experience want one before Next lights up — not as a wall,
     /// but so that Next always means "that's my answer"; Skip is the way past
-    /// without one. Reminders arrives already answered: `never` is selected
-    /// before anyone touches it.
+    /// without one. Reminders and the about step arrive already answered:
+    /// `never` and "rather not say" are selected before anyone touches them.
     public var canAdvance: Bool {
         switch step {
         case .goals: !goals.isEmpty
@@ -224,15 +245,16 @@ public final class OnboardingModel {
         return Double(step.rawValue) / questions
     }
 
-    /// The answers as they stand. The intent note stays empty: the flow no
-    /// longer asks for one, and the field survives only because the server
-    /// contract still carries it.
+    /// The answers as they stand. The display name is absent on purpose — the
+    /// flow never asks for one, and the leaderboard screen owns it.
     public var profile: Profile {
         Profile(
             goals: goals,
             experienceLevel: experienceLevel,
             reminderIntensity: reminderIntensity,
-            intentNote: ""
+            intentNote: intentNote,
+            birthYearBand: birthYearBand,
+            gender: gender
         )
     }
 }

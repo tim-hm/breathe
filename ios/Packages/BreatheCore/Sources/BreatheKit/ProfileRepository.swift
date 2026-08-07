@@ -128,7 +128,8 @@ extension Profile {
             reminderIntensity: reminderIntensity,
             intentNote: proto.intentNote,
             displayName: proto.displayName,
-            birthYearBand: BirthYearBand.decoded(from: proto.birthYearBand)
+            birthYearBand: BirthYearBand.decoded(from: proto.birthYearBand),
+            gender: Gender.decoded(from: proto.gender)
         )
     }
 
@@ -140,7 +141,34 @@ extension Profile {
         message.intentNote = intentNote
         message.displayName = displayName
         message.birthYearBand = birthYearBand?.proto ?? .unspecified
+        message.gender = gender?.proto ?? .unspecified
         return message
+    }
+}
+
+extension Gender {
+    /// The same two non-answers as `BirthYearBand.decoded(from:)`, reported the
+    /// same way: `nil` means they did not say, and throwing means a gender
+    /// added to the proto after this app shipped.
+    static func decoded(from proto: Breathe_V1_Gender) throws -> Self? {
+        switch proto {
+        case .female: .female
+        case .male: .male
+        case .nonBinary: .nonBinary
+        case .unspecified: nil
+        case .UNRECOGNIZED:
+            throw ProfileRepositoryError.malformedResponse(
+                "unrecognised gender `\(proto)`"
+            )
+        }
+    }
+
+    var proto: Breathe_V1_Gender {
+        switch self {
+        case .female: .female
+        case .male: .male
+        case .nonBinary: .nonBinary
+        }
     }
 }
 

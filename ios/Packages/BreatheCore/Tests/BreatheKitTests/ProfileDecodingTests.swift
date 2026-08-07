@@ -9,13 +9,15 @@ struct ProfileDecodingTests {
         goals: [Breathe_V1_TechniqueGoal] = [],
         experienceLevel: Breathe_V1_ExperienceLevel = .unspecified,
         reminderIntensity: Breathe_V1_ReminderIntensity = .never,
-        intentNote: String = ""
+        intentNote: String = "",
+        gender: Breathe_V1_Gender = .unspecified
     ) -> Breathe_V1_Profile {
         var profile = Breathe_V1_Profile()
         profile.goals = goals
         profile.experienceLevel = experienceLevel
         profile.reminderIntensity = reminderIntensity
         profile.intentNote = intentNote
+        profile.gender = gender
         return profile
     }
 
@@ -38,7 +40,9 @@ struct ProfileDecodingTests {
             goals: [.focus, .sleep],
             experienceLevel: .occasional,
             reminderIntensity: .gentle,
-            intentNote: "I clench my jaw"
+            intentNote: "I clench my jaw",
+            birthYearBand: .eighties,
+            gender: .nonBinary
         )
 
         #expect(try Profile(proto: original.proto) == original)
@@ -64,6 +68,18 @@ struct ProfileDecodingTests {
         #expect(try Profile(proto: protoProfile()).experienceLevel == nil)
     }
 
+    /// Rather-not-say is absence in both languages: the proto zero value
+    /// arrives as `nil`, and `nil` leaves as the zero value — which is what the
+    /// server stores as NULL. Both directions matter, because either one alone
+    /// deciding otherwise turns silence into an answer.
+    @Test("An unspecified gender is absent, and absence leaves as unspecified")
+    func genderRoundTripsThroughAbsence() throws {
+        #expect(try Profile(proto: protoProfile()).gender == nil)
+        #expect(try Profile(proto: protoProfile(gender: .female)).gender == .female)
+
+        #expect(Profile.unanswered.proto.gender == .unspecified)
+    }
+
     @Test("Every answer a person can pick has something to show for it")
     func everyAnswerHasCopy() {
         for level in ExperienceLevel.allCases {
@@ -73,6 +89,12 @@ struct ProfileDecodingTests {
         for intensity in ReminderIntensity.allCases {
             #expect(!intensity.title.isEmpty)
             #expect(!intensity.detail.isEmpty)
+        }
+        for gender in Gender.allCases {
+            #expect(!gender.title.isEmpty)
+        }
+        for band in BirthYearBand.allCases {
+            #expect(!band.title.isEmpty)
         }
     }
 }

@@ -63,8 +63,16 @@ struct OnboardingFlowTests {
         #expect(!model.canAdvance)
         model.experienceLevel = .new
         model.advance()
+        #expect(model.step == .about)
+
+        // The about step arrives already answered — "rather not say" is
+        // selected — so Next is never waiting on it.
+        #expect(model.canAdvance)
+        model.advance()
         #expect(model.step == .reminders)
 
+        model.back()
+        #expect(model.step == .about)
         model.back()
         #expect(model.step == .experience)
     }
@@ -86,6 +94,12 @@ struct OnboardingFlowTests {
         #expect(model.step == .experience)
 
         model.skip()
+        #expect(model.step == .about)
+        #expect(!model.canSkip, "the about step is already answered — Next is the way on")
+
+        model.skip()
+        #expect(model.step == .about)
+        model.advance()
         #expect(model.step == .reminders)
         #expect(!model.canSkip, "reminders is already answered — Next is the way on")
 
@@ -93,6 +107,9 @@ struct OnboardingFlowTests {
         #expect(model.step == .reminders)
         #expect(model.profile.goals.isEmpty)
         #expect(model.profile.experienceLevel == nil)
+        #expect(model.profile.birthYearBand == nil)
+        #expect(model.profile.gender == nil)
+        #expect(model.profile.intentNote.isEmpty)
     }
 
     /// Skipping declines to finish a question, not to have started it: an
@@ -124,6 +141,35 @@ struct OnboardingFlowTests {
 
         #expect(model.goals == [.focus, .sleep])
         #expect(!model.isSelected(.calm))
+    }
+
+    /// The about step's answers reach the profile the flow saves — all three of
+    /// them, because a field collected and then dropped on the way out would
+    /// look identical to one never asked.
+    @Test("The about step's answers flow into the saved profile")
+    func aboutAnswersReachTheProfile() {
+        let store = ProfileStore(profiles: RecordingWriter(), defaults: defaults("about"))
+        let model = OnboardingModel(store: store)
+
+        model.birthYearBand = .eighties
+        model.gender = .nonBinary
+        model.intentNote = "I want to stop clenching my jaw"
+
+        #expect(model.profile.birthYearBand == .eighties)
+        #expect(model.profile.gender == .nonBinary)
+        #expect(model.profile.intentNote == "I want to stop clenching my jaw")
+    }
+
+    /// The same clamp `LeaderboardNameModel` applies to the name, in the same
+    /// unit: a note the server would refuse must be impossible to type.
+    @Test("The intent note stops accepting input at the server's limit")
+    func clampsTheIntentNote() {
+        let store = ProfileStore(profiles: RecordingWriter(), defaults: defaults("clamp"))
+        let model = OnboardingModel(store: store)
+
+        model.intentNote = String(repeating: "a", count: Profile.maxIntentNoteLength + 40)
+
+        #expect(model.intentNote.unicodeScalars.count == Profile.maxIntentNoteLength)
     }
 
     /// Never has to be what someone gets by not answering, all the way through
