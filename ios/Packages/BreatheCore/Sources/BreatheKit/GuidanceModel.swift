@@ -1,23 +1,28 @@
 import Foundation
 import Observation
 
-/// Drives the "what should I do next" strip.
+/// Drives the "where to start" strip.
 ///
-/// There is no failure state, and that is the design. The server answers from
-/// its own rules whenever the assistant cannot be reached, so the only thing
-/// left to fail is the network — and a person opening the techniques tab on a
-/// train should see the catalogue, not an error about a suggestion they did not
-/// ask for. An unreachable server leaves `guidance` nil and the strip simply
-/// does not appear.
+/// One `State`, mutated only by `load()` — the same shape as
+/// `TechniqueListModel` and `FoundationsModel`, and for the same reason:
+/// parallel `isLoading`/data properties admit combinations that mean nothing,
+/// like a spinner shown over an answer that already arrived.
+///
+/// What it does not have is a `failed` case, and that is the design. The server
+/// answers from its own rules whenever the assistant is unreachable, so the only
+/// thing left to fail is the network — and a person opening the techniques tab
+/// on a train should see the catalogue, not an error about a suggestion they did
+/// not ask for. `unavailable` renders as nothing at all.
 @MainActor
 @Observable
 public final class GuidanceModel {
-    /// Nil until an answer arrives, and nil forever if none does.
-    public private(set) var guidance: Guidance?
+    public enum State: Sendable {
+        case loading
+        case loaded(Guidance)
+        case unavailable
+    }
 
-    /// True only while the first load is in flight, so the strip can hold its
-    /// height instead of appearing under the reader's thumb.
-    public private(set) var isLoading = false
+    public private(set) var state: State = .loading
 
     private let assistant: any AssistantReading
 
@@ -29,18 +34,21 @@ public final class GuidanceModel {
     ///
     /// The screen's `.task` runs on every arrival; guidance changes when the
     /// profile does, which is rarely, and re-asking on every tab switch would
-    /// spend the daily allowance on a screen somebody is scrolling past.
+    /// spend the daily allowance on a screen somebody is scrolling past. A
+    /// previous attempt that came back `unavailable` is not retried either —
+    /// the network did not recover because a tab was tapped.
     public func loadIfNeeded() async {
-        guard guidance == nil, !isLoading else { return }
+        guard case .loading = state else { return }
         await load()
     }
 
-    public func load() async {
-        isLoading = true
-        defer { isLoading = false }
-
+    private func load() async {
         // Quietly. The failure is invisible on purpose: everything this view
         // sits above works without it.
-        guidance = try? await assistant.recommendations()
+        state = if let guidance = try? await assistant.recommendations() {
+            .loaded(guidance)
+        } else {
+            .unavailable
+        }
     }
 }

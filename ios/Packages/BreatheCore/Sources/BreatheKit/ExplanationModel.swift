@@ -45,7 +45,7 @@ public final class ExplanationModel {
         start()
     }
 
-    public func start() {
+    private func start() {
         reader?.cancel()
         state = .waiting
 
@@ -57,24 +57,17 @@ public final class ExplanationModel {
                 for try await chunk in assistant.explanation(of: techniqueSlug) {
                     accumulated += chunk.text
                     source = chunk.source
-                    state = .reading(
-                        text: accumulated,
-                        source: chunk.source,
-                        isComplete: false
-                    )
+                    state = .reading(text: accumulated, source: chunk.source, isComplete: false)
                 }
             } catch {
-                // Mid-stream failure keeps what arrived: half an explanation is
-                // still worth reading, and replacing it with a placeholder
-                // would take away something the person is in the middle of.
-                if let source, !accumulated.isEmpty {
-                    state = .reading(text: accumulated, source: source, isComplete: true)
-                } else {
-                    state = .unavailable
-                }
-                return
+                // Deliberately empty. A stream that broke and one that finished
+                // reach the same terminal state below, decided by whether any
+                // text arrived — branching here would put the "keep what
+                // arrived" rule in two places that can drift apart.
             }
 
+            // Half an explanation is still worth reading; nothing at all is the
+            // one case the view renders a placeholder for.
             guard let source, !accumulated.isEmpty else {
                 state = .unavailable
                 return
