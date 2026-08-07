@@ -68,7 +68,13 @@ Local notifications only — no push infrastructure in V1. `UNUserNotificationCe
 
 ## M8 — Monetisation
 
-StoreKit 2 auto-renewable subscription, ~$4.99/year, paywalling the Plus tier defined in the business plan. Client-side `Transaction.currentEntitlements` drives all UI gating. Because assistant calls cost real money, the backend verifies a submitted transaction JWS once (signature chain against Apple's root) and stores the entitlement on the user row — assistant RPCs never trust a client boolean. App Store Server Notifications are deferred: re-check on launch plus an expiry grace period is enough for a yearly subscription. Paywall carries the App Review checklist items: restore purchases, clear price, EULA and privacy links.
+Two StoreKit 2 auto-renewable monthly subscriptions in one App Store subscription group — **Plus** at $0.99 for the full catalogue and **Coach** at $4.99 for the catalogue plus the AI breathing coach. One group, so switching between them is an upgrade Apple prorates rather than a second purchase this app has to reconcile. The free tier keeps the whole app and two techniques: box breathing and the physiological sigh.
+
+The enforcement is split along cost, and only along cost. **The client gates the catalogue**, because a session runs entirely on the device — a server check in front of it would guard nothing, so the catalogue is served whole with a `requires_subscription` flag per technique and locked ones are listed, described, and shown their rhythm rather than hidden. **The server gates the model**, because that is the only thing in the app with a marginal cost: the backend verifies a submitted transaction JWS once (ES256, x5c chain to a compiled-in Apple Root CA - G3, bundle and product id checked in the decoded payload), stores the tier and expiry on the user row, and `AssistantService` reads its daily allowance from that row and never from anything a request carries. Below Coach there is no allowance at all and the assistant answers from its rules, which is what every caller gets offline anyway.
+
+Submissions are ordered by the payload's `signedDate` rather than by expiry, and the whole row moves together. That is what makes an upgrade safe: moving Plus → Coach mid-period issues a transaction whose expiry is _earlier_ than the one it replaces, so any rule that kept the later expiry would leave somebody paying for Coach and holding Plus.
+
+App Store Server Notifications stay deferred — resubmission on every launch plus an expiry read on every call covers a monthly subscription, and the client submits revocations it sees so a refund still lands. `Transaction.currentEntitlements` drives all UI gating, cached across launches so nothing re-locks while StoreKit answers. The paywall carries the App Review checklist: both prices read from the App Store, restore purchases, EULA and privacy links.
 
 ## M9 — Apple Watch app
 

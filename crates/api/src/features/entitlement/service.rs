@@ -4,12 +4,12 @@
 //! Receives explicit dependencies (`&PgPool`, `&dyn TransactionVerifier`), never
 //! `Arc<AppState>`, and contains zero raw queries.
 
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::errors::EntitlementError;
-use super::repository;
+use super::repository::{self, EntitlementRow};
 use super::types::{Entitlement, Tier};
 use super::verifier::{TransactionVerifier, VerifiedTransaction};
 use crate::proto::breathe::v1 as pb;
@@ -28,20 +28,14 @@ pub async fn submit_transaction(
 ) -> Result<pb::SubmitAppStoreTransactionResponse, EntitlementError> {
     let transaction = verifier.verify(signed_transaction)?;
 
-    let plus_until = if transaction.revoked_at.is_some() {
+    let stored = if transaction.revoked_at.is_some() {
         revoke(pool, user_id, &transaction).await?
     } else {
-        repository::record_purchase(
-            pool,
-            user_id,
-            &transaction.original_transaction_id,
-            transaction.expires_at,
-        )
-        .await?
+        repository::record_purchase(pool, user_id, &transaction).await?
     };
 
     Ok(pb::SubmitAppStoreTransactionResponse {
-        entitlement: Some(to_proto(Entitlement::resolve(plus_until, Utc::now()))),
+        entitlement: Some(to_proto(Entitlement::from_row(&stored, Utc::now()))),
     })
 }
 
@@ -57,15 +51,17 @@ async fn revoke(
     pool: &PgPool,
     user_id: Uuid,
     transaction: &VerifiedTransaction,
-) -> Result<Option<DateTime<Utc>>, EntitlementError> {
+) -> Result<EntitlementRow, EntitlementError> {
     let stored = repository::find_entitlement(pool, user_id).await?;
 
     if stored.original_transaction_id.as_deref() != Some(&transaction.original_transaction_id) {
-        return Ok(stored.plus_until);
+        return Ok(stored);
     }
 
-    repository::clear_purchase(pool, user_id).await?;
-    Ok(None)
+    // Returned by the statement rather than described here: a subscription
+    // column added later is cleared by `clear_purchase` and would be silently
+    // forgotten by a row this function had built from memory.
+    repository::clear_purchase(pool, user_id).await
 }
 
 pub async fn get_entitlement(
@@ -75,10 +71,7 @@ pub async fn get_entitlement(
     let stored = repository::find_entitlement(pool, user_id).await?;
 
     Ok(pb::GetEntitlementResponse {
-        entitlement: Some(to_proto(Entitlement::resolve(
-            stored.plus_until,
-            Utc::now(),
-        ))),
+        entitlement: Some(to_proto(Entitlement::from_row(&stored, Utc::now()))),
     })
 }
 
@@ -86,6 +79,7 @@ fn to_proto(entitlement: Entitlement) -> pb::Entitlement {
     let tier = match entitlement.tier() {
         Tier::Free => pb::EntitlementTier::Free,
         Tier::Plus => pb::EntitlementTier::Plus,
+        Tier::Coach => pb::EntitlementTier::Coach,
     };
 
     pb::Entitlement {

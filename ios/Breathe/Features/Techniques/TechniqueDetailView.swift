@@ -11,6 +11,10 @@ struct TechniqueDetailView: View {
     @Environment(SessionSettings.self) private var settings
     @State private var started: StartedSession?
 
+    @Environment(SubscriptionStore.self) private var plus
+
+    @State private var isShowingPaywall = false
+
     var body: some View {
         @Bindable var settings = settings
         // Derived once per pass and handed down: `dialled` walks the stored
@@ -34,6 +38,7 @@ struct TechniqueDetailView: View {
         .paletteGround()
         .navigationTitle(technique.name)
         .navigationBarTitleDisplayMode(.inline)
+        .paywall(highlighting: technique.requires, isPresented: $isShowingPaywall)
         .fullScreenCover(item: $started) { session in
             SessionView(model: session.model)
         }
@@ -153,17 +158,30 @@ struct TechniqueDetailView: View {
         }
     }
 
+    /// Begin, or the offer that has to come first.
+    ///
+    /// The lock is `SessionModel.starting`'s to enforce — this screen only
+    /// decides what the button says and which sheet to open. A person who
+    /// arrives on a locked technique should still read about it, which is what
+    /// the catalogue is for; the offer belongs at the moment they try to
+    /// breathe it.
     private func beginButton(playing dialled: Technique) -> some View {
-        Button {
-            started = StartedSession(
-                model: SessionModel(
-                    technique: dialled,
-                    cues: SessionCues(mode: settings.cueMode, strength: settings.hapticStrength),
-                    recorder: sessions
-                )
-            )
+        let isUnlocked = technique.isUnlocked(for: plus.tier)
+
+        return Button {
+            guard let model = SessionModel.starting(
+                dialled,
+                for: plus.tier,
+                cues: SessionCues(mode: settings.cueMode, strength: settings.hapticStrength),
+                recorder: sessions
+            ) else {
+                isShowingPaywall = true
+                return
+            }
+
+            started = StartedSession(model: model)
         } label: {
-            Text("Begin")
+            Text(isUnlocked ? "Begin" : "Unlock to breathe this")
                 .font(.headline)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, Theme.Spacing.close)

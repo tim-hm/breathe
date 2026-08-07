@@ -66,6 +66,7 @@ use x509_parser::oid_registry::asn1_rs::{Oid, oid};
 use x509_parser::prelude::{ASN1Time, FromDer as _};
 
 use super::{TransactionVerifier, VerificationError, VerifiedTransaction};
+use crate::features::entitlement::types::SubscriptionTier;
 
 /// The app the App Store signs transactions for.
 ///
@@ -75,12 +76,24 @@ use super::{TransactionVerifier, VerificationError, VerifiedTransaction};
 /// for. It has to match `PRODUCT_BUNDLE_IDENTIFIER` in `ios/project.yml`.
 const BUNDLE_ID: &str = "xyz.holmie.breathe";
 
-/// The one thing this app sells.
+/// Everything this app sells, and what each one buys.
 ///
-/// A constant rather than a set, because there is one subscription and the price
-/// tier is not part of its identity. A second SKU makes this a slice; until then
-/// a list of one would only invite the question of what happens when two match.
-const PLUS_PRODUCT_ID: &str = "xyz.holmie.breathe.plus.yearly";
+/// Both products live in one App Store subscription group, which is what makes
+/// upgrading and downgrading Apple's problem rather than ours: a person holds at
+/// most one of them at a time, and switching issues a fresh transaction naming
+/// the other. A `productId` in neither row is `NotOurs` — including one this app
+/// used to sell, because an entitlement is only ever granted for something
+/// currently on the price list.
+///
+/// A slice rather than a `match`, so the two ids sit next to each other where a
+/// typo is visible against its neighbour. They have to match
+/// `ios/Breathe/Breathe.storekit`, `PlusProduct` in `BreatheKit`, and App Store
+/// Connect; there is no build-time check tying those together, and a mismatch
+/// presents as a paywall with no price and a purchase that never verifies.
+const PRODUCTS: &[(&str, SubscriptionTier)] = &[
+    ("xyz.holmie.breathe.plus.monthly", SubscriptionTier::Plus),
+    ("xyz.holmie.breathe.coach.monthly", SubscriptionTier::Coach),
+];
 
 /// Apple Root CA - G3, in DER, 583 bytes.
 ///
@@ -204,12 +217,15 @@ impl TransactionPayload {
             )));
         }
 
-        if self.product_id != PLUS_PRODUCT_ID {
+        let Some((_, tier)) = PRODUCTS
+            .iter()
+            .find(|(product_id, _)| *product_id == self.product_id)
+        else {
             return Err(VerificationError::NotOurs(format!(
-                "`productId` is `{}`, not `{PLUS_PRODUCT_ID}`",
+                "`productId` is `{}`, which this app does not sell",
                 self.product_id
             )));
-        }
+        };
 
         let expires_date = self.expires_date.ok_or_else(|| {
             VerificationError::NotOurs(
@@ -219,7 +235,9 @@ impl TransactionPayload {
 
         Ok(VerifiedTransaction {
             original_transaction_id: self.original_transaction_id,
+            tier: *tier,
             expires_at: timestamp(expires_date, "expiresDate")?,
+            signed_at: timestamp(self.signed_date, "signedDate")?,
             revoked_at: self
                 .revocation_date
                 .map(|at| timestamp(at, "revocationDate"))
@@ -456,8 +474,9 @@ mod tests {
     }
 
     fn payload_json() -> String {
+        let (product_id, _) = PRODUCTS[0];
         format!(
-            r#"{{"bundleId":"{BUNDLE_ID}","productId":"{PLUS_PRODUCT_ID}",
+            r#"{{"bundleId":"{BUNDLE_ID}","productId":"{product_id}",
                  "originalTransactionId":"2000000000000001",
                  "expiresDate":1800000000000,"signedDate":1770000000000}}"#
         )
@@ -468,7 +487,7 @@ mod tests {
     fn payload() -> TransactionPayload {
         TransactionPayload {
             bundle_id: BUNDLE_ID.to_owned(),
-            product_id: PLUS_PRODUCT_ID.to_owned(),
+            product_id: PRODUCTS[0].0.to_owned(),
             original_transaction_id: "2000000000000001".to_owned(),
             expires_date: Some(1_800_000_000_000),
             revocation_date: None,
@@ -535,18 +554,55 @@ mod tests {
         assert!(matches!(error, VerificationError::NotOurs(_)), "{error}");
     }
 
-    /// Likewise for a product this app does not sell — a future consumable, or
-    /// a receipt from another of the same developer's apps.
+    /// Likewise for a product this app does not sell — a future consumable, a
+    /// receipt from another of the same developer's apps, or the yearly Plus
+    /// subscription that was withdrawn before launch.
     #[test]
     fn a_transaction_for_another_product_is_not_ours() {
-        let error = TransactionPayload {
-            product_id: "xyz.holmie.breathe.something.else".to_owned(),
-            ..payload()
-        }
-        .into_verified()
-        .expect_err("an unknown product entitles nobody");
+        for product_id in [
+            "xyz.holmie.breathe.something.else",
+            "xyz.holmie.breathe.plus.yearly",
+        ] {
+            let error = TransactionPayload {
+                product_id: product_id.to_owned(),
+                ..payload()
+            }
+            .into_verified()
+            .expect_err("a product not on the price list entitles nobody");
 
-        assert!(matches!(error, VerificationError::NotOurs(_)), "{error}");
+            assert!(
+                matches!(error, VerificationError::NotOurs(_)),
+                "{product_id}: {error}"
+            );
+        }
+    }
+
+    /// Which product somebody bought is what decides whether the assistant will
+    /// spend money on them, and it is read from the payload rather than from
+    /// anything the client says. Both ids are asserted here because a typo in
+    /// either would present as a genuine purchase that quietly buys the wrong
+    /// thing — the one failure this feature has that nothing else would catch.
+    #[test]
+    fn each_product_buys_its_own_tier() {
+        for (product_id, expected) in PRODUCTS {
+            let verified = TransactionPayload {
+                product_id: (*product_id).to_owned(),
+                ..payload()
+            }
+            .into_verified()
+            .expect("a product on the price list is ours");
+
+            assert_eq!(verified.tier, *expected, "{product_id}");
+        }
+    }
+
+    /// The whole ordering rule rests on this field reaching the service, and it
+    /// arrives in the same milliseconds every other date does.
+    #[test]
+    fn the_signed_date_travels_with_the_transaction() {
+        let verified = payload().into_verified().expect("the payload is ours");
+
+        assert_eq!(verified.signed_at.timestamp(), 1_770_000_000);
     }
 
     /// Apple sends epoch **milliseconds**. Reading one as seconds lands in the

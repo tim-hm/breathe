@@ -82,6 +82,35 @@ async fn the_seeded_catalogue_arrives_over_grpc_web() {
     assert_eq!(find(&response, "bellows-breath").stages[0].cycles, 20);
 }
 
+/// The free tier, over the wire.
+///
+/// The whole catalogue is served either way — a locked technique is listed and
+/// described, because the client's job is to invite rather than to hide — so the
+/// only thing separating the two tiers on this call is one boolean per row, and
+/// nothing else in the response would look wrong if it were dropped. That is
+/// exactly what makes it worth an assertion: the free tier is a promise, and
+/// this is the only place in the pipeline where the promise is visible.
+#[tokio::test]
+async fn the_free_techniques_arrive_unlocked_and_the_rest_do_not() {
+    let db = TestDatabase::create("free_tier_flag").await;
+    let response = list_techniques(&db).await;
+
+    let free = response
+        .techniques
+        .iter()
+        .filter(|technique| !technique.requires_subscription)
+        .count();
+
+    // Which two are free is `seed.rs`'s decision and its test; what this pins is
+    // that the distinction survives the wire at all, and that both sides of it
+    // are served.
+    assert!(free > 0, "no technique arrived unlocked");
+    assert!(
+        response.techniques.len() > free,
+        "the locked techniques are served too, or there is nothing to sell"
+    );
+}
+
 /// The multi-stage model exists for this technique, and every part of its shape
 /// is load-bearing: the retention has to arrive between the fast breaths and the
 /// recovery hold, flagged open-ended, or the client either schedules a hold the
@@ -310,8 +339,11 @@ fn find<'a>(response: &'a pb::ListTechniquesResponse, slug: &str) -> &'a pb::Tec
 /// unique for the same reason the slug is.
 async fn insert_technique(pool: &sqlx::PgPool, slug: &str, goal: &str) {
     sqlx::query(
-        r"INSERT INTO techniques (id, slug, name, summary, goal, sort_order)
-           VALUES ($1, $1, $2, '', $3::technique_goal, $4)",
+        // `requires_subscription` is stated rather than defaulted because the
+        // column has no default — the same reason `seed.rs` has to state it.
+        r"INSERT INTO techniques
+              (id, slug, name, summary, goal, sort_order, requires_subscription)
+           VALUES ($1, $1, $2, '', $3::technique_goal, $4, true)",
     )
     .bind(slug)
     .bind(slug)

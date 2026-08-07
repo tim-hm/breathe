@@ -21,14 +21,16 @@ Ask instead: _if this broke, would anything else notice?_ If a compile error, a 
 
 The existing tests are the pattern:
 
-| Test                                                | Guards                                                                                              |
-| :-------------------------------------------------- | :-------------------------------------------------------------------------------------------------- |
-| `carries_the_query_string_onto_the_maintenance_url` | Dropping the query string would silently change the maintenance connection's TLS mode               |
-| `no_domain_goal_maps_to_unspecified`                | The proto zero value never escapes as a real enum case                                              |
-| `slugs_are_unique`                                  | The seed upsert is keyed on `slug`; a duplicate would make array order decide which definition wins |
-| `rejectsAnUnspecifiedGoal`                          | The Swift side of the same boundary — a newer server cannot put a technique in the wrong section    |
-| `a_forged_chain_does_not_verify`                    | A structurally perfect App Store transaction that is nobody's but its author's entitles nobody      |
-| `the_compiled_in_root_is_apples`                    | The one trust anchor with no runtime check behind it; a swapped file would refuse every real buyer  |
+| Test                                                   | Guards                                                                                                 |
+| :----------------------------------------------------- | :----------------------------------------------------------------------------------------------------- |
+| `carries_the_query_string_onto_the_maintenance_url`    | Dropping the query string would silently change the maintenance connection's TLS mode                  |
+| `no_domain_goal_maps_to_unspecified`                   | The proto zero value never escapes as a real enum case                                                 |
+| `slugs_are_unique`                                     | The seed upsert is keyed on `slug`; a duplicate would make array order decide which definition wins    |
+| `rejectsAnUnspecifiedGoal`                             | The Swift side of the same boundary — a newer server cannot put a technique in the wrong section       |
+| `a_forged_chain_does_not_verify`                       | A structurally perfect App Store transaction that is nobody's but its author's entitles nobody         |
+| `the_compiled_in_root_is_apples`                       | The one trust anchor with no runtime check behind it; a swapped file would refuse every real buyer     |
+| `each_product_buys_its_own_tier`                       | Two ids decide who reaches the model; a typo in either is a purchase that quietly buys the wrong thing |
+| `the_free_techniques_are_the_two_that_cannot_go_wrong` | Nobody is guided through the free tier, so it may hold only techniques carrying no safety caution      |
 
 Every one covers a decision that is invisible in the code and expensive to rediscover.
 
@@ -65,9 +67,11 @@ The tests and what they pin:
 | `an_exhausted_quota_answers_from_the_rules`                  | The spend ceiling binds, and running out is a flagged answer rather than an error                                   |
 | `the_breaker_trips_and_then_recovers`                        | Both halves, through the call count — a breaker that never opened and one that never closed both still answer       |
 | `the_explanation_streams_ordered_chunks`                     | The first server-streaming RPC: separate frames, in order, over the real gRPC-Web framing                           |
-| `plus_raises_the_daily_model_allowance`                      | The only mechanical thing a subscription buys, read from the caller's row and never from the request                |
+| `only_coach_reaches_the_model`                               | The one thing the server spends money on, gated on the caller's own row rather than on anything a request carries   |
 | `resubmitting_the_same_transaction_changes_nothing`          | The client resubmits on every launch; the expiry not moving is what says the grant was not applied twice            |
-| `an_older_transaction_cannot_shorten_a_renewed_subscription` | `Transaction.updates` and `currentEntitlements` have no ordering, so last year's purchase can arrive last           |
+| `an_upgrade_is_not_shadowed_by_a_longer_cheaper_period`      | Why the ordering key is `signedDate`: a Plus→Coach upgrade's expiry is _earlier_ than the period it replaces        |
+| `a_refund_ends_only_the_subscription_it_paid_for`            | A late refund for a lapsed subscription must not end the one somebody is currently paying for                       |
+| `the_free_techniques_arrive_unlocked_and_the_rest_do_not`    | The free tier is a promise, and one boolean per row is the whole of it on the wire                                  |
 
 Each was verified by breaking the code it covers and confirming it fails.
 

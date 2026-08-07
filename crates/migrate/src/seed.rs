@@ -45,6 +45,23 @@ struct TechniqueSeed {
     /// per technique, and one for everything that is a single cycle repeated —
     /// rounds only earn their name in a staged protocol.
     recommended_rounds: i32,
+    /// Whether this one is behind Breathe Plus.
+    ///
+    /// Stated per technique with no default behind it, because the column has
+    /// none: a new technique cannot be added without someone deciding, which is
+    /// the only way to stop the free tier drifting by accident in either
+    /// direction.
+    ///
+    /// Two are free, and which two is a product decision rather than a
+    /// technical one. Both carry an empty `safety_note` — the free tier is the
+    /// part of the app nobody is guided through, so it holds only techniques
+    /// that cannot go wrong. Between them they cover the two things somebody
+    /// downloads a breathing app for: a couple of minutes to settle before
+    /// something (box breathing), and thirty seconds to come down from
+    /// something (the physiological sigh). Somebody who never pays still has an
+    /// app worth opening; what Plus sells is the other seven and the reasons to
+    /// choose between them.
+    requires_subscription: bool,
 }
 
 /// A phase with the dial range it may be moved within, inclusive.
@@ -103,6 +120,7 @@ const TECHNIQUES: &[TechniqueSeed] = &[
             8,
         )],
         recommended_rounds: 1,
+        requires_subscription: false,
     },
     TechniqueSeed {
         slug: "coherent-breathing",
@@ -125,6 +143,7 @@ const TECHNIQUES: &[TechniqueSeed] = &[
             27,
         )],
         recommended_rounds: 1,
+        requires_subscription: true,
     },
     TechniqueSeed {
         slug: "four-seven-eight",
@@ -144,6 +163,7 @@ const TECHNIQUES: &[TechniqueSeed] = &[
             4,
         )],
         recommended_rounds: 1,
+        requires_subscription: true,
     },
     TechniqueSeed {
         slug: "extended-exhale",
@@ -165,6 +185,7 @@ const TECHNIQUES: &[TechniqueSeed] = &[
             12,
         )],
         recommended_rounds: 1,
+        requires_subscription: true,
     },
     TechniqueSeed {
         slug: "physiological-sigh",
@@ -189,6 +210,7 @@ const TECHNIQUES: &[TechniqueSeed] = &[
             3,
         )],
         recommended_rounds: 1,
+        requires_subscription: false,
     },
     TechniqueSeed {
         slug: "bellows-breath",
@@ -209,6 +231,7 @@ const TECHNIQUES: &[TechniqueSeed] = &[
             20,
         )],
         recommended_rounds: 1,
+        requires_subscription: true,
     },
     TechniqueSeed {
         slug: "wim-hof-rounds",
@@ -249,6 +272,7 @@ const TECHNIQUES: &[TechniqueSeed] = &[
         // hold typically lengthens on its own — which is the reason to do more
         // than one.
         recommended_rounds: 3,
+        requires_subscription: true,
     },
     TechniqueSeed {
         slug: "long-box-breathing",
@@ -270,6 +294,7 @@ const TECHNIQUES: &[TechniqueSeed] = &[
             6,
         )],
         recommended_rounds: 1,
+        requires_subscription: true,
     },
     TechniqueSeed {
         slug: "alternate-nostril",
@@ -293,6 +318,7 @@ const TECHNIQUES: &[TechniqueSeed] = &[
             9,
         )],
         recommended_rounds: 1,
+        requires_subscription: true,
     },
 ];
 
@@ -429,8 +455,9 @@ async fn upsert_technique(
     // its id, so reseeding never invalidates a reference held elsewhere.
     let id: String = sqlx::query_scalar(
         r"INSERT INTO techniques
-                 (id, slug, name, summary, safety_note, goal, sort_order, recommended_rounds)
-               VALUES ($1, $2, $3, $4, $5, $6::technique_goal, $7, $8)
+                 (id, slug, name, summary, safety_note, goal, sort_order,
+                  recommended_rounds, requires_subscription)
+               VALUES ($1, $2, $3, $4, $5, $6::technique_goal, $7, $8, $9)
                ON CONFLICT (slug) DO UPDATE SET
                  name = EXCLUDED.name,
                  summary = EXCLUDED.summary,
@@ -438,6 +465,7 @@ async fn upsert_technique(
                  goal = EXCLUDED.goal,
                  sort_order = EXCLUDED.sort_order,
                  recommended_rounds = EXCLUDED.recommended_rounds,
+                 requires_subscription = EXCLUDED.requires_subscription,
                  updated_at = now()
                RETURNING id",
     )
@@ -449,6 +477,7 @@ async fn upsert_technique(
     .bind(technique.goal)
     .bind(i32::try_from(index).context("catalogue is impossibly large")?)
     .bind(technique.recommended_rounds)
+    .bind(technique.requires_subscription)
     .fetch_one(&mut **tx)
     .await
     .with_context(|| format!("failed to upsert technique `{}`", technique.slug))?;
@@ -513,6 +542,30 @@ mod tests {
     /// The only slug the client is allowed to know about by name, and the only
     /// technique in the catalogue that has stages worth calling stages.
     const WIM_HOF: &str = "wim-hof-rounds";
+
+    /// The free tier is a product promise, and it is one line of this file away
+    /// from being broken in either direction — a `true` typed into the wrong
+    /// struct takes the app's whole free experience away, and a `false` gives
+    /// the catalogue away.
+    ///
+    /// The safety half is the one worth stating out loud: nobody is guided
+    /// through the free tier, so it may only hold techniques that carry no
+    /// caution. Anything with a `safety_note` is a technique somebody should
+    /// meet after deciding this app is for them.
+    #[test]
+    fn the_free_techniques_are_the_two_that_cannot_go_wrong() {
+        let mut free = Vec::new();
+        for technique in TECHNIQUES.iter().filter(|t| !t.requires_subscription) {
+            assert!(
+                technique.safety_note.is_empty(),
+                "`{}` is free and carries a safety note",
+                technique.slug
+            );
+            free.push(technique.slug);
+        }
+
+        assert_eq!(free, vec!["box-breathing", "physiological-sigh"]);
+    }
 
     /// A technique with no stages — or a stage with no phases — would leave the
     /// client with an empty animation loop and nothing to advance through. The

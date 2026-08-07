@@ -85,7 +85,7 @@ async fn read_context(
     Ok((
         catalogue,
         profile,
-        Entitlement::resolve(entitlement.plus_until, chrono::Utc::now()).tier(),
+        Entitlement::from_row(&entitlement, chrono::Utc::now()).tier(),
     ))
 }
 
@@ -212,14 +212,22 @@ fn from_fallback(text: &str) -> ExplanationStream {
 /// `tier` came from the caller's own row, never from the request: this is the
 /// only place in the codebase where a client could otherwise talk the server
 /// into spending money. It arrives as an argument rather than being read here
-/// so the rule ("Plus gets more") stays in Rust where it is testable, instead of
-/// inside the `WHERE` clause of the statement below.
+/// so the rule ("only Coach, and only so often") stays in Rust where it is
+/// testable, instead of inside the `WHERE` clause of the statement below.
+///
+/// A tier that buys no model calls returns before touching the database. Not an
+/// optimisation — a limit of zero would still write the usage row, leaving a
+/// table full of people who were never going to be charged against it.
 ///
 /// A database failure here reads as "no allowance". The alternative — failing
 /// the whole RPC — would take the fallback down with the counter, and the
 /// fallback is the thing that is supposed to survive.
 async fn claim_call(pool: &PgPool, user_id: Uuid, tier: Tier) -> bool {
-    match repository::claim_daily_call(pool, user_id, daily_model_calls(tier)).await {
+    let Some(limit) = daily_model_calls(tier) else {
+        return false;
+    };
+
+    match repository::claim_daily_call(pool, user_id, limit).await {
         Ok(claimed) => {
             if !claimed {
                 tracing::info!(

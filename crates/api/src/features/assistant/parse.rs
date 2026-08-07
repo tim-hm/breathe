@@ -79,6 +79,7 @@ mod tests {
             safety_note: String::new(),
             goal,
             recommended_rounds: 1,
+            requires_subscription: true,
         }
     }
 

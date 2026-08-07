@@ -119,6 +119,17 @@ public struct Technique: Sendable, Identifiable, Hashable, Codable {
     /// read while choosing, this while breathing.
     public let safetyNote: String?
 
+    /// The tier this one needs. `.free` for the two the app opens with,
+    /// `.plus` for the rest.
+    ///
+    /// A tier rather than a boolean so a gate is the same comparison everywhere
+    /// — and so a future technique behind Coach needs no new field. Defaulted to
+    /// `.free` in the initialiser, which mirrors the proto's zero value and
+    /// keeps every hand-built `Technique` in a test or a preview to the lines it
+    /// already had: a decode gap that locked something must never be the quiet
+    /// outcome.
+    public let requires: SubscriptionTier
+
     public init(
         id: String,
         slug: String,
@@ -127,7 +138,8 @@ public struct Technique: Sendable, Identifiable, Hashable, Codable {
         goal: TechniqueGoal,
         stages: [Stage],
         recommendedRounds: Int,
-        safetyNote: String? = nil
+        safetyNote: String? = nil,
+        requires: SubscriptionTier = .free
     ) {
         self.id = id
         self.slug = slug
@@ -137,6 +149,17 @@ public struct Technique: Sendable, Identifiable, Hashable, Codable {
         self.stages = stages
         self.recommendedRounds = recommendedRounds
         self.safetyNote = safetyNote
+        self.requires = requires
+    }
+
+    /// Whether `tier` opens this technique.
+    ///
+    /// On the type rather than at each call site, because "can this person
+    /// breathe this" is asked from the list, the detail screen, the home wheel,
+    /// and the watch — and four copies of a comparison is four chances to write
+    /// `>` where `>=` belongs.
+    public func isUnlocked(for tier: SubscriptionTier) -> Bool {
+        tier >= requires
     }
 
     /// Whether any stage waits on the person rather than the clock — which is

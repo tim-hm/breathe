@@ -26,21 +26,46 @@
           "codeOffers" : [
 
           ],
-          "displayPrice" : "4.99",
+          "displayPrice" : "0.99",
           "familyShareable" : false,
-          "groupNumber" : 1,
+          "groupNumber" : 2,
           "internalID" : "6472019384",
           "introductoryOffer" : null,
           "localizations" : [
             {
-              "description" : "The assistant in full: guidance written for you, and why any technique works, explained at your level.",
+              "description" : "Every technique in the catalogue — sleep, focus and energy protocols, and the Wim Hof-style rounds.",
               "displayName" : "Breathe Plus",
               "locale" : "en_US"
             }
           ],
-          "productID" : "xyz.holmie.breathe.plus.yearly",
-          "recurringSubscriptionPeriod" : "P1Y",
-          "referenceName" : "Breathe Plus (yearly)",
+          "productID" : "xyz.holmie.breathe.plus.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Breathe Plus (monthly)",
+          "subscriptionGroupID" : "21571893",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "4.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6472019385",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Everything in Plus, and an assistant that reads your practice: where to start, and why any technique works, written for you.",
+              "displayName" : "Breathe Coach",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "xyz.holmie.breathe.coach.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Breathe Coach (monthly)",
           "subscriptionGroupID" : "21571893",
           "type" : "RecurringSubscription"
         }

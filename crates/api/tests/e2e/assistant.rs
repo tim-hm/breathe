@@ -17,6 +17,7 @@ use api::proto::breathe::v1 as pb;
 
 use crate::harness::{
     ScriptedModel, TestDatabase, allowance, call_grpc_web_stream_with, call_grpc_web_with,
+    subscribe,
 };
 
 const GET_RECOMMENDATION: &str = "/breathe.v1.AssistantService/GetRecommendation";
@@ -93,13 +94,14 @@ async fn the_fallback_ranks_by_the_goals_they_picked() {
 /// one, flagged. Without the flag a client would present rule-based copy as
 /// personalised.
 ///
-/// Nobody here has bought anything, so the ceiling is the free tier's. What a
-/// subscription changes is `entitlement.rs`'s business.
+/// The ceiling is Coach's, because Coach is the only tier that reaches the
+/// model at all — who is allowed past the gate is `entitlement.rs`'s business
+/// and this is about what happens once they are.
 #[tokio::test]
 async fn an_exhausted_quota_answers_from_the_rules() {
     let db = TestDatabase::create("assistant_quota").await;
     let model = ScriptedModel::always(Ok("box-breathing | Steady.".to_owned()));
-    let allowance = allowance(Tier::Free);
+    let allowance = allowance(Tier::Coach);
 
     for _ in 0..allowance {
         let response = recommend(&db, model.clone(), USER).await;
@@ -128,13 +130,9 @@ async fn an_exhausted_quota_answers_from_the_rules() {
 /// count, because a breaker that never opened and one that never closed both
 /// still return an answer.
 ///
-/// The caller is put on Plus first, so the only ceiling in play is the breaker's
-/// — five attempts is more than the free allowance, and a quota that ran out
-/// mid-test would look exactly like a breaker that never closed.
 #[tokio::test]
 async fn the_breaker_trips_and_then_recovers() {
     let db = TestDatabase::create("assistant_breaker").await;
-    subscribe(&db, USER).await;
 
     let model = ScriptedModel::script(vec![
         Err(ModelError::Failed("first".to_owned())),
@@ -343,11 +341,20 @@ async fn smoke_the_real_model_answers() {
     );
 }
 
+/// Asks for a recommendation as somebody who is allowed to reach the model.
+///
+/// The subscription is part of the helper rather than repeated at the top of
+/// every test, because this suite is about what the model says and not about
+/// who may ask it — that gate is `entitlement.rs`'s, and a test here that forgot
+/// the setup would fail as though the assistant were broken. Cheap enough to
+/// repeat: it is one upsert per call.
 async fn recommend(
     db: &TestDatabase,
     model: Arc<dyn ModelClient>,
     user: &str,
 ) -> pb::GetRecommendationResponse {
+    subscribe(&db.pool, user, "COACH").await;
+
     call_grpc_web_with(
         db.app_with_model(model),
         GET_RECOMMENDATION,
@@ -364,6 +371,8 @@ async fn explain(
     user: &str,
     slug: &str,
 ) -> crate::harness::GrpcWebStream<pb::ExplainTechniqueResponse> {
+    subscribe(&db.pool, user, "COACH").await;
+
     call_grpc_web_stream_with(
         db.app_with_model(model),
         EXPLAIN_TECHNIQUE,
@@ -373,23 +382,6 @@ async fn explain(
         &[(USER_ID_HEADER, user)],
     )
     .await
-}
-
-/// Puts somebody on Plus by writing the column `EntitlementService` writes.
-///
-/// Straight into the row rather than through a submission, because this suite
-/// scripts no verifier and the only thing it wants from a subscription is the
-/// larger allowance. What a real purchase does to that column is
-/// `entitlement.rs`'s business.
-async fn subscribe(db: &TestDatabase, user: &str) {
-    sqlx::query(
-        "INSERT INTO users (id, plus_until) VALUES ($1, now() + interval '1 year')
-         ON CONFLICT (id) DO UPDATE SET plus_until = EXCLUDED.plus_until",
-    )
-    .bind(user.parse::<uuid::Uuid>().expect("a valid uuid"))
-    .execute(&db.pool)
-    .await
-    .expect("the subscription is written");
 }
 
 /// Stores goals through the real `ProfileService`, so the rows the assistant

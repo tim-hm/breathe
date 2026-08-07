@@ -14,6 +14,9 @@ pub struct TechniqueRow {
     pub safety_note: String,
     pub goal: TechniqueGoal,
     pub recommended_rounds: i32,
+    /// Whether breathing this one needs a subscription. Carried to the client
+    /// and enforced only there — see the field note in the proto.
+    pub requires_subscription: bool,
 }
 
 /// One stage, carrying the id of the technique it belongs to so the caller can
@@ -52,7 +55,8 @@ pub async fn list_techniques(pool: &PgPool) -> Result<Vec<TechniqueRow>, Techniq
             summary,
             safety_note,
             goal AS "goal: TechniqueGoal",
-            recommended_rounds
+            recommended_rounds,
+            requires_subscription
          FROM techniques
          ORDER BY sort_order"#
     )

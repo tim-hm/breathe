@@ -1,25 +1,22 @@
 import Foundation
 
-/// The subscription this app sells, in the vocabulary of the app rather than of
-/// `StoreKit`.
+/// One of the subscriptions this app sells, in the vocabulary of the app rather
+/// than of `StoreKit`.
 ///
 /// Only what a paywall draws. The `Product` type carries a dozen more fields —
 /// subscription group, promotional offers, introductory periods — and every one
 /// of them would be a reason for a view to reach past this boundary.
-public struct PlusProduct: Sendable, Equatable {
-    /// Must match the product id in App Store Connect, in
-    /// `ios/Breathe/Breathe.storekit`, and in the server's
-    /// `features/entitlement/types.rs`. Four places, and there is no build-time
-    /// check that ties them together — a mismatch presents as a paywall with no
-    /// price and a purchase that never verifies.
-    public static let identifier = "xyz.holmie.breathe.plus.yearly"
+public struct SubscriptionProduct: Sendable, Equatable {
+    /// Which tier buying this grants. Never `.free`.
+    public let tier: SubscriptionTier
 
     /// Already formatted for the storefront the person is buying from. Never
     /// composed here: the App Store owns the currency, the symbol's position,
     /// and whether the amount rounds — and it varies by country.
     public let displayPrice: String
 
-    public init(displayPrice: String) {
+    public init(tier: SubscriptionTier, displayPrice: String) {
+        self.tier = tier
         self.displayPrice = displayPrice
     }
 }
@@ -30,7 +27,7 @@ public struct PlusProduct: Sendable, Equatable {
 /// this device reads the fields to decide what to show, and the server reads the
 /// JWS to decide what to spend. Neither trusts the other's reading, which is the
 /// whole arrangement.
-public struct PlusTransaction: Sendable, Equatable {
+public struct SubscriptionTransaction: Sendable, Equatable {
     public let id: UInt64
     public let productID: String
 
@@ -62,17 +59,24 @@ public struct PlusTransaction: Sendable, Equatable {
         self.jws = jws
     }
 
-    /// Whether this transaction entitles somebody to Plus at `moment`.
+    /// What this transaction entitles somebody to at `moment`, which is `.free`
+    /// for anything spent, refunded, or bought from a price list this build does
+    /// not know.
     ///
     /// `Transaction.currentEntitlements` has already applied most of this, so
     /// the checks look redundant — they are not. This is the rule the app gates
     /// on, and a rule that lives only inside a framework is one no test can
     /// state and no reader can find.
-    public func entitlesPlus(at moment: Date) -> Bool {
-        guard productID == PlusProduct.identifier, revocationDate == nil else { return false }
-        guard let expirationDate else { return true }
+    public func entitledTier(at moment: Date) -> SubscriptionTier {
+        guard revocationDate == nil,
+              let tier = SubscriptionTier.tier(forProductIdentifier: productID)
+        else {
+            return .free
+        }
 
-        return expirationDate > moment
+        guard let expirationDate else { return tier }
+
+        return expirationDate > moment ? tier : .free
     }
 
     /// What the submission ledger records.
@@ -90,14 +94,14 @@ public struct PlusTransaction: Sendable, Equatable {
 ///
 /// `pending` is a real outcome rather than a failure: Ask to Buy sends the
 /// request to a parent and the answer arrives hours later, through
-/// `PlusStoreFront/updates()`, which is exactly why that stream exists.
-public enum PlusPurchaseOutcome: Sendable, Equatable {
-    case purchased(PlusTransaction)
+/// `StoreFront/updates()`, which is exactly why that stream exists.
+public enum PurchaseOutcome: Sendable, Equatable {
+    case purchased(SubscriptionTransaction)
     case cancelled
     case pending
 }
 
-public enum PlusStoreFrontError: Error, Equatable {
+public enum StoreFrontError: Error, Equatable {
     /// The App Store has no such product. In the simulator this means the run
     /// scheme is not pointed at `Breathe.storekit`; on a device it means the
     /// product is not yet approved in App Store Connect.
@@ -114,24 +118,32 @@ public enum PlusStoreFrontError: Error, Equatable {
 /// A seam for the same reason `assistant::ModelClient` is one on the server: the
 /// interesting logic is what the app *decides* from a set of transactions, and
 /// none of that should need a signed-in App Store account and a booted simulator
-/// to exercise. `StoreKitPlusStoreFront` is the only type in the repository that
+/// to exercise. `StoreKitStoreFront` is the only type in the repository that
 /// imports `StoreKit`.
-public protocol PlusStoreFront: Sendable {
-    /// The product, for the price on the paywall. `nil` rather than throwing —
-    /// the paywall has a story for a missing price, and a person with no signal
-    /// should still be able to read what Plus is.
-    func product() async -> PlusProduct?
+public protocol StoreFront: Sendable {
+    /// Both subscriptions, for the prices on the paywall. Empty rather than
+    /// throwing — the paywall has a story for a missing price, and a person with
+    /// no signal should still be able to read what each tier is.
+    func products() async -> [SubscriptionProduct]
 
     /// What `StoreKit` currently considers this person entitled to. Answered
     /// from the device, so it works offline, which is why no screen ever waits
     /// on the server for this.
-    func currentEntitlements() async -> [PlusTransaction]
+    func currentEntitlements() async -> [SubscriptionTransaction]
 
     /// Transactions arriving after launch: a renewal, a purchase made on
-    /// another device, an Ask to Buy approval, a refund.
-    func updates() -> AsyncStream<PlusTransaction>
+    /// another device, an Ask to Buy approval, a refund, or the crossgrade
+    /// Apple issues when somebody moves between the two tiers.
+    func updates() -> AsyncStream<SubscriptionTransaction>
 
-    func purchase() async throws -> PlusPurchaseOutcome
+    /// Buys `tier`.
+    ///
+    /// Buying one while holding the other is an ordinary upgrade or downgrade
+    /// rather than a second subscription, because both products sit in one App
+    /// Store subscription group: Apple prorates it, cancels the old one, and
+    /// issues a fresh transaction naming the new product. Nothing here has to
+    /// know that beyond passing the tier through.
+    func purchase(_ tier: SubscriptionTier) async throws -> PurchaseOutcome
 
     /// Restores purchases, which App Review requires a paywall to offer. It
     /// prompts for the App Store password, so it is only ever called from a

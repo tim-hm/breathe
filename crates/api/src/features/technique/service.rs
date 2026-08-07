@@ -39,6 +39,7 @@ pub async fn list_techniques(pool: &PgPool) -> Result<pb::ListTechniquesResponse
                 stages,
                 recommended_rounds,
                 safety_note: row.safety_note,
+                requires_subscription: row.requires_subscription,
             })
         })
         .collect::<Result<Vec<_>, TechniqueError>>()?;

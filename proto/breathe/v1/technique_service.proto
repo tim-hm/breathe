@@ -143,6 +143,21 @@ message Technique {
   // Separate from `summary` because it has to reach the person who is already
   // breathing: a client shows the summary when choosing and this while doing.
   string safety_note = 10;
+
+  // Whether breathing this one needs a subscription.
+  //
+  // Phrased so that `false` — the proto3 zero value, and therefore what an
+  // absent field, an older server, and a truncated message all mean — is
+  // *unlocked*. That direction is deliberate. A session runs entirely on the
+  // device, so there is nothing to enforce here and nothing this saves: the
+  // costly feature is the language model, and `EntitlementService` guards that
+  // one server-side. What a decode gap could cost is a person being asked to
+  // pay for something they were promised, which is worth more than the handful
+  // of sessions the other direction gives away.
+  //
+  // The catalogue is served whole either way. A locked technique is listed,
+  // described, and shown its rhythm — it is an invitation, not a hidden row.
+  bool requires_subscription = 11;
 }
 
 // One question a beginner has, and the app's answer to it.

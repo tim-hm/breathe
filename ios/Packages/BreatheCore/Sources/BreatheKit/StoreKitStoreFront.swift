@@ -3,33 +3,35 @@ import StoreKit
 
 /// The only type in the repository that imports `StoreKit`.
 ///
-/// Everything above it works in `PlusTransaction` values, which is what lets the
-/// gating rules and the submission ledger be tested on the host with no App
-/// Store account, no booted simulator, and no purchase.
+/// Everything above it works in `SubscriptionTransaction` values, which is what lets the
+/// tier rules and the submission ledger be tested on the host with no App Store
+/// account, no booted simulator, and no purchase.
 ///
-/// Stateless, and therefore a struct. Holding the resolved `Product` between the
-/// paywall's price and the same screen's purchase looks worth doing, and is not:
-/// it makes this an actor, and an actor's isolated members cannot satisfy a
+/// Stateless, and therefore a struct. Holding the resolved `Product`s between
+/// the paywall's prices and the same screen's purchase looks worth doing, and is
+/// not: it makes this an actor, and an actor's isolated members cannot satisfy a
 /// `Sendable` protocol under Swift 6 without a conformance the compiler refuses.
 /// `StoreKit` caches product metadata on the device anyway, so the second lookup
 /// is a local read rather than the round trip it appears to be.
-public struct StoreKitPlusStoreFront: PlusStoreFront {
+public struct StoreKitStoreFront: StoreFront {
     public init() {}
 
-    public func product() async -> PlusProduct? {
-        guard let product = await resolve() else { return nil }
-
-        return PlusProduct(displayPrice: product.displayPrice)
+    public func products() async -> [SubscriptionProduct] {
+        await resolve(SubscriptionTier.purchasable.compactMap(\.productIdentifier))
+            .compactMap { product in
+                SubscriptionTier.tier(forProductIdentifier: product.id).map {
+                    SubscriptionProduct(tier: $0, displayPrice: product.displayPrice)
+                }
+            }
+            // Cheapest tier first, from the ladder rather than from whatever
+            // order the App Store answered in.
+            .sorted { $0.tier < $1.tier }
     }
 
-    private func resolve() async -> Product? {
-        try? await Product.products(for: [PlusProduct.identifier]).first
-    }
-
-    public func currentEntitlements() async -> [PlusTransaction] {
-        var entitlements: [PlusTransaction] = []
+    public func currentEntitlements() async -> [SubscriptionTransaction] {
+        var entitlements: [SubscriptionTransaction] = []
         for await result in Transaction.currentEntitlements {
-            if let transaction = PlusTransaction(result) {
+            if let transaction = SubscriptionTransaction(result) {
                 entitlements.append(transaction)
             }
         }
@@ -37,7 +39,7 @@ public struct StoreKitPlusStoreFront: PlusStoreFront {
         return entitlements
     }
 
-    public func updates() -> AsyncStream<PlusTransaction> {
+    public func updates() -> AsyncStream<SubscriptionTransaction> {
         AsyncStream { continuation in
             let task = Task {
                 for await result in Transaction.updates {
@@ -49,7 +51,7 @@ public struct StoreKitPlusStoreFront: PlusStoreFront {
                     // ledger rather than StoreKit's queue.
                     await result.unsafePayloadValue.finish()
 
-                    if let transaction = PlusTransaction(result) {
+                    if let transaction = SubscriptionTransaction(result) {
                         continuation.yield(transaction)
                     }
                 }
@@ -60,16 +62,18 @@ public struct StoreKitPlusStoreFront: PlusStoreFront {
         }
     }
 
-    public func purchase() async throws -> PlusPurchaseOutcome {
-        guard let product = await resolve() else {
-            throw PlusStoreFrontError.productUnavailable
+    public func purchase(_ tier: SubscriptionTier) async throws -> PurchaseOutcome {
+        guard let identifier = tier.productIdentifier,
+              let product = await resolve([identifier]).first
+        else {
+            throw StoreFrontError.productUnavailable
         }
 
         switch try await product.purchase() {
         case let .success(result):
             await result.unsafePayloadValue.finish()
-            guard let transaction = PlusTransaction(result) else {
-                throw PlusStoreFrontError.unverified
+            guard let transaction = SubscriptionTransaction(result) else {
+                throw StoreFrontError.unverified
             }
             return .purchased(transaction)
         case .userCancelled:
@@ -87,9 +91,15 @@ public struct StoreKitPlusStoreFront: PlusStoreFront {
     public func restore() async throws {
         try await AppStore.sync()
     }
+
+    /// Asks the App Store for exactly what the caller needs — both products for
+    /// the paywall's prices, one for the purchase somebody is waiting on.
+    private func resolve(_ identifiers: [String]) async -> [Product] {
+        await (try? Product.products(for: identifiers)) ?? []
+    }
 }
 
-private extension PlusTransaction {
+private extension SubscriptionTransaction {
     /// `nil` for a transaction `StoreKit` will not vouch for.
     ///
     /// Dropped rather than passed along unverified: the signature is the only

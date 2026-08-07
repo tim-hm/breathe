@@ -1,55 +1,62 @@
 import Foundation
 import os
 
-/// Whether this person has Breathe Plus, and the only thing any screen asks.
+/// Which tier this person is on, and the only thing any screen asks.
 ///
-/// Offline-first, in the strict sense: `isPlus` is answered from `StoreKit` on
+/// Offline-first, in the strict sense: the tier is answered from `StoreKit` on
 /// this device, which works with no signal, and the server submission is a sync
-/// that runs alongside — never a gate in front of it. A person who buys Plus on
-/// a train has Plus on that train.
+/// that runs alongside — never a gate in front of it. Somebody who subscribes on
+/// a train has their subscription on that train.
 ///
 /// The two halves are deliberately asymmetric, because they answer different
-/// questions. This device decides what to *show*; the server decides what to
-/// *spend* on the language model, and it will not take this app's word for it.
+/// questions. This device decides what to *show* — which techniques open, which
+/// upsell appears — and none of that costs anything to give away, because a
+/// session runs here. The server decides what to *spend* on the language model,
+/// and it will not take this app's word for it.
+///
 /// Nothing here reports a sync failure to a view: there is no action the person
-/// could take, and the only consequence is a smaller assistant allowance until
-/// the next launch retries.
+/// could take, and the only consequence is the assistant answering from its
+/// rules until the next launch retries.
 @MainActor
 @Observable
-public final class PlusStore {
+public final class SubscriptionStore {
     private static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "BreatheKit",
-        category: "plus"
+        category: "subscription"
     )
 
-    private static let isPlusKey = "plus.isSubscriber"
+    /// The key keeps its old spelling on purpose: it names a value already
+    /// written to disk on installed builds, and renaming it would silently drop
+    /// every existing subscriber back to free for one launch.
+    private static let tierKey = "plus.tier"
 
-    /// Whether Plus is active right now.
+    /// What this person is entitled to right now.
     ///
     /// Written through to `UserDefaults` on every change and read back at init,
     /// so a launch shows the right thing on the first frame. Without the cache
     /// every launch would render the free state for as long as `StoreKit` took
-    /// to answer, which a subscriber would experience as the paywall flashing at
-    /// them.
+    /// to answer, which a subscriber would experience as their catalogue
+    /// re-locking itself at every cold start.
     ///
     /// Guarded on a genuine change, because `refresh` assigns unconditionally
     /// and runs on every foreground: Swift fires `didSet` on an equal-value
     /// assignment, so without it the defaults plist is dirtied for a value that
-    /// changes about once a year.
-    public private(set) var isPlus: Bool {
+    /// changes about once a month.
+    public private(set) var tier: SubscriptionTier {
         didSet {
-            guard oldValue != isPlus else { return }
+            guard oldValue != tier else { return }
 
-            defaults.set(isPlus, forKey: Self.isPlusKey)
+            defaults.set(tier.rawValue, forKey: Self.tierKey)
         }
     }
 
-    /// The price to put on the paywall, once the App Store has said what it is.
-    public private(set) var product: PlusProduct?
+    /// The subscriptions on offer, cheapest first, once the App Store has said
+    /// what they cost.
+    public private(set) var products: [SubscriptionProduct] = []
 
-    /// Whether a purchase or a restore is in flight, for the button to disable
-    /// itself with. One flag for both: they are the same modal moment as far as
-    /// the screen is concerned, and neither can start while the other is
+    /// Whether a purchase or a restore is in flight, for the buttons to disable
+    /// themselves with. One flag for all of them: they are the same modal moment
+    /// as far as the screen is concerned, and none can start while another is
     /// running.
     public private(set) var isBusy = false
 
@@ -58,7 +65,7 @@ public final class PlusStore {
     /// button did nothing.
     public private(set) var isAwaitingApproval = false
 
-    private let front: any PlusStoreFront
+    private let front: any StoreFront
     private let entitlements: any EntitlementSyncing
     private let defaults: UserDefaults
 
@@ -73,7 +80,7 @@ public final class PlusStore {
     private var submitted: Set<String> = []
 
     public init(
-        front: any PlusStoreFront,
+        front: any StoreFront,
         entitlements: any EntitlementSyncing,
         defaults: UserDefaults = .standard
     ) {
@@ -81,8 +88,10 @@ public final class PlusStore {
         self.entitlements = entitlements
         self.defaults = defaults
         // Assigning in an initialiser does not run `didSet`, which is what keeps
-        // this from writing back the value it just read.
-        isPlus = defaults.bool(forKey: Self.isPlusKey)
+        // this from writing back the value it just read. An unreadable or
+        // unknown stored value reads as free — the safe direction, and the one
+        // a single refresh corrects.
+        tier = SubscriptionTier(rawValue: defaults.integer(forKey: Self.tierKey)) ?? .free
     }
 
     /// Reads what `StoreKit` already knows, then keeps listening for the rest of
@@ -109,43 +118,57 @@ public final class PlusStore {
     ///
     /// Safe on every foreground: with nothing outstanding it is one local
     /// `StoreKit` read and no network at all. Deliberately does not fetch the
-    /// price — that is an App Store round trip, and it is only the paywall that
-    /// needs it.
+    /// prices — that is an App Store round trip, and it is only the paywall that
+    /// needs them.
+    ///
+    /// The tier is the *highest* of whatever `StoreKit` reports rather than the
+    /// first. One subscription group means one active subscription in practice,
+    /// but a crossgrade can leave both visible for a moment, and the answer
+    /// during that moment should be the one the person is paying for.
     public func refresh() async {
         let entitlements = await front.currentEntitlements()
         let now = Date()
 
-        isPlus = entitlements.contains { $0.entitlesPlus(at: now) }
+        tier = entitlements
+            .map { $0.entitledTier(at: now) }
+            .max() ?? .free
 
         for transaction in entitlements {
             await submit(transaction)
         }
     }
 
-    /// Fetches the price, for a screen that is about to show it.
+    /// Fetches the prices, for a screen that is about to show them.
     ///
     /// Separate from [`refresh`] because it is the one part of this store that
     /// talks to the App Store: folding it in would put a network fetch on every
     /// cold launch for the majority of people who never open the paywall. Cached
     /// after the first success, so reopening the sheet is free.
-    public func loadProduct() async {
-        guard product == nil else { return }
+    public func loadProducts() async {
+        // Counted rather than emptiness-checked: the App Store can answer with
+        // one of the two, and latching on that would leave the other tier
+        // priceless for the life of the process.
+        guard products.count < SubscriptionTier.purchasable.count else { return }
 
-        product = await front.product()
+        products = await front.products()
     }
 
-    /// Buys Plus.
+    /// Buys `tier`.
     ///
-    /// The entitlement is applied from `StoreKit`'s answer rather than from the
-    /// server's, so the screen changes the moment the sheet dismisses.
-    public func purchase() async {
+    /// Buying Coach while holding Plus is an upgrade, not a second
+    /// subscription — both products are in one App Store subscription group, so
+    /// Apple prorates the remainder, cancels the old one, and delivers a fresh
+    /// transaction. The entitlement is then applied from `StoreKit`'s answer
+    /// rather than from the server's, so the screen changes the moment the sheet
+    /// dismisses.
+    public func purchase(_ tier: SubscriptionTier) async {
         guard !isBusy else { return }
         isBusy = true
         isAwaitingApproval = false
         defer { isBusy = false }
 
         do {
-            switch try await front.purchase() {
+            switch try await front.purchase(tier) {
             case let .purchased(transaction):
                 await submit(transaction)
                 await refresh()
@@ -191,8 +214,8 @@ public final class PlusStore {
     /// unrecorded, so the next attempt tries again — the same
     /// retry-on-next-launch shape the profile sync uses, and for the same
     /// reason: a purchase that reaches the server a day late costs the person
-    /// only a smaller assistant allowance in the meantime.
-    private func submit(_ transaction: PlusTransaction) async {
+    /// only a rule-based assistant in the meantime.
+    private func submit(_ transaction: SubscriptionTransaction) async {
         guard !submitted.contains(transaction.submissionKey) else { return }
 
         do {
