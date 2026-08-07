@@ -8,6 +8,9 @@ import SwiftUI
 /// appear on the detail screen — where someone decides — and inside the session,
 /// where someone is already breathing. A warning only the catalogue shows is one
 /// the person has scrolled past by the time it matters.
+///
+/// The watch draws its own, in caption type with no card. Two small views
+/// rather than one taking three flags.
 struct SafetyNote: View {
     let technique: Technique
     /// Smaller inside the session, where the screen belongs to the breath.

@@ -9,7 +9,7 @@ import SwiftUI
 /// all platform-neutral by construction, so the wrist reuses them rather than
 /// reimplementing them. Two things differ, and both are consequences of the
 /// watch never minting an identity — the identity store is the provisioned one,
-/// and a `PhoneLink` listens for the id that fills it.
+/// and a `PhoneLink` listens for the id that fills the `WatchHandoffInbox`.
 @main
 struct BreatheWatchApp: App {
     /// Empty until the phone has been in range once. Everything below tolerates
@@ -23,7 +23,15 @@ struct BreatheWatchApp: App {
 
     @State private var catalogue: TechniqueListModel
     @State private var journey: JourneyModel
-    @State private var phone: PhoneLink
+
+    /// Everything the phone has told this wrist. In the environment, because
+    /// the screen that renders the mirrored best is three pushes from here.
+    @State private var phone: WatchHandoffInbox
+
+    /// The radio that fills it. A stored `let` rather than `@State` because
+    /// nothing observes it and `WCSession.delegate` is weak — something has to
+    /// hold this for the life of the app or the delegate quietly goes away.
+    private let link: PhoneLink
 
     /// The one preference the wrist owns, held here so the settings screen and
     /// the cue controller a session is composed with are looking at the same
@@ -55,7 +63,9 @@ struct BreatheWatchApp: App {
             )
         )
 
-        _phone = State(wrappedValue: PhoneLink(identity: identity))
+        let inbox = WatchHandoffInbox(identity: identity)
+        _phone = State(wrappedValue: inbox)
+        link = PhoneLink(inbox: inbox)
     }
 
     var body: some Scene {
@@ -70,7 +80,7 @@ struct BreatheWatchApp: App {
             .environment(phone)
             .environment(settings)
             .task {
-                phone.activate()
+                link.activate()
                 // Started here rather than left to the Exercises screen, so the
                 // catalogue is in hand by the time somebody has tapped through
                 // the menu. `loadIfNeeded` is what makes that a shared fetch

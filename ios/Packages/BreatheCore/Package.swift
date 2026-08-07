@@ -1,7 +1,7 @@
 // swift-tools-version: 6.0
 import PackageDescription
 
-// One package, three targets — not three packages. SwiftPM offers no way to
+// One package, four targets — not four packages. SwiftPM offers no way to
 // share a tools-version or a platform list across packages, so a split would
 // mean maintaining those in triplicate and, worse, one `Package.resolved` per
 // package: several lockfiles free to pin different versions of the same
@@ -23,6 +23,7 @@ let package = Package(
     products: [
         .library(name: "BreatheKit", targets: ["BreatheKit"]),
         .library(name: "BreatheUI", targets: ["BreatheUI"]),
+        .library(name: "BreatheStyle", targets: ["BreatheStyle"]),
     ],
     dependencies: [
         // The Connect runtime. It speaks the Connect, gRPC, and gRPC-Web
@@ -49,7 +50,8 @@ let package = Package(
         ),
         .target(name: "BreatheKit", dependencies: ["BreatheAPI"]),
         // No dependencies, ever. The design system stays free of domain types so
-        // that mapping a `TechniqueGoal` to an accent remains the feature's job.
+        // the palette stays reusable; mapping a `TechniqueGoal` onto an accent
+        // belongs to BreatheStyle below, which may depend on both.
         //
         // The asset catalogue holds every colour, each with a light and a dark
         // value. Declaring it is what puts it in `Bundle.module` at all; without
@@ -58,6 +60,13 @@ let package = Package(
         // actool — `swift build` copies it verbatim, which is why the palette's
         // test reads the JSON rather than resolving a `Color`.
         .target(name: "BreatheUI", resources: [.process("Colors.xcassets")]),
+        // Mappings from a domain type onto a design token, and only those — no
+        // views, which the two apps still write separately because a wrist is
+        // not a small phone. `BreatheUI` must never learn what a `TechniqueGoal`
+        // is, but that rule says nothing about a third module depending on both,
+        // and a mapping written once per app target is one the phone and the
+        // wrist are free to disagree about silently.
+        .target(name: "BreatheStyle", dependencies: ["BreatheKit", "BreatheUI"]),
         // Depends on BreatheAPI as well as BreatheKit because it builds proto
         // messages to feed the decoders. That is the boundary being tested, so
         // reaching across it here is the point rather than a leak.

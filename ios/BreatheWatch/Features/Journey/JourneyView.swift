@@ -21,7 +21,7 @@ struct JourneyView: View {
     /// links here does not carry a number it never renders. Not off
     /// `JourneyModel`, whose personal best is folded from scores measured on
     /// *this* device — and the BOLT test is a phone screen.
-    @Environment(PhoneLink.self) private var phone
+    @Environment(WatchHandoffInbox.self) private var phone
 
     var body: some View {
         List {

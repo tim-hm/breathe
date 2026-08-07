@@ -70,7 +70,7 @@ struct BreatheApp: App {
     init() {
         let identity = identity
         let baseURL = AppConfiguration.apiBaseURL
-        watch = WatchLink(identity: identity, scores: scores)
+        watch = WatchLink(outbox: WatchHandoffOutbox(identity: identity, scores: scores))
 
         let techniques = CachedTechniqueRepository(
             caching: TechniqueRepository(baseURL: baseURL, identity: identity)
@@ -179,7 +179,8 @@ struct BreatheApp: App {
 private extension Appearance {
     /// What `preferredColorScheme` takes: an override, or nil to follow the
     /// system. Mapped here rather than in BreatheKit so the domain package
-    /// stays free of SwiftUI — the same seam `GoalAccent` sits on.
+    /// stays free of SwiftUI, and here rather than in `BreatheStyle` because
+    /// this scene is the only reader and the mapping touches no palette.
     var colorScheme: ColorScheme? {
         switch self {
         case .system: nil

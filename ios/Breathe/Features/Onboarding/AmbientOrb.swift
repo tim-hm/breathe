@@ -1,16 +1,16 @@
 import BreatheUI
 import SwiftUI
 
-/// The marketing site's orb, idling on home: a filled dot inside two rings,
-/// breathing whether or not anyone has begun.
+/// The marketing site's orb, idling above the welcome copy: a filled dot inside
+/// two rings, breathing whether or not anyone has begun.
 ///
 /// It breathes briskly and visibly — a second and a half in, the same out —
 /// with enough travel that the expansion reads as a breath rather than a
 /// shimmer. Ambience, not instruction: the session orb swells to be
 /// followed; this one only has to be unmistakably alive.
 struct AmbientOrb: View {
-    /// The wheel's current goal accent, so the orb takes the colour of what
-    /// the person is about to do.
+    /// What colour to breathe in. The welcome screen hands it the brand accent,
+    /// because nothing there belongs to a technique yet.
     let accent: Color
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion

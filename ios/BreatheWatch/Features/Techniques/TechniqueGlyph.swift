@@ -1,4 +1,5 @@
 import BreatheKit
+import BreatheStyle
 import BreatheUI
 import SwiftUI
 
@@ -12,11 +13,15 @@ import SwiftUI
 /// sine about a midline for coherent, a zigzag for bellows. `TechniqueDrawing`
 /// holds those coordinates; this view only turns them into a path.
 ///
-/// The phone has its own copy of this renderer, at row weight. That is the split
-/// `GoalAccent` documents and the same one it accepts: the coordinates and every
-/// judgement about them are shared, and turning a command into a `Path` is
-/// mechanical enough that two copies cannot disagree about anything that
-/// matters.
+/// Duplicated from the phone's copy on purpose, and the budget is ninety-odd
+/// lines including `DrawnStroke` — `BreatheStyle` could hold a shared renderer,
+/// since it may depend on both `BreatheKit` and `BreatheUI`, so this is a choice
+/// rather than a constraint. It stands because views are where the two apps
+/// diverge: a wrist is not a small phone, this drawing already carries a
+/// different weight, and a shared one would grow a parameter for each
+/// difference. What must not diverge cannot: `TechniqueDrawing` in `BreatheKit`
+/// holds every coordinate and every judgement about them, leaving each copy the
+/// mechanical turn from a command into a `Path`.
 struct TechniqueGlyph: View {
     let technique: Technique
     /// Heavier than the phone's row weight and than the site's 1.5: this drawing

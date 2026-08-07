@@ -1,4 +1,5 @@
 import BreatheKit
+import BreatheStyle
 import BreatheUI
 import SwiftUI
 
@@ -32,7 +33,7 @@ struct SessionView: View {
             if model.status == .finished, let record = model.record, !model.wasDiscarded {
                 SessionSummaryView(record: record, technique: model.technique) { dismiss() }
             } else if let countdown {
-                getReady(countdown)
+                CountdownView(count: countdown)
             } else {
                 player
             }
@@ -70,35 +71,6 @@ struct SessionView: View {
             if status == .finished, model.wasDiscarded {
                 dismiss()
             }
-        }
-    }
-
-    /// The breath before the breathing: a beat to settle before the plan's
-    /// clock starts. Three seconds, not a preference — long enough to put the
-    /// phone somewhere and soften the shoulders, short enough that nobody
-    /// reaches for a skip.
-    private func getReady(_ count: Int) -> some View {
-        VStack(spacing: Theme.Spacing.loose) {
-            VStack(spacing: Theme.Spacing.close) {
-                Text("Get comfortable")
-                    .font(.title2.weight(.medium))
-                Text("Starting in")
-                    .font(.subheadline)
-                    .foregroundStyle(Theme.Ink.secondary)
-            }
-
-            Text("\(count)")
-                .font(.system(size: 96, design: .rounded).weight(.light))
-                .monospacedDigit()
-                .contentTransition(.numericText(countsDown: true))
-                .animation(.easeInOut(duration: 0.3), value: count)
-        }
-        .foregroundStyle(Theme.Ink.primary)
-        // The announcements in `runCountdown` carry this for VoiceOver, on
-        // the same beat the sighted see.
-        .accessibilityHidden(true)
-        .sensoryFeedback(.impact(weight: .light), trigger: count) { _, _ in
-            settings.cueMode.playsHaptics
         }
     }
 
@@ -145,7 +117,7 @@ struct SessionView: View {
 
             Spacer()
             if model.isInHold {
-                hold
+                HoldView(model: model, hints: hints)
             } else {
                 breathGuide
             }
@@ -229,56 +201,6 @@ struct SessionView: View {
                     // conveys.
                     .accessibilityElement(children: .combine)
                 }
-            }
-        }
-    }
-
-    /// The retention. Nothing counts down here, because nothing knows how long
-    /// this is: the timer counts up, and the button is the only thing that ends
-    /// it. No target, no record, no encouragement to go longer — a maximal hold
-    /// is the one thing this app will not ask anyone for.
-    /// A second a tick, not a frame a tick: inside a hold the plan is frozen, so
-    /// the orb holds still and the only thing moving on this screen is a timer
-    /// counting whole seconds.
-    private var hold: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { _ in
-            VStack(spacing: Theme.Spacing.loose) {
-                BreathVisual(
-                    beat: model.currentBeat,
-                    elapsed: model.elapsed,
-                    progress: model.progress(at: model.elapsed),
-                    accent: model.technique.goal.accent
-                )
-                .accessibilityHidden(true)
-
-                VStack(spacing: Theme.Spacing.close) {
-                    // The timer stays under Just the visuals — inside a hold
-                    // the orb is frozen, so it is the only feedback there is.
-                    if settings.guidance == .full {
-                        Text(model.currentBeat?.kind.spokenInstruction ?? "")
-                            .font(.title2.weight(.medium))
-                    }
-                    Text(model.holdElapsed.formatted(.time(pattern: .minuteSecond)))
-                        .font(.system(.largeTitle, design: .rounded).weight(.light))
-                        .monospacedDigit()
-                        .foregroundStyle(Theme.Ink.secondary)
-                }
-                // Explicit label and value rather than combined children, so
-                // VoiceOver reads "Hold, lungs empty — 1:23" at every guidance
-                // level, including the one that hides the instruction text.
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(PhaseHints.spokenPhase(for: model.currentBeat, in: hints))
-                .accessibilityValue(model.holdElapsed.formatted(.time(pattern: .minuteSecond)))
-
-                Button("I'm ready") {
-                    model.release()
-                }
-                .font(.headline)
-                .padding(.horizontal, Theme.Spacing.loose)
-                .padding(.vertical, Theme.Spacing.close)
-                .background(.thinMaterial, in: Capsule())
-                .disabled(model.status != .holding)
-                .accessibilityHint("Ends the hold and takes the recovery breath")
             }
         }
     }
