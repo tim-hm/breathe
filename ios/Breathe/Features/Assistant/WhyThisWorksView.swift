@@ -12,6 +12,8 @@ struct WhyThisWorksView: View {
     @State private var model: ExplanationModel
     @State private var isOpen = false
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     /// `assistant` is defaulted so this view can be dropped into a screen
     /// without changing that screen's initialiser. See `LiveAssistant`.
     init(techniqueSlug: String, assistant: any AssistantReading = LiveAssistant.reading) {
@@ -33,6 +35,16 @@ struct WhyThisWorksView: View {
                 model.startIfNeeded()
             }
         }
+        // Once the explanation is whole, not once per chunk: a paragraph
+        // announced a few words at a time would interrupt itself all the way
+        // down. Observed on the model rather than on the growing `Text`, because
+        // the fallback answer arrives complete in a single step and a view that
+        // is built already finished sees no change to react to.
+        .onChange(of: model.state) { _, state in
+            if case let .reading(text, _, true) = state {
+                AccessibilityNotification.Announcement(text).post()
+            }
+        }
         .onDisappear { model.cancel() }
     }
 
@@ -52,9 +64,11 @@ struct WhyThisWorksView: View {
                 Text(text)
                     .font(.body)
                     .foregroundStyle(Theme.Ink.primary)
-                    // Growing text should settle rather than snap, and the
-                    // running total changes on every chunk.
-                    .animation(.easeOut(duration: 0.15), value: text)
+                    // Growing text should settle rather than snap. Dropped
+                    // entirely under Reduce Motion rather than shortened: the
+                    // reflow repeats once per chunk, dozens of times over one
+                    // paragraph.
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: text)
 
                 if isComplete {
                     Text(caption(for: source))

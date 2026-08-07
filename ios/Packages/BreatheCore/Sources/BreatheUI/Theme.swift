@@ -51,12 +51,25 @@ public enum Theme {
     /// Text, in three steps of emphasis. Tinted towards the palette rather than
     /// neutral grey, which is what stops a screen of body copy reading as
     /// system-default next to the accents.
+    ///
+    /// At full opacity all three clear WCAG AA for normal text — 4.5:1 —
+    /// against both `Surface` grounds in both appearances, which
+    /// `ThemeColorTests` measures rather than takes on trust. Every ink is used
+    /// at `.caption` or `.footnote` somewhere, so none of them qualifies for the
+    /// 3:1 large-text allowance, and the scale has less room at the quiet end
+    /// than it looks like it should. Fading one with `.opacity` spends that
+    /// margin and is nobody's measured value.
     public enum Ink {
         /// Body and headings.
         public static let primary = ColorToken.inkPrimary.color
         /// Supporting copy: a summary under a title, a caption under a number.
         public static let secondary = ColorToken.inkSecondary.color
         /// Present but receding — a disclaimer, a hint someone has already read.
+        ///
+        /// As faint as AA allows and no fainter: against `Surface.raised`, the
+        /// tighter of the two grounds, it measures 4.55:1. The pair it replaced
+        /// looked more recessive and measured 2.72:1 there, so a step further
+        /// back is not available.
         public static let tertiary = ColorToken.inkTertiary.color
     }
 

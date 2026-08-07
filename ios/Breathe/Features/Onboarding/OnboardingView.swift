@@ -22,6 +22,12 @@ struct OnboardingView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// The wordmark's letter spacing, scaled with its own type. A fixed value
+    /// beside a Dynamic Type font closes up as the letters grow, which turns
+    /// spaced capitals into ordinary ones at exactly the sizes somebody asked
+    /// for larger text.
+    @ScaledMetric(relativeTo: .body) private var wordmarkTracking: CGFloat = 7
+
     init(model: OnboardingModel, onFinished: @escaping () -> Void) {
         _model = State(wrappedValue: model)
         self.onFinished = onFinished
@@ -104,8 +110,8 @@ struct OnboardingView: View {
 
             VStack(spacing: Theme.Spacing.standard) {
                 Text("BREATHE")
-                    .font(.system(size: 17, weight: .medium, design: .serif))
-                    .tracking(7)
+                    .font(.system(.body, design: .serif, weight: .medium))
+                    .tracking(wordmarkTracking)
                     .foregroundStyle(Theme.Ink.secondary)
 
                 Text("We're glad you're here.")
