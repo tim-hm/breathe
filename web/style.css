@@ -372,6 +372,26 @@ p + p {
   letter-spacing: -0.01em;
 }
 
+/* The Watch note — a quiet companion line under the badge, not a second
+   badge: the watch app is a reason to believe the haptic claim, not a
+   separate product to sell. */
+
+.watch-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 1.1rem;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+
+.watch-glyph {
+  width: 1.05rem;
+  height: 1.05rem;
+  flex: none;
+}
+
 /* Technique explorer — goal-led tabs, one technique per panel. */
 
 .tabs {
@@ -512,6 +532,11 @@ footer {
   display: flex;
   justify-content: center;
   gap: 1.5rem;
+}
+
+.copyright {
+  margin-top: 1.25rem;
+  font-size: 0.8rem;
 }
 
 .footer-links a {
