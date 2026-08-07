@@ -25,6 +25,11 @@ struct BreatheWatchApp: App {
     @State private var journey: JourneyModel
     @State private var phone: PhoneLink
 
+    /// The one preference the wrist owns, held here so the settings screen and
+    /// the cue controller a session is composed with are looking at the same
+    /// switch.
+    @State private var settings = WatchSettings()
+
     init() {
         let baseURL = WatchConfiguration.apiBaseURL
 
@@ -56,16 +61,23 @@ struct BreatheWatchApp: App {
     var body: some Scene {
         WindowGroup {
             NavigationStack {
-                TechniqueCarouselView(model: catalogue, sessions: sessions, journey: journey)
+                RootMenuView(catalogue: catalogue, sessions: sessions, journey: journey)
             }
             .tint(Theme.Accent.brand)
-            // In the environment rather than passed down: the only screen that
-            // reads the mirrored pause is two pushes from here, and the
-            // catalogue in between has no use for it.
+            // In the environment rather than passed down: the screens that read
+            // these sit two or three pushes from here, and the menu in between
+            // has no use for either.
             .environment(phone)
+            .environment(settings)
             .task {
                 phone.activate()
-                await journey.sync()
+                // Started here rather than left to the Exercises screen, so the
+                // catalogue is in hand by the time somebody has tapped through
+                // the menu. `loadIfNeeded` is what makes that a shared fetch
+                // rather than a second one.
+                async let catalogue: Void = catalogue.loadIfNeeded()
+                async let sync: Void = journey.sync()
+                _ = await (catalogue, sync)
             }
             // An identity arriving is the moment a backlog recorded anonymously
             // becomes attributable — and, the first time, the moment the phone's

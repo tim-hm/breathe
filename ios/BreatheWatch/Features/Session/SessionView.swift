@@ -2,17 +2,31 @@ import BreatheKit
 import BreatheUI
 import SwiftUI
 
-/// The session on the wrist: the same `SessionModel` the phone drives, with the
-/// screen stripped back to what a glance can read.
+/// The session on the wrist: one breathing shape filling the face, and as close
+/// to nothing else as the session allows.
 ///
-/// Two things differ from the phone, both deliberate. There is no countdown —
-/// a wrist session starts from an explicit tap and a person is already
-/// composed. And leaving the app does **not** pause: an extended runtime session
-/// keeps the cues firing with the wrist down, which is the posture most of these
-/// techniques are done in, so pausing on the way there would defeat the feature.
+/// Shaped after Mindfulness rather than after the phone. What a person needs
+/// mid-breath is the shape moving and the tap on their wrist; a countdown they
+/// have to focus on to read is the opposite of the thing being practised. So the
+/// digits are gone from the screen — but not from VoiceOver, which has no shape
+/// to watch and would otherwise lose the only measure of the phase there is.
+///
+/// Two further differences from the phone, both deliberate. There is no
+/// countdown to the start — a wrist session begins from an explicit tap and the
+/// person is already composed. And leaving the app does **not** pause: an
+/// extended runtime session keeps the cues firing with the wrist down, which is
+/// the posture most of these techniques are done in.
 struct SessionView: View {
     @State private var model: SessionModel
     @State private var runtime = ExtendedRuntime()
+
+    /// Whether the pause and end buttons are on screen. Hidden by default: they
+    /// are needed twice a session at most, and a breathing guide with a control
+    /// bar bolted under it is a control bar somebody is looking at.
+    @State private var controlsShown = false
+    /// Bumped by every reveal, and the identity of the auto-hide task — a fresh
+    /// tap therefore restarts the countdown rather than racing the last one.
+    @State private var reveals = 0
 
     /// Called once a finished session has been read and acknowledged, which is
     /// where the wrist's recordings get their chance to reach the server. Here
@@ -21,6 +35,9 @@ struct SessionView: View {
     private let onFinished: () -> Void
 
     @Environment(\.dismiss) private var dismiss
+
+    /// How long the controls stay up before getting out of the way again.
+    private static let controlsLinger = Duration.seconds(4)
 
     init(model: SessionModel, onFinished: @escaping () -> Void) {
         _model = State(wrappedValue: model)
@@ -39,8 +56,9 @@ struct SessionView: View {
             }
         }
         .containerBackground(model.technique.goal.accent.gradient.opacity(0.3), for: .navigation)
-        .navigationTitle(model.technique.name)
-        .navigationBarTitleDisplayMode(.inline)
+        // No title. The bar it would sit in is the tallest thing competing with
+        // the breath for this screen, and the technique was named on the page
+        // the person tapped to get here.
         .task {
             runtime.start()
             model.start()
@@ -60,14 +78,39 @@ struct SessionView: View {
                 dismiss()
             }
         }
+        // Keyed on the reveal count, so each tap cancels the previous countdown
+        // and starts a fresh one.
+        .task(id: reveals) {
+            guard reveals > 0 else { return }
+            try? await Task.sleep(for: Self.controlsLinger)
+            // A paused session keeps its controls: hiding them would leave the
+            // only way to resume behind a tap nobody knows to make.
+            guard !Task.isCancelled, model.status == .running else { return }
+            withAnimation { controlsShown = false }
+        }
     }
 
-    @ViewBuilder
     private var player: some View {
-        if model.isInHold {
-            hold
-        } else {
-            breathGuide
+        ZStack {
+            visual
+
+            if model.isInHold {
+                hold
+            } else {
+                phase
+            }
+
+            if controlsShown {
+                controls
+                    .transition(.opacity)
+            }
+        }
+        // The whole face, so a tap anywhere brings the controls back — there is
+        // no target to find on a screen that is deliberately almost empty.
+        .contentShape(Rectangle())
+        .onTapGesture {
+            reveals += 1
+            withAnimation { controlsShown = true }
         }
     }
 
@@ -75,57 +118,52 @@ struct SessionView: View {
     /// back off the session's clock, so the visual follows the same timeline the
     /// taps do rather than an animation running alongside it. Paused when the
     /// session is, which stops the redraws as well as the breath.
-    private var breathGuide: some View {
+    private var visual: some View {
         TimelineView(.animation(paused: model.status != .running)) { _ in
             let elapsed = model.elapsed
+
+            BreathRing(
+                beat: model.timeline.beat(at: elapsed),
+                elapsed: elapsed,
+                progress: model.progress(at: elapsed),
+                accent: model.technique.goal.accent
+            )
+        }
+        // The phase text below is the accessible description of all this.
+        .accessibilityHidden(true)
+    }
+
+    /// The one word left on screen, and the whole of what VoiceOver is told.
+    ///
+    /// Ticking once a second rather than once a phase: the word only changes at
+    /// a boundary, but the seconds remaining ride on this element's accessibility
+    /// value, and those left the visual layer without leaving VoiceOver.
+    private var phase: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            let elapsed = model.elapsed
             let beat = model.timeline.beat(at: elapsed)
-            // Hoisted beside the beat because the label and the VoiceOver value
-            // are the same number, and this block runs every frame.
-            let remaining = beat.map { "\($0.secondsRemaining(at: elapsed))" } ?? ""
 
-            VStack(spacing: Theme.Spacing.close) {
-                BreathRing(
-                    beat: beat,
-                    elapsed: elapsed,
-                    progress: model.progress(at: elapsed),
-                    accent: model.technique.goal.accent
-                )
-                .overlay {
-                    VStack(spacing: 0) {
-                        Text(beat?.kind.instruction ?? "")
-                            .font(.caption)
-                            .foregroundStyle(Theme.Ink.secondary)
-                        Text(remaining)
-                            .font(.system(.title, design: .rounded).weight(.light))
-                            .monospacedDigit()
-                            .foregroundStyle(Theme.Ink.primary)
-                    }
-                }
-                // One VoiceOver element for the whole guide: the phase and how
-                // long is left in it, which is everything the visual conveys.
-                .accessibilityElement(children: .ignore)
+            Text(beat?.kind.instruction ?? "")
+                .font(.caption2)
+                .foregroundStyle(Theme.Ink.secondary)
+                .accessibilityElement()
                 .accessibilityLabel(beat?.kind.spokenInstruction ?? "")
-                .accessibilityValue(remaining)
-
-                controls
-            }
+                .accessibilityValue(beat.map { "\($0.secondsRemaining(at: elapsed))" } ?? "")
         }
     }
 
     /// The retention. Nothing counts down here, because nothing knows how long
     /// this is: the timer counts up, and the button is the only thing that ends
-    /// it. A second a tick rather than a frame a tick — inside a hold the plan
-    /// is frozen, so the timer is the only thing moving.
+    /// it. Both stay on screen through a hold whatever the controls are doing —
+    /// this button is the only way out of a retention, and the count is the only
+    /// feedback a frozen shape can give.
     private var hold: some View {
         TimelineView(.periodic(from: .now, by: 1)) { _ in
             VStack(spacing: Theme.Spacing.close) {
-                Text(model.currentBeat?.kind.spokenInstruction ?? "")
-                    .font(.caption)
-                    .foregroundStyle(Theme.Ink.secondary)
                 Text(model.holdElapsed.formatted(.time(pattern: .minuteSecond)))
-                    .font(.system(.largeTitle, design: .rounded).weight(.light))
+                    .font(.system(.title3, design: .rounded).weight(.light))
                     .monospacedDigit()
-                    .foregroundStyle(Theme.Ink.primary)
+                    .foregroundStyle(Theme.Ink.secondary)
                     .accessibilityLabel(model.currentBeat?.kind.spokenInstruction ?? "")
                     .accessibilityValue(model.holdElapsed.formatted(.time(pattern: .minuteSecond)))
 
@@ -138,27 +176,53 @@ struct SessionView: View {
         }
     }
 
+    /// Two small glass discs at the foot of the screen.
+    ///
+    /// Sized rather than left to `.bordered`, which stretches a toolbar-width
+    /// button across the face and buries the shape underneath it. These sit over
+    /// the breath, so they are the smallest thing a thumb can reliably hit and
+    /// no larger.
     private var controls: some View {
-        HStack(spacing: Theme.Spacing.standard) {
-            Button {
-                if model.status == .paused {
-                    model.resume()
-                } else {
-                    model.pause()
+        VStack {
+            Spacer()
+            HStack(spacing: Theme.Spacing.standard) {
+                control(
+                    model.status == .paused ? "play.fill" : "pause.fill",
+                    label: model.status == .paused ? "Resume" : "Pause",
+                    tint: Theme.Ink.primary
+                ) {
+                    if model.status == .paused {
+                        model.resume()
+                        // Straight back out of the way: somebody who has just
+                        // resumed is watching the shape again.
+                        withAnimation { controlsShown = false }
+                    } else {
+                        model.pause()
+                    }
                 }
-            } label: {
-                Image(systemName: model.status == .paused ? "play.fill" : "pause.fill")
-            }
-            .accessibilityLabel(model.status == .paused ? "Resume" : "Pause")
 
-            Button {
-                model.end()
-            } label: {
-                Image(systemName: "stop.fill")
+                control("stop.fill", label: "End", tint: Theme.Ink.secondary) {
+                    model.end()
+                }
             }
-            .tint(Theme.Ink.secondary)
-            .accessibilityLabel("End")
+            .padding(.bottom, Theme.Spacing.close)
         }
-        .buttonStyle(.bordered)
+    }
+
+    private func control(
+        _ symbol: String,
+        label: String,
+        tint: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.footnote)
+                .foregroundStyle(tint)
+                .frame(width: 34, height: 34)
+                .background(.ultraThinMaterial, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 }

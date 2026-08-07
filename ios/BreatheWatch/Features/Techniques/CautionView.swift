@@ -21,6 +21,8 @@ struct CautionView: View {
 
     @State private var isBreathing = false
 
+    @Environment(WatchSettings.self) private var settings
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.close) {
@@ -49,7 +51,7 @@ struct CautionView: View {
     private func session() -> SessionModel {
         SessionModel(
             technique: technique,
-            cues: WatchHapticController(),
+            cues: WatchHapticController(settings: settings),
             recorder: sessions
         )
     }

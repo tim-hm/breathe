@@ -2,15 +2,13 @@ import BreatheKit
 import BreatheUI
 import SwiftUI
 
-/// The catalogue, and the watch app's root screen: one technique to a page,
-/// turned with the Digital Crown.
+/// The catalogue: one technique to a page, turned with the Digital Crown.
 ///
-/// Scroll it, tap it, breathe. A list would put every technique on screen at
-/// once and none of them legibly, and it would spend a tap on a detail screen
-/// between choosing and starting — on the wrist, choosing *is* starting. Each
-/// page therefore carries everything the phone's detail screen carried that
-/// matters here: the goal, the pattern, how long it takes, and the caution when
-/// there is one.
+/// Shaped like a Fitness workout card, and for the same reason — a wrist screen
+/// holds one picture, one name, and one button before it stops being glanceable.
+/// Everything that used to sit on the card (the intent word, the cadence, the
+/// summary) has gone: none of it is read while choosing on a watch, and all of
+/// it is a tap away in the hand.
 struct TechniqueCarouselView: View {
     let model: TechniqueListModel
     let sessions: any SessionRecording
@@ -21,29 +19,11 @@ struct TechniqueCarouselView: View {
     /// somebody has actually chosen.
     @State private var chosen: Technique?
 
+    @Environment(WatchSettings.self) private var settings
+
     var body: some View {
         content
-            .navigationTitle("Breathe")
-            .toolbar {
-                ToolbarItem(placement: .bottomBar) {
-                    NavigationLink {
-                        JourneyView(model: journey)
-                    } label: {
-                        // The phone's Journey tab icon. The same door gets the
-                        // same handle on both devices, and it promises history
-                        // rather than the settings a cog would — the watch has
-                        // none, by design.
-                        Image(systemName: "clock.arrow.circlepath")
-                            .foregroundStyle(Theme.Ink.secondary)
-                    }
-                    // Plain, so this is a glyph at the edge rather than the
-                    // filled accent capsule watchOS gives a toolbar button by
-                    // default: the screen belongs to the technique on it, and a
-                    // second bright control would compete with Begin.
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Your journey")
-                }
-            }
+            .navigationTitle("Exercises")
             // One destination that branches, so the carousel has one piece of
             // state rather than two nearly-identical ones. The drain is hung off
             // the session finishing rather than off a screen going away, because
@@ -86,85 +66,66 @@ struct TechniqueCarouselView: View {
         }
     }
 
-    /// One technique, filling the screen and tappable anywhere on it.
-    ///
-    /// The whole card is the button rather than the "Begin" line alone: at this
-    /// size a target the width of two words is one somebody misses, and there is
-    /// nothing else on the page a tap could have meant.
+    /// One technique: its orb, its name, and the button that starts it.
     private func page(_ technique: Technique) -> some View {
-        Button {
-            chosen = technique
-        } label: {
-            VStack(alignment: .leading, spacing: Theme.Spacing.tight) {
-                HStack(spacing: Theme.Spacing.tight) {
-                    Circle()
-                        .fill(technique.goal.accent)
-                        .frame(width: 6, height: 6)
-                    Text(technique.goal.intentObject)
-                        .font(.caption2)
-                        .foregroundStyle(technique.goal.accent)
+        VStack(spacing: Theme.Spacing.close) {
+            TechniqueOrb(accent: technique.goal.accent)
+                .overlay(alignment: .topTrailing) {
+                    if technique.safetyNote != nil {
+                        cautionBadge
+                    }
                 }
 
+            VStack(spacing: 0) {
                 Text(technique.name)
-                    .font(.headline)
+                    .font(.caption)
                     .foregroundStyle(Theme.Ink.primary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
 
-                HStack(alignment: .firstTextBaseline) {
-                    Text(cadence(technique))
-                        .accessibilityLabel("Pattern")
-                        .accessibilityValue(cadence(technique))
-                    Spacer(minLength: Theme.Spacing.tight)
-                    Text(technique.plannedDuration.formatted(.time(pattern: .minuteSecond)))
-                        .foregroundStyle(Theme.Ink.tertiary)
-                }
-                .font(.caption2)
-                .monospacedDigit()
-                .foregroundStyle(Theme.Ink.secondary)
-
-                // A marker, not the caution itself. The longest one in the
-                // catalogue is eight lines on this screen and there is no
-                // honest way to abbreviate a contraindication, so the card
-                // says there is one and `CautionView` says what it is.
-                Label(
-                    technique.safetyNote == nil ? "Begin" : "Caution — read first",
-                    systemImage: technique.safetyNote == nil
-                        ? "play.fill"
-                        : "exclamationmark.triangle.fill"
-                )
-                .font(.caption.weight(.medium))
-                .foregroundStyle(
-                    technique.safetyNote == nil ? technique.goal.accent : Theme.Accent.caution
-                )
-                .padding(.top, Theme.Spacing.tight)
+                // The one number that survived the redesign, because it is the
+                // one that changes the answer: two minutes and nine minutes are
+                // different decisions, and the rest of what a card used to carry
+                // is not read on a wrist.
+                Text(technique.plannedDuration.formatted(.time(pattern: .minuteSecond)))
+                    .font(.caption2)
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.Ink.tertiary)
             }
-            // Hugging its content and centred, rather than filling the page: a
-            // technique with no caution would otherwise leave a third of the
-            // card empty above the Begin line.
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(Theme.Spacing.close)
-            .background(Theme.Surface.raised.opacity(0.5), in: card)
-            .overlay(card.stroke(technique.goal.accent.opacity(0.35)))
+            .accessibilityElement(children: .combine)
+
+            play(technique)
         }
-        .buttonStyle(.plain)
-        // Clear of the vertical page indicator, which draws over the right edge
-        // — without this the card runs under the dots and looks cropped.
+        // Clear of the vertical page indicator, which draws over the right edge.
         .padding(.trailing, Theme.Spacing.close)
     }
 
-    private var card: RoundedRectangle {
-        RoundedRectangle(cornerRadius: Theme.Radius.card)
+    /// Fitness's play button, in the technique's colour: the one control on the
+    /// page, and big enough to hit without looking.
+    private func play(_ technique: Technique) -> some View {
+        Button {
+            chosen = technique
+        } label: {
+            Image(systemName: "play.fill")
+                .font(.title3)
+                .foregroundStyle(Theme.Surface.ground)
+                .frame(width: 42, height: 42)
+                .background(technique.goal.accent, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Begin \(technique.name)")
+        .accessibilityHint(technique.safetyNote == nil ? "" : "Shows a caution first")
     }
 
-    /// The pattern in seconds — "4 · 4 · 4 · 4" — which is the one thing about a
-    /// technique somebody checks before starting it.
-    ///
-    /// Read off the first stage only. A staged protocol has no single cadence to
-    /// state, and the honest short answer for one is how it opens.
-    private func cadence(_ technique: Technique) -> String {
-        guard let stage = technique.stages.first else { return "" }
-        return stage.phases
-            .map { $0.duration.seconds.formatted(.number.precision(.fractionLength(0 ... 1))) }
-            .joined(separator: " · ")
+    /// A marker, not the caution itself. The longest one in the catalogue is
+    /// eight lines on this screen and there is no honest way to abbreviate a
+    /// contraindication, so the page says there is one and `CautionView` says
+    /// what it is.
+    private var cautionBadge: some View {
+        Image(systemName: "exclamationmark.triangle.fill")
+            .font(.caption2)
+            .foregroundStyle(Theme.Accent.caution)
+            .accessibilityHidden(true)
     }
 
     /// Built at the tap rather than held: a session is a one-shot object, and
@@ -173,7 +134,7 @@ struct TechniqueCarouselView: View {
     private func session(for technique: Technique) -> SessionModel {
         SessionModel(
             technique: technique,
-            cues: WatchHapticController(),
+            cues: WatchHapticController(settings: settings),
             recorder: sessions
         )
     }

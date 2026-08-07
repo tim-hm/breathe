@@ -13,6 +13,15 @@ import WatchKit
 /// with no engine behind it to warm up or leak.
 @MainActor
 final class WatchHapticController: SessionCueing {
+    /// Read on every cue rather than resolved at composition, so a switch
+    /// flicked between choosing a technique and finishing it takes effect on
+    /// the next boundary instead of the next session.
+    private let settings: WatchSettings
+
+    init(settings: WatchSettings) {
+        self.settings = settings
+    }
+
     func prepare() {}
 
     func play(_ beat: SessionTimeline.Beat) {
@@ -33,6 +42,8 @@ final class WatchHapticController: SessionCueing {
     /// the shortest neutral tap there is, so a hold reads as a boundary without
     /// suggesting a direction to move in.
     private func play(_ cue: WatchCue) {
+        guard settings.playsHaptics else { return }
+
         let haptic: WKHapticType = switch cue {
         case .rise: .directionUp
         case .fall: .directionDown

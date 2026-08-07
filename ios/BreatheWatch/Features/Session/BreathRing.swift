@@ -2,12 +2,16 @@ import BreatheKit
 import BreatheUI
 import SwiftUI
 
-/// The thing you glance at while you breathe, sized for a wrist.
+/// The thing you breathe with, filling the face.
 ///
 /// One shape doing the phone's two jobs at once, because there is only room for
 /// one: the disc scales with the breath, and the ring around it fills with the
 /// session. Under Reduce Motion the disc holds still and the ring alone carries
 /// the phase — the scaling is exactly the effect that setting exists to stop.
+///
+/// The session ring is drawn thin and at the very edge. It is reference rather
+/// than instruction — how far through you are, answered by a glance and never
+/// competing with the disc, which is the thing actually being followed.
 struct BreathRing: View {
     let beat: SessionTimeline.Beat?
     let elapsed: Duration
@@ -20,14 +24,16 @@ struct BreathRing: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(tint.opacity(0.2), lineWidth: 6)
+                .stroke(tint.opacity(0.18), lineWidth: 3)
             Circle()
                 .trim(from: 0, to: progress)
-                .stroke(tint, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                .stroke(tint, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                 .rotationEffect(.degrees(-90))
 
             disc
         }
+        .padding(2)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(.easeInOut(duration: 0.4), value: isStill)
     }
 
@@ -49,10 +55,10 @@ struct BreathRing: View {
                     colors: [tint.opacity(0.85), tint.opacity(0.2)],
                     center: .center,
                     startRadius: 2,
-                    endRadius: 60
+                    endRadius: 100
                 )
             )
-            .padding(10)
+            .padding(6)
             .scaleEffect(reduceMotion ? SessionTimeline.Beat.emptyLungs : fullness)
     }
 
