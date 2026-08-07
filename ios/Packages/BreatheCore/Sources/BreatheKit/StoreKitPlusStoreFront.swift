@@ -6,13 +6,24 @@ import StoreKit
 /// Everything above it works in `PlusTransaction` values, which is what lets the
 /// gating rules and the submission ledger be tested on the host with no App
 /// Store account, no booted simulator, and no purchase.
+///
+/// Stateless, and therefore a struct. Holding the resolved `Product` between the
+/// paywall's price and the same screen's purchase looks worth doing, and is not:
+/// it makes this an actor, and an actor's isolated members cannot satisfy a
+/// `Sendable` protocol under Swift 6 without a conformance the compiler refuses.
+/// `StoreKit` caches product metadata on the device anyway, so the second lookup
+/// is a local read rather than the round trip it appears to be.
 public struct StoreKitPlusStoreFront: PlusStoreFront {
     public init() {}
 
     public func product() async -> PlusProduct? {
-        let products = try? await Product.products(for: [PlusProduct.identifier])
+        guard let product = await resolve() else { return nil }
 
-        return products?.first.map { PlusProduct(displayPrice: $0.displayPrice) }
+        return PlusProduct(displayPrice: product.displayPrice)
+    }
+
+    private func resolve() async -> Product? {
+        try? await Product.products(for: [PlusProduct.identifier]).first
     }
 
     public func currentEntitlements() async -> [PlusTransaction] {
@@ -50,7 +61,7 @@ public struct StoreKitPlusStoreFront: PlusStoreFront {
     }
 
     public func purchase() async throws -> PlusPurchaseOutcome {
-        guard let product = try await Product.products(for: [PlusProduct.identifier]).first else {
+        guard let product = await resolve() else {
             throw PlusStoreFrontError.productUnavailable
         }
 

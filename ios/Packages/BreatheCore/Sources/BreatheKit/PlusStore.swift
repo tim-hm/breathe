@@ -23,7 +23,6 @@ public final class PlusStore {
     )
 
     private static let isPlusKey = "plus.isSubscriber"
-    private static let submittedKey = "plus.submittedTransactions"
 
     /// Whether Plus is active right now.
     ///
@@ -32,8 +31,17 @@ public final class PlusStore {
     /// every launch would render the free state for as long as `StoreKit` took
     /// to answer, which a subscriber would experience as the paywall flashing at
     /// them.
+    ///
+    /// Guarded on a genuine change, because `refresh` assigns unconditionally
+    /// and runs on every foreground: Swift fires `didSet` on an equal-value
+    /// assignment, so without it the defaults plist is dirtied for a value that
+    /// changes about once a year.
     public private(set) var isPlus: Bool {
-        didSet { defaults.set(isPlus, forKey: Self.isPlusKey) }
+        didSet {
+            guard oldValue != isPlus else { return }
+
+            defaults.set(isPlus, forKey: Self.isPlusKey)
+        }
     }
 
     /// The price to put on the paywall, once the App Store has said what it is.
@@ -53,6 +61,16 @@ public final class PlusStore {
     private let front: any PlusStoreFront
     private let entitlements: any EntitlementSyncing
     private let defaults: UserDefaults
+
+    /// Transactions the server has accepted during this run.
+    ///
+    /// In memory, not on disk, and that is the retry policy: one submission per
+    /// transaction per launch. Persisting it would save a request on the launches
+    /// after the first and cost the ability to ever re-sync — a server row lost
+    /// or restored from a backup would never be told about a purchase again,
+    /// because this device would have recorded it as done. The RPC is idempotent
+    /// precisely so the cheap answer is the safe one.
+    private var submitted: Set<String> = []
 
     public init(
         front: any PlusStoreFront,
@@ -90,20 +108,30 @@ public final class PlusStore {
     /// Re-reads the entitlement and pushes anything the server has not seen.
     ///
     /// Safe on every foreground: with nothing outstanding it is one local
-    /// `StoreKit` read and no network at all.
+    /// `StoreKit` read and no network at all. Deliberately does not fetch the
+    /// price — that is an App Store round trip, and it is only the paywall that
+    /// needs it.
     public func refresh() async {
         let entitlements = await front.currentEntitlements()
         let now = Date()
 
         isPlus = entitlements.contains { $0.entitlesPlus(at: now) }
 
-        if product == nil {
-            product = await front.product()
-        }
-
         for transaction in entitlements {
             await submit(transaction)
         }
+    }
+
+    /// Fetches the price, for a screen that is about to show it.
+    ///
+    /// Separate from [`refresh`] because it is the one part of this store that
+    /// talks to the App Store: folding it in would put a network fetch on every
+    /// cold launch for the majority of people who never open the paywall. Cached
+    /// after the first success, so reopening the sheet is free.
+    public func loadProduct() async {
+        guard product == nil else { return }
+
+        product = await front.product()
     }
 
     /// Buys Plus.
@@ -156,22 +184,20 @@ public final class PlusStore {
         await refresh()
     }
 
-    /// Tells the server about one transaction, at most once.
+    /// Tells the server about one transaction, at most once per launch.
     ///
-    /// The ledger is what makes this callable on every launch and after every
-    /// change without turning into a request per foreground. A failure leaves
-    /// the key unrecorded, so the next launch tries again — the same
+    /// The ledger is what makes this callable on every foreground without
+    /// turning into a request per foreground. A failure leaves the key
+    /// unrecorded, so the next attempt tries again — the same
     /// retry-on-next-launch shape the profile sync uses, and for the same
     /// reason: a purchase that reaches the server a day late costs the person
     /// only a smaller assistant allowance in the meantime.
     private func submit(_ transaction: PlusTransaction) async {
-        var submitted = Set(defaults.stringArray(forKey: Self.submittedKey) ?? [])
         guard !submitted.contains(transaction.submissionKey) else { return }
 
         do {
             try await entitlements.submit(transaction.jws)
             submitted.insert(transaction.submissionKey)
-            defaults.set(submitted.sorted(), forKey: Self.submittedKey)
         } catch {
             Self.logger.notice("entitlement sync deferred: \(error.localizedDescription)")
         }

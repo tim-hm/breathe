@@ -4,14 +4,14 @@
 //! Receives explicit dependencies (`&PgPool`, `&dyn TransactionVerifier`), never
 //! `Arc<AppState>`, and contains zero raw queries.
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use super::errors::EntitlementError;
 use super::repository;
 use super::types::{Entitlement, Tier};
-use super::verifier::TransactionVerifier;
+use super::verifier::{TransactionVerifier, VerifiedTransaction};
 use crate::proto::breathe::v1 as pb;
 
 /// Verifies a submitted transaction and stores what it grants.
@@ -29,7 +29,7 @@ pub async fn submit_transaction(
     let transaction = verifier.verify(signed_transaction)?;
 
     let plus_until = if transaction.revoked_at.is_some() {
-        repository::revoke_purchase(pool, user_id, &transaction.original_transaction_id).await?
+        revoke(pool, user_id, &transaction).await?
     } else {
         repository::record_purchase(
             pool,
@@ -45,43 +45,52 @@ pub async fn submit_transaction(
     })
 }
 
+/// Ends the entitlement, but only if the refund is for the subscription this
+/// row is actually living on.
+///
+/// The guard matters and is here rather than in the `UPDATE`'s `WHERE` clause
+/// because it is a rule rather than a query: `Transaction.updates` delivers a
+/// revocation for whatever the person bought, and somebody who cancelled last
+/// year's subscription and started a new one must not lose the new one to the
+/// old one's refund arriving late.
+async fn revoke(
+    pool: &PgPool,
+    user_id: Uuid,
+    transaction: &VerifiedTransaction,
+) -> Result<Option<DateTime<Utc>>, EntitlementError> {
+    let stored = repository::find_entitlement(pool, user_id).await?;
+
+    if stored.original_transaction_id.as_deref() != Some(&transaction.original_transaction_id) {
+        return Ok(stored.plus_until);
+    }
+
+    repository::clear_purchase(pool, user_id).await?;
+    Ok(None)
+}
+
 pub async fn get_entitlement(
     pool: &PgPool,
     user_id: Uuid,
 ) -> Result<pb::GetEntitlementResponse, EntitlementError> {
-    let plus_until = repository::find_plus_until(pool, user_id).await?;
+    let stored = repository::find_entitlement(pool, user_id).await?;
 
     Ok(pb::GetEntitlementResponse {
-        entitlement: Some(to_proto(Entitlement::resolve(plus_until, Utc::now()))),
+        entitlement: Some(to_proto(Entitlement::resolve(
+            stored.plus_until,
+            Utc::now(),
+        ))),
     })
 }
 
-/// The caller's tier, for a feature that is deciding what to spend on them.
-///
-/// Fails to `Free` rather than propagating, and that is the whole reason it is
-/// not just `find_plus_until`: the callers are cost controls, and an unreachable
-/// database must not be a way to be treated as a subscriber. It also must not
-/// take the feature down — `assistant` answers from its rules when this says
-/// `Free`, which is a worse answer than the caller paid for but still an answer.
-pub async fn tier(pool: &PgPool, user_id: Uuid) -> Tier {
-    match repository::find_plus_until(pool, user_id).await {
-        Ok(plus_until) => Entitlement::resolve(plus_until, Utc::now()).tier,
-        Err(error) => {
-            tracing::error!(feature = "entitlement", %error, "could not read the caller's tier; treating them as free");
-            Tier::Free
-        }
-    }
-}
-
 fn to_proto(entitlement: Entitlement) -> pb::Entitlement {
-    let tier = match entitlement.tier {
+    let tier = match entitlement.tier() {
         Tier::Free => pb::EntitlementTier::Free,
         Tier::Plus => pb::EntitlementTier::Plus,
     };
 
     pb::Entitlement {
         tier: tier as i32,
-        expires_at: entitlement.expires_at.map(|at| prost_types::Timestamp {
+        expires_at: entitlement.expires_at().map(|at| prost_types::Timestamp {
             seconds: at.timestamp(),
             // A leap second reports more than a billion subsecond nanoseconds,
             // which the proto type cannot carry; clamping loses at most that

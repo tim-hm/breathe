@@ -9,22 +9,36 @@ use uuid::Uuid;
 
 use super::errors::EntitlementError;
 
-/// When the caller's Plus period ends, if they ever bought one.
-///
-/// `None` covers both "never subscribed" and "the column is null", which are
-/// the same thing — the distinction the schema keeps is between a null and a
-/// past date, and reading a past date back is what lets an expiry be honoured
-/// without a job that clears it.
-pub async fn find_plus_until(
+/// The two entitlement columns of one `users` row.
+pub struct EntitlementRow {
+    /// When the Plus period ends, whether or not it already has. `None` covers
+    /// both "never subscribed" and "the column is null", which are the same
+    /// thing — the distinction the schema keeps is between a null and a past
+    /// date, and reading a past date back is what lets an expiry be honoured
+    /// without a job that clears it.
+    pub plus_until: Option<DateTime<Utc>>,
+
+    /// The subscription this row is currently living on, which is what makes a
+    /// revocation attributable to it.
+    pub original_transaction_id: Option<String>,
+}
+
+pub async fn find_entitlement(
     pool: &PgPool,
     user_id: Uuid,
-) -> Result<Option<DateTime<Utc>>, EntitlementError> {
-    let plus_until = sqlx::query_scalar!("SELECT plus_until FROM users WHERE id = $1", user_id)
-        .fetch_optional(pool)
-        .await?
-        .ok_or(EntitlementError::Missing)?;
+) -> Result<EntitlementRow, EntitlementError> {
+    let row = sqlx::query_as!(
+        EntitlementRow,
+        "SELECT plus_until, app_store_original_transaction_id AS original_transaction_id
+           FROM users
+          WHERE id = $1",
+        user_id
+    )
+    .fetch_optional(pool)
+    .await?
+    .ok_or(EntitlementError::Missing)?;
 
-    Ok(plus_until)
+    Ok(row)
 }
 
 /// Records what a verified transaction grants, returning the expiry as stored.
@@ -60,33 +74,20 @@ pub async fn record_purchase(
     Ok(plus_until)
 }
 
-/// Ends the entitlement a refunded transaction paid for.
-///
-/// Guarded on the transaction id inside the statement rather than in a `WHERE`
-/// clause, so the row always comes back and the caller learns the resulting
-/// expiry either way. The guard matters: `Transaction.updates` delivers a
-/// revocation for whatever the person bought, which is not necessarily the
-/// subscription this row is currently living on.
-pub async fn revoke_purchase(
-    pool: &PgPool,
-    user_id: Uuid,
-    original_transaction_id: &str,
-) -> Result<Option<DateTime<Utc>>, EntitlementError> {
-    let plus_until = sqlx::query_scalar!(
-        "UPDATE users
-            SET plus_until = CASE
-                  WHEN app_store_original_transaction_id = $2 THEN NULL
-                  ELSE plus_until
-                END,
-                updated_at = now()
-          WHERE id = $1
-        RETURNING plus_until",
-        user_id,
-        original_transaction_id
+/// Ends the entitlement, for a refund the service has already attributed to the
+/// subscription this row holds.
+pub async fn clear_purchase(pool: &PgPool, user_id: Uuid) -> Result<(), EntitlementError> {
+    let affected = sqlx::query!(
+        "UPDATE users SET plus_until = NULL, updated_at = now() WHERE id = $1",
+        user_id
     )
-    .fetch_optional(pool)
+    .execute(pool)
     .await?
-    .ok_or(EntitlementError::Missing)?;
+    .rows_affected();
 
-    Ok(plus_until)
+    if affected == 0 {
+        return Err(EntitlementError::Missing);
+    }
+
+    Ok(())
 }

@@ -66,7 +66,21 @@ use x509_parser::oid_registry::asn1_rs::{Oid, oid};
 use x509_parser::prelude::{ASN1Time, FromDer as _};
 
 use super::{TransactionVerifier, VerificationError, VerifiedTransaction};
-use crate::features::entitlement::types::{BUNDLE_ID, PLUS_PRODUCT_ID};
+
+/// The app the App Store signs transactions for.
+///
+/// Checked against every submitted transaction: a signature that verifies
+/// against Apple's root but names another app is a genuine receipt for somebody
+/// else's product, which is exactly the token a determined caller would reach
+/// for. It has to match `PRODUCT_BUNDLE_IDENTIFIER` in `ios/project.yml`.
+const BUNDLE_ID: &str = "xyz.holmie.breathe";
+
+/// The one thing this app sells.
+///
+/// A constant rather than a set, because there is one subscription and the price
+/// tier is not part of its identity. A second SKU makes this a slice; until then
+/// a list of one would only invite the question of what happens when two match.
+const PLUS_PRODUCT_ID: &str = "xyz.holmie.breathe.plus.yearly";
 
 /// Apple Root CA - G3, in DER, 583 bytes.
 ///
@@ -87,6 +101,10 @@ const APPLE_ROOT_CA_G3: &[u8] = include_bytes!("apple_root_ca_g3.der");
 /// same, and a chain of another length is not a longer path to the same anchor
 /// — it is a token this code was not written to read.
 const CHAIN_LENGTH: usize = 3;
+
+/// Of those three, the two this code reads. The root is the one it does not —
+/// see [`decode_chain`].
+const SIGNING_CERTIFICATES: usize = 2;
 
 /// The only algorithm Apple signs transactions with.
 ///
@@ -254,57 +272,57 @@ fn decode_json<T: for<'de> Deserialize<'de>>(
     })
 }
 
-fn decode_chain(x5c: &[String]) -> Result<Vec<Vec<u8>>, VerificationError> {
-    if x5c.len() != CHAIN_LENGTH {
+/// Takes the leaf and the intermediate, and refuses to touch the third.
+///
+/// The slice pattern is the length check: a chain of any other shape does not
+/// reach the decoder at all. Apple's own root arrives as `x5c[2]` and is never
+/// decoded, because trusting the anchor a caller sent would make the whole chain
+/// self-certifying — anyone can generate three certificates that verify against
+/// each other.
+fn decode_chain(x5c: &[String]) -> Result<[Vec<u8>; SIGNING_CERTIFICATES], VerificationError> {
+    let [leaf, intermediate, _root] = x5c else {
         return Err(VerificationError::Untrusted(format!(
             "`x5c` carries {} certificates, not {CHAIN_LENGTH}",
             x5c.len()
         )));
-    }
+    };
 
-    // Standard base64 with padding, unlike the segments: `x5c` entries are
-    // ordinary base64 per RFC 7515, and only the segments are base64url.
-    x5c.iter()
-        .map(|encoded| {
-            base64::engine::general_purpose::STANDARD
-                .decode(encoded)
-                .map_err(|error| {
-                    VerificationError::Untrusted(format!("an `x5c` entry is not base64: {error}"))
-                })
-        })
-        .collect()
+    Ok([decode_certificate(leaf)?, decode_certificate(intermediate)?])
 }
 
-fn parse_chain(chain: &[Vec<u8>]) -> Result<Vec<X509Certificate<'_>>, VerificationError> {
-    chain
-        .iter()
-        .map(|der| {
-            X509Certificate::from_der(der)
-                .map(|(_, certificate)| certificate)
-                .map_err(|error| {
-                    VerificationError::Untrusted(format!(
-                        "an `x5c` entry is not a certificate: {error}"
-                    ))
-                })
+/// Standard base64 with padding, unlike the JWS segments: `x5c` entries are
+/// ordinary base64 per RFC 7515, and only the segments are base64url.
+fn decode_certificate(encoded: &str) -> Result<Vec<u8>, VerificationError> {
+    base64::engine::general_purpose::STANDARD
+        .decode(encoded)
+        .map_err(|error| {
+            VerificationError::Untrusted(format!("an `x5c` entry is not base64: {error}"))
         })
-        .collect()
+}
+
+fn parse_chain(
+    chain: &[Vec<u8>; SIGNING_CERTIFICATES],
+) -> Result<[X509Certificate<'_>; SIGNING_CERTIFICATES], VerificationError> {
+    let [leaf, intermediate] = chain;
+
+    Ok([parse_certificate(leaf)?, parse_certificate(intermediate)?])
+}
+
+fn parse_certificate(der: &[u8]) -> Result<X509Certificate<'_>, VerificationError> {
+    X509Certificate::from_der(der)
+        .map(|(_, certificate)| certificate)
+        .map_err(|error| {
+            VerificationError::Untrusted(format!("an `x5c` entry is not a certificate: {error}"))
+        })
 }
 
 /// Walks leaf ← intermediate ← Apple's root, returning the leaf that signed the
 /// transaction.
-///
-/// The root in `certificates[2]` is deliberately unused. Trusting the anchor a
-/// caller sent would make the whole chain self-certifying: anyone can generate
-/// three certificates that verify against each other.
 fn verify_chain<'a>(
-    certificates: &'a [X509Certificate<'a>],
+    certificates: &'a [X509Certificate<'a>; SIGNING_CERTIFICATES],
     signed_at: DateTime<Utc>,
 ) -> Result<&'a X509Certificate<'a>, VerificationError> {
-    let (Some(leaf), Some(intermediate)) = (certificates.first(), certificates.get(1)) else {
-        return Err(VerificationError::Untrusted(
-            "the chain is too short to hold a leaf and an intermediate".to_owned(),
-        ));
-    };
+    let [leaf, intermediate] = certificates;
 
     let (_, root) = X509Certificate::from_der(APPLE_ROOT_CA_G3).map_err(|error| {
         VerificationError::Untrusted(format!("the compiled-in Apple root is unreadable: {error}"))
@@ -445,6 +463,19 @@ mod tests {
         )
     }
 
+    /// A payload this server would honour, for the tests that change one field
+    /// and assert it no longer would.
+    fn payload() -> TransactionPayload {
+        TransactionPayload {
+            bundle_id: BUNDLE_ID.to_owned(),
+            product_id: PLUS_PRODUCT_ID.to_owned(),
+            original_transaction_id: "2000000000000001".to_owned(),
+            expires_date: Some(1_800_000_000_000),
+            revocation_date: None,
+            signed_date: 1_770_000_000_000,
+        }
+    }
+
     /// The whole point. Everything about this token is well-formed and none of
     /// it is Apple's, so it must not entitle anybody.
     #[test]
@@ -482,7 +513,7 @@ mod tests {
         for token in ["", "not-a-jws", "one.two", "one.two.three.four"] {
             let error = AppStoreVerifier
                 .verify(token)
-                .expect_err("`{token}` is not a JWS");
+                .expect_err("a token of the wrong shape is not a JWS");
 
             assert!(matches!(error, VerificationError::Malformed(_)), "{token}");
         }
@@ -494,18 +525,12 @@ mod tests {
     /// mint.
     #[test]
     fn a_transaction_for_another_app_is_not_ours() {
-        let payload = TransactionPayload {
+        let error = TransactionPayload {
             bundle_id: "com.example.other".to_owned(),
-            product_id: PLUS_PRODUCT_ID.to_owned(),
-            original_transaction_id: "2000000000000001".to_owned(),
-            expires_date: Some(1_800_000_000_000),
-            revocation_date: None,
-            signed_date: 1_770_000_000_000,
-        };
-
-        let error = payload
-            .into_verified()
-            .expect_err("another app's bundle id entitles nobody here");
+            ..payload()
+        }
+        .into_verified()
+        .expect_err("another app's bundle id entitles nobody here");
 
         assert!(matches!(error, VerificationError::NotOurs(_)), "{error}");
     }
@@ -514,18 +539,12 @@ mod tests {
     /// a receipt from another of the same developer's apps.
     #[test]
     fn a_transaction_for_another_product_is_not_ours() {
-        let payload = TransactionPayload {
-            bundle_id: BUNDLE_ID.to_owned(),
+        let error = TransactionPayload {
             product_id: "xyz.holmie.breathe.something.else".to_owned(),
-            original_transaction_id: "2000000000000001".to_owned(),
-            expires_date: Some(1_800_000_000_000),
-            revocation_date: None,
-            signed_date: 1_770_000_000_000,
-        };
-
-        let error = payload
-            .into_verified()
-            .expect_err("an unknown product entitles nobody");
+            ..payload()
+        }
+        .into_verified()
+        .expect_err("an unknown product entitles nobody");
 
         assert!(matches!(error, VerificationError::NotOurs(_)), "{error}");
     }
@@ -535,16 +554,12 @@ mod tests {
     /// is exactly the kind of bug no other test would notice.
     #[test]
     fn dates_are_read_as_milliseconds() {
-        let payload = TransactionPayload {
-            bundle_id: BUNDLE_ID.to_owned(),
-            product_id: PLUS_PRODUCT_ID.to_owned(),
-            original_transaction_id: "2000000000000001".to_owned(),
-            expires_date: Some(1_800_000_000_000),
+        let verified = TransactionPayload {
             revocation_date: Some(1_790_000_000_000),
-            signed_date: 1_770_000_000_000,
-        };
-
-        let verified = payload.into_verified().expect("the payload is ours");
+            ..payload()
+        }
+        .into_verified()
+        .expect("the payload is ours");
 
         assert_eq!(verified.expires_at.timestamp(), 1_800_000_000);
         assert_eq!(

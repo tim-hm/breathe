@@ -14,14 +14,9 @@ import SwiftUI
 struct PaywallView: View {
     @Environment(\.dismiss) private var dismiss
 
-    /// Not `@State`: `LivePlus` owns the instance, and observation tracks it
-    /// through a plain reference. Wrapping it in `@State` here would make this
-    /// view look like the owner of something that outlives it.
-    let store: PlusStore
-
-    init(store: PlusStore = LivePlus.store) {
-        self.store = store
-    }
+    /// From the environment, like `SessionSettings`: `BreatheApp` owns the one
+    /// instance, and the surfaces that offer Plus are nowhere near it.
+    @Environment(PlusStore.self) private var store
 
     var body: some View {
         NavigationStack {
@@ -50,7 +45,10 @@ struct PaywallView: View {
                     dismiss()
                 }
             }
-            .task { await store.refresh() }
+            // The price is fetched here rather than at launch: it is the one
+            // App Store round trip this app makes, and only this screen needs
+            // it.
+            .task { await store.loadProduct() }
         }
     }
 
@@ -162,8 +160,8 @@ struct PaywallView: View {
                 }
                 .disabled(store.isBusy)
 
-                Link("Privacy", destination: PlusLinks.privacyPolicy)
-                Link("Terms", destination: PlusLinks.termsOfUse)
+                Link("Privacy", destination: LegalLinks.privacyPolicy)
+                Link("Terms", destination: LegalLinks.termsOfUse)
             }
             .font(.footnote)
             .tint(Theme.Accent.brand)
@@ -182,28 +180,4 @@ struct PaywallView: View {
 
         return "Get Plus — \(price) a year"
     }
-}
-
-/// The two links a subscription paywall must carry to pass App Review.
-enum PlusLinks {
-    /// Apple's standard EULA, which is the terms this app ships under. Using
-    /// Apple's own document rather than writing one is what makes this a link to
-    /// a page that already exists and is already agreed.
-    static let termsOfUse = URL(
-        string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/"
-    ) ?? placeholder
-
-    /// The page this points at does not exist yet. `cadence.holmie.xyz` is
-    /// served by the same box as the API (`infra/box/Caddyfile`), so publishing
-    /// it is a file in `web/`; App Review rejects a paywall whose privacy link
-    /// 404s, which makes it a prerequisite for the first submission rather than
-    /// for this screen.
-    static let privacyPolicy = URL(
-        string: "https://cadence.holmie.xyz/privacy"
-    ) ?? placeholder
-
-    /// Both URLs above are literals that parse, so this is unreachable. It
-    /// exists because `force_unwrapping` is an error in this repository and a
-    /// paywall is the last place to introduce a crash.
-    private static let placeholder = URL(fileURLWithPath: "/")
 }

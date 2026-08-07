@@ -9,6 +9,7 @@
 
 use tonic::Status;
 
+use crate::features::entitlement::errors::EntitlementError;
 use crate::features::profile::errors::ProfileError;
 use crate::features::technique::errors::TechniqueError;
 
@@ -38,6 +39,13 @@ pub enum AssistantError {
     /// Reading the catalogue failed, likewise.
     #[error("technique error: {0}")]
     Technique(#[from] TechniqueError),
+
+    /// Reading what the caller is entitled to failed. Fatal rather than read as
+    /// "free", because it is the same row and the same connection the profile
+    /// read above needs — a database that cannot answer this one has already
+    /// failed the call.
+    #[error("entitlement error: {0}")]
+    Entitlement(#[from] EntitlementError),
 }
 
 /// Logs server-side faults before converting them.
@@ -59,6 +67,7 @@ impl From<AssistantError> for Status {
             }
             AssistantError::Profile(e) => e.into(),
             AssistantError::Technique(e) => e.into(),
+            AssistantError::Entitlement(e) => e.into(),
         }
     }
 }

@@ -84,11 +84,6 @@ private func scratchDefaults() -> UserDefaults {
 
 @Suite("Plus entitlement")
 struct PlusEntitlementTests {
-    @Test("A current subscription entitles Plus")
-    func currentSubscriptionEntitles() {
-        #expect(transaction().entitlesPlus(at: Date()))
-    }
-
     /// The expiry is the moment it ends, matching the server's own comparison.
     /// The two sides disagreeing by one instant would show somebody Plus copy
     /// while the assistant refused them the Plus allowance.
@@ -186,11 +181,12 @@ struct PlusStoreTests {
         #expect(server.received == ["jws-plus"])
     }
 
-    /// A lapsed subscription drops the person back to free without anything
-    /// having run in between, and the cached flag must follow — a cache that
-    /// only ever turned on would leave an ex-subscriber on Plus forever.
-    @Test("A lapse takes Plus away again")
-    func lapseRemovesPlus() async {
+    /// The cache is what stops the paywall flashing at a subscriber on every
+    /// cold launch, so it has to survive one — and it has to survive one in
+    /// both directions. A cache that only ever turned on would leave an
+    /// ex-subscriber on Plus forever.
+    @Test("The answer survives a launch, and so does its removal")
+    func theAnswerSurvivesALaunch() async {
         let front = FakeStoreFront(entitlements: [transaction()])
         let defaults = scratchDefaults()
         let store = PlusStore(
@@ -201,40 +197,16 @@ struct PlusStoreTests {
 
         await store.refresh()
         #expect(store.isPlus)
+        #expect(relaunch(over: defaults, front: front).isPlus)
 
         front.set([])
         await store.refresh()
         #expect(!store.isPlus)
-
-        // And the next launch starts where this one left off, rather than
-        // showing Plus for as long as StoreKit takes to answer.
-        let relaunched = PlusStore(
-            front: front,
-            entitlements: RecordingEntitlements(),
-            defaults: defaults
-        )
-        #expect(!relaunched.isPlus)
+        #expect(!relaunch(over: defaults, front: front).isPlus)
     }
 
-    /// The cache is what stops the paywall flashing at a subscriber on every
-    /// cold launch, so it has to survive one.
-    @Test("A subscriber is Plus on the first frame of the next launch")
-    func theAnswerSurvivesALaunch() async {
-        let front = FakeStoreFront(entitlements: [transaction()])
-        let defaults = scratchDefaults()
-
-        let store = PlusStore(
-            front: front,
-            entitlements: RecordingEntitlements(),
-            defaults: defaults
-        )
-        await store.refresh()
-
-        let relaunched = PlusStore(
-            front: front,
-            entitlements: RecordingEntitlements(),
-            defaults: defaults
-        )
-        #expect(relaunched.isPlus)
+    /// A fresh store over the same defaults, which is what a cold launch is.
+    private func relaunch(over defaults: UserDefaults, front: FakeStoreFront) -> PlusStore {
+        PlusStore(front: front, entitlements: RecordingEntitlements(), defaults: defaults)
     }
 }

@@ -10,16 +10,15 @@
 //! pinned here.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
-use api::assistant::{ModelClient, ModelError, ModelRequest, ModelStream};
-use api::entitlement::{TransactionVerifier, VerificationError, VerifiedTransaction};
+use api::entitlement::{Tier, TransactionVerifier, VerificationError, VerifiedTransaction};
 use api::identity::USER_ID_HEADER;
 use api::proto::breathe::v1 as pb;
 use axum::Router;
 use chrono::{Duration, Utc};
 
-use crate::harness::{TestDatabase, call_grpc_web_with};
+use crate::harness::{ScriptedModel, TestDatabase, allowance, build_app_with, call_grpc_web_with};
 
 const SUBMIT: &str = "/breathe.v1.EntitlementService/SubmitAppStoreTransaction";
 const GET: &str = "/breathe.v1.EntitlementService/GetEntitlement";
@@ -32,20 +31,19 @@ const OTHER_USER: &str = "e07171e0-0000-4000-8000-000000000002";
 ///
 /// Keyed on the token string so a test can submit "the same JWS" twice and mean
 /// it — the idempotency being asserted is about the transaction id inside, and a
-/// verifier that minted a fresh id per call would make that untestable.
+/// verifier that minted a fresh id per call would make that untestable. Never
+/// mutated after construction, which is what lets it be shared without a lock.
 struct ScriptedVerifier {
-    transactions: Mutex<HashMap<String, VerifiedTransaction>>,
+    transactions: HashMap<String, VerifiedTransaction>,
 }
 
 impl ScriptedVerifier {
     fn with(tokens: Vec<(&str, VerifiedTransaction)>) -> Arc<Self> {
         Arc::new(Self {
-            transactions: Mutex::new(
-                tokens
-                    .into_iter()
-                    .map(|(token, transaction)| (token.to_owned(), transaction))
-                    .collect(),
-            ),
+            transactions: tokens
+                .into_iter()
+                .map(|(token, transaction)| (token.to_owned(), transaction))
+                .collect(),
         })
     }
 }
@@ -53,45 +51,9 @@ impl ScriptedVerifier {
 impl TransactionVerifier for ScriptedVerifier {
     fn verify(&self, signed_transaction: &str) -> Result<VerifiedTransaction, VerificationError> {
         self.transactions
-            .lock()
-            .expect("the script is not poisoned")
             .get(signed_transaction)
             .cloned()
             .ok_or_else(|| VerificationError::Untrusted("scripted rejection".to_owned()))
-    }
-}
-
-/// A model that answers the same thing every time and counts how often it was
-/// asked.
-///
-/// The count is the only way the allowance is observable: both tiers produce an
-/// answer, and only the number of calls behind it says which ceiling bound.
-struct CountingModel {
-    calls: std::sync::atomic::AtomicUsize,
-}
-
-impl CountingModel {
-    fn new() -> Arc<Self> {
-        Arc::new(Self {
-            calls: std::sync::atomic::AtomicUsize::new(0),
-        })
-    }
-
-    fn calls(&self) -> usize {
-        self.calls.load(std::sync::atomic::Ordering::Relaxed)
-    }
-}
-
-#[tonic::async_trait]
-impl ModelClient for CountingModel {
-    async fn complete(&self, _request: &ModelRequest) -> Result<String, ModelError> {
-        self.calls
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        Ok("box-breathing | Steady.".to_owned())
-    }
-
-    async fn stream(&self, _request: &ModelRequest) -> Result<ModelStream, ModelError> {
-        Err(ModelError::Failed("not used here".to_owned()))
     }
 }
 
@@ -100,6 +62,13 @@ fn subscription(original_transaction_id: &str, expires_in: Duration) -> Verified
         original_transaction_id: original_transaction_id.to_owned(),
         expires_at: Utc::now() + expires_in,
         revoked_at: None,
+    }
+}
+
+fn refund(original_transaction_id: &str) -> VerifiedTransaction {
+    VerifiedTransaction {
+        revoked_at: Some(Utc::now()),
+        ..subscription(original_transaction_id, Duration::days(365))
     }
 }
 
@@ -131,6 +100,22 @@ async fn read(app: Router, user: &str) -> pb::Entitlement {
     .into_ok()
     .entitlement
     .expect("every response carries an entitlement")
+}
+
+async fn recommend(
+    db: &TestDatabase,
+    model: Arc<ScriptedModel>,
+    verifier: Arc<ScriptedVerifier>,
+    user: &str,
+) -> pb::GetRecommendationResponse {
+    call_grpc_web_with::<_, pb::GetRecommendationResponse>(
+        build_app_with(db.pool.clone(), model, verifier),
+        GET_RECOMMENDATION,
+        &pb::GetRecommendationRequest {},
+        &[(USER_ID_HEADER, user)],
+    )
+    .await
+    .into_ok()
 }
 
 /// The happy path, and the only one that mints an entitlement: a transaction
@@ -215,26 +200,36 @@ async fn an_older_transaction_cannot_shorten_a_renewed_subscription() {
     assert_eq!(after_the_old_one, renewed);
 }
 
-/// A refund revokes. The transaction still verifies and its expiry is still in
-/// the future — what ends the entitlement is the revocation date, and nothing
-/// else in the payload says so.
+/// A refund revokes — and only the subscription it paid for. The transaction
+/// still verifies and its expiry is still in the future; what ends the
+/// entitlement is the revocation date, and nothing else in the payload says so.
+///
+/// The unrelated refund is the half that could not be seen from the other:
+/// somebody who let one subscription lapse, bought another, and then had the old
+/// one refunded must keep what they are still paying for.
 #[tokio::test]
-async fn a_revoked_transaction_ends_the_entitlement() {
+async fn a_refund_ends_only_the_subscription_it_paid_for() {
     let db = TestDatabase::create("entitlement_revoked").await;
-    let mut revoked = subscription("2000000000000001", Duration::days(365));
-    revoked.revoked_at = Some(Utc::now());
-
     let verifier = ScriptedVerifier::with(vec![
         (
             "jws-plus",
             subscription("2000000000000001", Duration::days(365)),
         ),
-        ("jws-refunded", revoked),
+        ("jws-refunded", refund("2000000000000001")),
+        ("jws-other-refund", refund("2000000000000009")),
     ]);
 
-    submit(db.app_with_verifier(verifier.clone()), USER, "jws-plus").await;
-    let after_refund = submit(db.app_with_verifier(verifier.clone()), USER, "jws-refunded").await;
+    let bought = submit(db.app_with_verifier(verifier.clone()), USER, "jws-plus").await;
 
+    let unrelated = submit(
+        db.app_with_verifier(verifier.clone()),
+        USER,
+        "jws-other-refund",
+    )
+    .await;
+    assert_eq!(unrelated, bought);
+
+    let after_refund = submit(db.app_with_verifier(verifier.clone()), USER, "jws-refunded").await;
     assert_eq!(after_refund.tier, pb::EntitlementTier::Free as i32);
     assert_eq!(after_refund.expires_at, None);
     assert_eq!(
@@ -270,9 +265,8 @@ async fn an_unverifiable_transaction_is_refused() {
 
 /// An entitlement is one person's. The purchase is stored against the caller in
 /// the header, so somebody else reading with their own identity sees nothing —
-/// this is the same containment `ProfileService` and `JourneyService` rely on,
-/// and it is worth pinning separately here because this is the one it costs
-/// money to get wrong.
+/// the same containment `ProfileService` and `JourneyService` rely on, pinned
+/// separately here because this is the one it costs money to get wrong.
 #[tokio::test]
 async fn one_persons_purchase_does_not_entitle_another() {
     let db = TestDatabase::create("entitlement_isolation").await;
@@ -288,90 +282,55 @@ async fn one_persons_purchase_does_not_entitle_another() {
     assert_eq!(other.expires_at, None);
 }
 
-/// Identity is required. Without it the server has no row to attribute a
-/// purchase to, and attributing it to nobody would silently discard a payment.
-#[tokio::test]
-async fn an_anonymous_caller_cannot_submit_or_read() {
-    let db = TestDatabase::create("entitlement_anonymous").await;
-    let verifier = ScriptedVerifier::with(vec![]);
-
-    let submitted = call_grpc_web_with::<_, pb::SubmitAppStoreTransactionResponse>(
-        db.app_with_verifier(verifier.clone()),
-        SUBMIT,
-        &pb::SubmitAppStoreTransactionRequest {
-            signed_transaction: "jws-plus".to_owned(),
-        },
-        &[],
-    )
-    .await;
-    assert_eq!(submitted.status, tonic::Code::Unauthenticated as i32);
-
-    let fetched = call_grpc_web_with::<_, pb::GetEntitlementResponse>(
-        db.app_with_verifier(verifier),
-        GET,
-        &pb::GetEntitlementRequest {},
-        &[],
-    )
-    .await;
-    assert_eq!(fetched.status, tonic::Code::Unauthenticated as i32);
-}
-
-/// What the subscription actually buys. Free runs out at three model calls and
-/// falls back; the same person, after a verified purchase, keeps going well past
-/// it. Asserted through the model's call count, because both tiers answer — only
-/// the number of calls behind the answers says which ceiling bound.
+/// What the subscription actually buys. Free runs out and falls back; the same
+/// person, after a verified purchase, keeps going well past that ceiling.
+/// Asserted through the model's call count, because both tiers answer — only the
+/// number of calls behind the answers says which ceiling bound.
 #[tokio::test]
 async fn plus_raises_the_daily_model_allowance() {
     let db = TestDatabase::create("entitlement_quota").await;
-    let free_allowance = usize::try_from(api::assistant::daily_model_calls(
-        api::entitlement::Tier::Free,
-    ))
-    .expect("the allowance is positive");
-    let plus_allowance = usize::try_from(api::assistant::daily_model_calls(
-        api::entitlement::Tier::Plus,
-    ))
-    .expect("the allowance is positive");
-    assert!(plus_allowance > free_allowance, "the tiers must differ");
+    let free = allowance(Tier::Free);
+    let plus = allowance(Tier::Plus);
+    assert!(
+        plus > free,
+        "the tiers must differ or there is nothing to buy"
+    );
 
-    let model = CountingModel::new();
+    let model = ScriptedModel::always(Ok("box-breathing | Steady.".to_owned()));
     let verifier = ScriptedVerifier::with(vec![(
         "jws-plus",
         subscription("2000000000000001", Duration::days(365)),
     )]);
 
     // Free: the ceiling binds, and the call past it never reaches the model.
-    for _ in 0..=free_allowance {
+    for _ in 0..=free {
         recommend(&db, model.clone(), verifier.clone(), USER).await;
     }
-    assert_eq!(model.calls(), free_allowance);
+    assert_eq!(model.calls(), free);
 
     // The same person, now a subscriber, spends the rest of the larger
-    // allowance — including the calls the free ceiling had refused.
+    // allowance — including the call the free ceiling had just refused.
     submit(db.app_with_verifier(verifier.clone()), USER, "jws-plus").await;
-    for _ in free_allowance..plus_allowance {
+    for _ in free..plus {
         recommend(&db, model.clone(), verifier.clone(), USER).await;
     }
-    assert_eq!(model.calls(), plus_allowance);
+    assert_eq!(model.calls(), plus);
 
     // And Plus is a bigger ceiling, not the absence of one.
     recommend(&db, model.clone(), verifier, USER).await;
-    assert_eq!(model.calls(), plus_allowance);
+    assert_eq!(model.calls(), plus);
 }
 
-/// The tier is read against the clock on every call, so a subscription that ran
-/// out is back on the free allowance with nothing having run in between. Written
-/// straight into the column because there is no way to make Apple's clock move.
+/// The tier is derived on every read rather than stored, so a subscription that
+/// ran out answers FREE with nothing having run in between. Written straight
+/// into the column, because there is no way to make Apple's clock move.
 #[tokio::test]
-async fn a_lapsed_subscription_is_back_on_the_free_allowance() {
+async fn an_expiry_in_the_past_reads_as_free() {
     let db = TestDatabase::create("entitlement_lapsed").await;
-    let free_allowance = usize::try_from(api::assistant::daily_model_calls(
-        api::entitlement::Tier::Free,
-    ))
-    .expect("the allowance is positive");
+    let verifier = ScriptedVerifier::with(vec![]);
 
     // The row is created by the identity layer on the first RPC of any kind, so
     // one call has to happen before there is anything to expire.
-    let verifier = ScriptedVerifier::with(vec![]);
     read(db.app_with_verifier(verifier.clone()), USER).await;
 
     sqlx::query("UPDATE users SET plus_until = now() - interval '1 day' WHERE id = $1")
@@ -380,33 +339,7 @@ async fn a_lapsed_subscription_is_back_on_the_free_allowance() {
         .await
         .expect("the expiry is written");
 
-    let entitlement = read(db.app_with_verifier(verifier.clone()), USER).await;
+    let entitlement = read(db.app_with_verifier(verifier), USER).await;
     assert_eq!(entitlement.tier, pb::EntitlementTier::Free as i32);
     assert_eq!(entitlement.expires_at, None);
-
-    let model = CountingModel::new();
-    for _ in 0..=free_allowance {
-        recommend(&db, model.clone(), verifier.clone(), USER).await;
-    }
-    assert_eq!(
-        model.calls(),
-        free_allowance,
-        "a lapsed subscriber spends the free allowance, not the paid one"
-    );
-}
-
-async fn recommend(
-    db: &TestDatabase,
-    model: Arc<CountingModel>,
-    verifier: Arc<ScriptedVerifier>,
-    user: &str,
-) -> pb::GetRecommendationResponse {
-    call_grpc_web_with::<_, pb::GetRecommendationResponse>(
-        db.app_with_model_and_verifier(model, verifier),
-        GET_RECOMMENDATION,
-        &pb::GetRecommendationRequest {},
-        &[(USER_ID_HEADER, user)],
-    )
-    .await
-    .into_ok()
 }

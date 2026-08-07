@@ -28,6 +28,13 @@ struct BreatheApp: App {
     /// detail screen and the session that reads the setting are not adjacent.
     @State private var settings = SessionSettings()
 
+    /// Whether this person has Breathe Plus. In the environment for the same
+    /// reason `settings` is: the surfaces that offer a subscription — the
+    /// assistant's two strips, and the paywall they open — are nowhere near
+    /// here, and threading a parameter through every screen between would touch
+    /// every one of them.
+    @State private var plus: PlusStore
+
     /// Holds the onboarding answers and knows whether they have been given.
     @State private var profiles: ProfileStore
 
@@ -77,6 +84,13 @@ struct BreatheApp: App {
         _profiles = State(wrappedValue: profiles)
         _isOnboarding = State(wrappedValue: !profiles.hasCompletedOnboarding)
 
+        _plus = State(
+            wrappedValue: PlusStore(
+                front: StoreKitPlusStoreFront(),
+                entitlements: EntitlementRepository(baseURL: baseURL, identity: identity)
+            )
+        )
+
         let journeys = JourneyRepository(baseURL: baseURL, identity: identity)
         let sessions = sessions
         let scores = scores
@@ -124,6 +138,7 @@ struct BreatheApp: App {
             // system, which keeps the default behaviour exactly today's.
             .preferredColorScheme(settings.appearance.colorScheme)
             .environment(settings)
+            .environment(plus)
             .fullScreenCover(isPresented: $isOnboarding) {
                 OnboardingView(
                     model: OnboardingModel(
@@ -151,11 +166,11 @@ struct BreatheApp: App {
                 _ = await (profile, sessions)
             }
             // Its own task because it never returns: the first thing it does is
-            // read the entitlement and push anything the server has not
-            // acknowledged, and then it listens for renewals and refunds for as
-            // long as the app is running. Folded into the task above it would
-            // hold the other two open forever.
-            .task { await LivePlus.store.watch() }
+            // read the entitlement off the device and push anything the server
+            // has not acknowledged, and then it listens for renewals and refunds
+            // for as long as the app is running. Folded into the task above it
+            // would hold the other two open forever.
+            .task { await plus.watch() }
         }
     }
 }

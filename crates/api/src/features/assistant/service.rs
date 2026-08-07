@@ -21,7 +21,8 @@ use super::types::{
     EXPLANATION_MAX_TOKENS, RECOMMENDATION_MAX_TOKENS, Recommendation, daily_model_calls,
 };
 use super::{fallback, parse, prompt, repository};
-use crate::features::entitlement;
+use crate::features::entitlement::repository::find_entitlement;
+use crate::features::entitlement::types::{Entitlement, Tier};
 use crate::features::profile::repository::{ProfileRow, find_profile};
 use crate::features::technique::repository::{TechniqueRow, list_techniques};
 use crate::proto::breathe::v1 as pb;
@@ -35,13 +36,13 @@ pub async fn get_recommendation(
     model: &dyn ModelClient,
     user_id: Uuid,
 ) -> Result<pb::GetRecommendationResponse, AssistantError> {
-    let (catalogue, profile) = read_context(pool, user_id).await?;
+    let (catalogue, profile, tier) = read_context(pool, user_id).await?;
     if catalogue.is_empty() {
         return Err(AssistantError::EmptyCatalogue);
     }
 
     let (recommendations, source) =
-        match model_recommendations(pool, model, user_id, &catalogue, &profile).await {
+        match model_recommendations(pool, model, user_id, tier, &catalogue, &profile).await {
             Some(recommendations) => (recommendations, pb::AssistantSource::Model),
             None => (
                 fallback::recommendations(&catalogue, &profile),
@@ -55,25 +56,37 @@ pub async fn get_recommendation(
     })
 }
 
-/// The catalogue and the caller's profile, read together.
+/// The catalogue, the caller's profile, and what they are entitled to, read
+/// together.
 ///
-/// Concurrently because neither read depends on the other, and both happen
-/// before anything else can: serialising them would put two loopback
-/// round-trips in front of every call rather than one.
+/// Concurrently because none of the three depends on the others, and all of them
+/// happen before anything else can: serialising them would put three loopback
+/// round-trips in front of every call rather than one. The entitlement joins
+/// them rather than being read where it is used, for exactly that reason — it
+/// decides the model allowance, which is the last thing either RPC settles.
 async fn read_context(
     pool: &PgPool,
     user_id: Uuid,
-) -> Result<(Vec<TechniqueRow>, ProfileRow), AssistantError> {
-    let (catalogue, profile) = tokio::try_join!(
+) -> Result<(Vec<TechniqueRow>, ProfileRow, Tier), AssistantError> {
+    let (catalogue, profile, entitlement) = tokio::try_join!(
         async { list_techniques(pool).await.map_err(AssistantError::from) },
         async {
             find_profile(pool, user_id)
                 .await
                 .map_err(AssistantError::from)
         },
+        async {
+            find_entitlement(pool, user_id)
+                .await
+                .map_err(AssistantError::from)
+        },
     )?;
 
-    Ok((catalogue, profile))
+    Ok((
+        catalogue,
+        profile,
+        Entitlement::resolve(entitlement.plus_until, chrono::Utc::now()).tier(),
+    ))
 }
 
 /// The model's answer, or `None` for every reason there might not be one.
@@ -86,10 +99,11 @@ async fn model_recommendations(
     pool: &PgPool,
     model: &dyn ModelClient,
     user_id: Uuid,
+    tier: Tier,
     catalogue: &[TechniqueRow],
     profile: &ProfileRow,
 ) -> Option<Vec<Recommendation>> {
-    if !model.is_available() || !claim_call(pool, user_id).await {
+    if !model.is_available() || !claim_call(pool, user_id, tier).await {
         return None;
     }
 
@@ -126,7 +140,7 @@ pub async fn explain_technique(
     user_id: Uuid,
     slug: &str,
 ) -> Result<ExplanationStream, AssistantError> {
-    let (catalogue, profile) = read_context(pool, user_id).await?;
+    let (catalogue, profile, tier) = read_context(pool, user_id).await?;
     let technique = catalogue
         .iter()
         .find(|row| row.slug == slug)
@@ -137,7 +151,7 @@ pub async fn explain_technique(
     // Availability first, so a process with no key configured — a fresh clone,
     // CI, the whole e2e suite — neither writes a quota row nor builds a prompt
     // for a call that provably will not be made.
-    if model.is_available() && claim_call(pool, user_id).await {
+    if model.is_available() && claim_call(pool, user_id, tier).await {
         let request = ModelRequest {
             cacheable_prefix: prompt::catalogue_prefix(&catalogue),
             instruction: prompt::explanation_instruction(technique, &profile),
@@ -195,20 +209,17 @@ fn from_fallback(text: &str) -> ExplanationStream {
 
 /// Claims one call against the caller's daily allowance.
 ///
-/// The allowance is whatever their entitlement buys, read from their own row
-/// rather than from the request: this is the only place in the codebase where a
-/// client could otherwise talk the server into spending money, and it is two
-/// statements — the tier, then the claim — rather than one so that the rule
-/// ("Plus gets more") stays in Rust where it is testable instead of inside the
-/// `WHERE` clause.
+/// `tier` came from the caller's own row, never from the request: this is the
+/// only place in the codebase where a client could otherwise talk the server
+/// into spending money. It arrives as an argument rather than being read here
+/// so the rule ("Plus gets more") stays in Rust where it is testable, instead of
+/// inside the `WHERE` clause of the statement below.
 ///
 /// A database failure here reads as "no allowance". The alternative — failing
 /// the whole RPC — would take the fallback down with the counter, and the
 /// fallback is the thing that is supposed to survive.
-async fn claim_call(pool: &PgPool, user_id: Uuid) -> bool {
-    let limit = daily_model_calls(entitlement::service::tier(pool, user_id).await);
-
-    match repository::claim_daily_call(pool, user_id, limit).await {
+async fn claim_call(pool: &PgPool, user_id: Uuid, tier: Tier) -> bool {
+    match repository::claim_daily_call(pool, user_id, daily_model_calls(tier)).await {
         Ok(claimed) => {
             if !claimed {
                 tracing::info!(

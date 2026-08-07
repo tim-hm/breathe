@@ -2,11 +2,14 @@
 
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
-use api::assistant::{DisabledModelClient, ModelClient};
+use api::assistant::{
+    DisabledModelClient, ModelClient, ModelError, ModelRequest, ModelStream, daily_model_calls,
+};
 use api::config::{Config, Environment};
-use api::entitlement::{AppStoreVerifier, TransactionVerifier};
+use api::entitlement::{AppStoreVerifier, Tier, TransactionVerifier};
 use api::state::AppState;
 use axum::Router;
 use axum::body::{Body, Bytes};
@@ -116,15 +119,80 @@ impl TestDatabase {
             entitlement,
         )
     }
+}
 
-    /// Both seams at once, for the tests that buy a subscription and then spend
-    /// it.
-    pub fn app_with_model_and_verifier(
-        &self,
-        assistant: Arc<dyn ModelClient>,
-        entitlement: Arc<dyn TransactionVerifier>,
-    ) -> Router {
-        build_app_with(self.pool.clone(), assistant, entitlement)
+/// One person's daily model allowance, in the `usize` a call count is compared
+/// against.
+///
+/// Derived rather than written out, so a test says which tier it is asserting
+/// about and the numbers stay in `features::assistant::types` where the product
+/// decision lives.
+pub fn allowance(tier: Tier) -> usize {
+    usize::try_from(daily_model_calls(tier)).expect("an allowance is never negative")
+}
+
+/// A model that answers from a script and counts how often it was asked.
+///
+/// The count is what makes the quota and the breaker observable: both are
+/// supposed to stop a call from happening at all, and a test that only checked
+/// the response could not tell "answered from the rules" apart from "called the
+/// model and ignored it".
+///
+/// In the harness rather than in one suite because two of them need it — the
+/// assistant's, which is about what the model says, and the entitlement's, which
+/// is about how often it may be asked.
+pub struct ScriptedModel {
+    /// Replies in order; the last one repeats once the script runs out.
+    replies: Mutex<Vec<Result<String, ModelError>>>,
+    calls: AtomicUsize,
+}
+
+impl ScriptedModel {
+    /// `next` repeats a sole entry forever, so "always" is a one-element script.
+    pub fn always(reply: Result<String, ModelError>) -> Arc<Self> {
+        Self::script(vec![reply])
+    }
+
+    pub fn script(replies: Vec<Result<String, ModelError>>) -> Arc<Self> {
+        Arc::new(Self {
+            replies: Mutex::new(replies),
+            calls: AtomicUsize::new(0),
+        })
+    }
+
+    pub fn calls(&self) -> usize {
+        self.calls.load(Ordering::Relaxed)
+    }
+
+    fn next(&self) -> Result<String, ModelError> {
+        self.calls.fetch_add(1, Ordering::Relaxed);
+
+        let mut replies = self.replies.lock().expect("the script is not poisoned");
+        if replies.len() > 1 {
+            replies.remove(0)
+        } else {
+            match replies.first() {
+                Some(Ok(reply)) => Ok(reply.clone()),
+                Some(Err(_)) | None => Err(ModelError::Failed("scripted failure".to_owned())),
+            }
+        }
+    }
+}
+
+#[tonic::async_trait]
+impl ModelClient for ScriptedModel {
+    async fn complete(&self, _request: &ModelRequest) -> Result<String, ModelError> {
+        self.next()
+    }
+
+    /// One chunk per line, so a test can assert the client received them in the
+    /// order the model wrote them.
+    async fn stream(&self, _request: &ModelRequest) -> Result<ModelStream, ModelError> {
+        let reply = self.next()?;
+        let chunks: Vec<Result<String, ModelError>> =
+            reply.lines().map(|line| Ok(line.to_owned())).collect();
+
+        Ok(Box::pin(tokio_stream::iter(chunks)))
     }
 }
 

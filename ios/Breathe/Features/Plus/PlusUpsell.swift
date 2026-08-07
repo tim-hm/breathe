@@ -16,14 +16,11 @@ struct PlusUpsell: View {
     /// generic sentence would be honest about neither.
     let reason: String
 
-    let store: PlusStore
+    /// From the environment, so a surface that wants to offer Plus adds one
+    /// line and learns nothing about where the subscription comes from.
+    @Environment(PlusStore.self) private var store
 
     @State private var isShowingPaywall = false
-
-    init(reason: String, store: PlusStore = LivePlus.store) {
-        self.reason = reason
-        self.store = store
-    }
 
     var body: some View {
         if !store.isPlus {
@@ -44,7 +41,7 @@ struct PlusUpsell: View {
             }
             .buttonStyle(.plain)
             .sheet(isPresented: $isShowingPaywall) {
-                PaywallView(store: store)
+                PaywallView()
             }
         }
     }

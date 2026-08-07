@@ -35,7 +35,7 @@ pub mod assistant {
 /// `Tier` travels with it because the allowance is a function of one, so a test
 /// asking how many calls a subscriber gets has to be able to name it.
 pub mod entitlement {
-    pub use crate::features::entitlement::types::{PLUS_PRODUCT_ID, Tier};
+    pub use crate::features::entitlement::types::Tier;
     pub use crate::features::entitlement::verifier::{
         AppStoreVerifier, TransactionVerifier, VerificationError, VerifiedTransaction,
     };
