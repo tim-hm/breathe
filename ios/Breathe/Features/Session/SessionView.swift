@@ -125,7 +125,7 @@ struct SessionView: View {
 
             // The contraindications belong where the person is, not only where
             // they chose. Compact, because the screen belongs to the breath.
-            SafetyNote(technique: model.technique, font: .caption)
+            SafetyNote(technique: model.technique)
 
             controls
         }

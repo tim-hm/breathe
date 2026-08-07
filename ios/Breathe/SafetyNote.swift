@@ -2,19 +2,21 @@ import BreatheKit
 import BreatheUI
 import SwiftUI
 
-/// The caution a technique carries, where it carries one.
+/// The caution an exercise carries, compact, for a screen that belongs to
+/// something else.
 ///
-/// App-local rather than inside either feature, because the same words have to
-/// appear on the detail screen — where someone decides — and inside the session,
-/// where someone is already breathing. A warning only the catalogue shows is one
-/// the person has scrolled past by the time it matters.
+/// The session player is the only user: the contraindications belong where the
+/// person is, not only where they chose, and nothing about this one is
+/// dismissible. Somebody who is already breathing is exactly who the words are
+/// for.
 ///
-/// The watch draws its own, in caption type with no card. Two small views
-/// rather than one taking three flags.
+/// `SafetyNoteCard` is the same words given the room to be read before anything
+/// starts. Two views rather than one taking flags, because the browsing one
+/// carries dismissal state and this one must never learn about it.
+///
+/// The watch draws its own — the wrist has no room for either of these.
 struct SafetyNote: View {
     let technique: Technique
-    /// Smaller inside the session, where the screen belongs to the breath.
-    var font: Font = .footnote
 
     var body: some View {
         if let note = technique.safetyNote {
@@ -24,12 +26,14 @@ struct SafetyNote: View {
                 Text(note)
                     .foregroundStyle(Theme.Ink.secondary)
             }
-            .font(font)
+            .font(.caption)
             .padding(Theme.Spacing.standard)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: Theme.Radius.card))
-            // One VoiceOver element: the icon says nothing the words do not.
+            // One VoiceOver element, with the caution named first: the icon
+            // carries that meaning for everyone who can see it.
             .accessibilityElement(children: .combine)
+            .accessibilityLabel("Caution. \(note)")
         }
     }
 }

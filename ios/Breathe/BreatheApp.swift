@@ -35,6 +35,12 @@ struct BreatheApp: App {
     /// every one of them.
     @State private var plus: SubscriptionStore
 
+    /// Which exercises' cautions have been put away. In the environment beside
+    /// `settings` for the same reason: the card that writes it and the detail
+    /// screen that reads it are one view apart, but the store has to outlive
+    /// every push and pop between them.
+    @State private var safetyNotes = SafetyNoteStore()
+
     /// Holds the onboarding answers and knows whether they have been given.
     @State private var profiles: ProfileStore
 
@@ -111,10 +117,9 @@ struct BreatheApp: App {
 
     var body: some Scene {
         WindowGroup {
-            // The whole of the chrome, and which of its treatments is on screen,
-            // is `AppChrome`'s. Reminders live behind a link in Settings; the
-            // subscription has no home of its own, opening from whatever was
-            // locked.
+            // The whole of the chrome is `AppChrome`'s. Reminders live behind a
+            // link in Settings; the subscription has no home of its own,
+            // opening from whatever was locked.
             AppChrome(
                 catalogue: catalogue,
                 sessions: sessions,
@@ -130,6 +135,7 @@ struct BreatheApp: App {
             .preferredColorScheme(settings.appearance.colorScheme)
             .environment(settings)
             .environment(plus)
+            .environment(safetyNotes)
             .fullScreenCover(isPresented: $isOnboarding) {
                 OnboardingView(
                     model: OnboardingModel(
