@@ -11,7 +11,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
 
 use api::entitlement::{
     SubscriptionTier, Tier, TransactionVerifier, VerificationError, VerifiedTransaction,
@@ -22,7 +22,8 @@ use axum::Router;
 use chrono::{Duration, Utc};
 
 use crate::harness::{
-    ScriptedModel, TestDatabase, allowance, build_app_with, call_grpc_web_with, subscribe,
+    GrpcWebResponse, ScriptedModel, TestDatabase, allowance, build_app_with, call_grpc_web_with,
+    subscribe,
 };
 
 const SUBMIT: &str = "/breathe.v1.EntitlementService/SubmitAppStoreTransaction";
@@ -40,10 +41,16 @@ const MONTH: Duration = Duration::days(30);
 ///
 /// Keyed on the token string so a test can submit "the same JWS" twice and mean
 /// it — the idempotency being asserted is about the transaction id inside, and a
-/// verifier that minted a fresh id per call would make that untestable. Never
-/// mutated after construction, which is what lets it be shared without a lock.
+/// verifier that minted a fresh id per call would make that untestable. The
+/// script itself is never mutated after construction, which is what lets it be
+/// shared without a lock.
 struct ScriptedVerifier {
     transactions: HashMap<String, VerifiedTransaction>,
+
+    /// How often the seam was reached. The only way to assert that a submission
+    /// was refused *before* the token was read, which is the whole content of
+    /// the size bound.
+    reads: AtomicUsize,
 }
 
 impl ScriptedVerifier {
@@ -53,12 +60,19 @@ impl ScriptedVerifier {
                 .into_iter()
                 .map(|(token, transaction)| (token.to_owned(), transaction))
                 .collect(),
+            reads: AtomicUsize::new(0),
         })
+    }
+
+    fn reads(&self) -> usize {
+        self.reads.load(Ordering::Relaxed)
     }
 }
 
 impl TransactionVerifier for ScriptedVerifier {
     fn verify(&self, signed_transaction: &str) -> Result<VerifiedTransaction, VerificationError> {
+        self.reads.fetch_add(1, Ordering::Relaxed);
+
         self.transactions
             .get(signed_transaction)
             .cloned()
@@ -107,21 +121,24 @@ fn refund(original_transaction_id: &str) -> VerifiedTransaction {
     }
 }
 
-async fn submit(app: Router, user: &str, token: &str) -> pb::Entitlement {
+async fn try_submit(
+    app: Router,
+    user: &str,
+    token: &str,
+) -> GrpcWebResponse<pb::SubmitAppStoreTransactionResponse> {
     let request = pb::SubmitAppStoreTransactionRequest {
         signed_transaction: token.to_owned(),
     };
 
-    call_grpc_web_with::<_, pb::SubmitAppStoreTransactionResponse>(
-        app,
-        SUBMIT,
-        &request,
-        &[(USER_ID_HEADER, user)],
-    )
-    .await
-    .into_ok()
-    .entitlement
-    .expect("every response carries an entitlement")
+    call_grpc_web_with(app, SUBMIT, &request, &[(USER_ID_HEADER, user)]).await
+}
+
+async fn submit(app: Router, user: &str, token: &str) -> pb::Entitlement {
+    try_submit(app, user, token)
+        .await
+        .into_ok()
+        .entitlement
+        .expect("every response carries an entitlement")
 }
 
 async fn read(app: Router, user: &str) -> pb::Entitlement {
@@ -296,6 +313,152 @@ async fn a_refund_ends_only_the_subscription_it_paid_for() {
         read(db.app_with_verifier(verifier), USER).await,
         after_refund
     );
+}
+
+/// A refund is final, and the transaction that paid for it is still in the
+/// client's hands.
+///
+/// The revoked transaction and the purchase it revokes are the *same*
+/// subscription, and the purchase's payload carries no `revocationDate` — so it
+/// verifies perfectly, forever, until its own expiry. What stops it re-granting
+/// is that the revocation leaves the ordering marker set to its own `signedDate`
+/// rather than clearing it; an earlier submission then loses the comparison it
+/// would otherwise win against a null.
+///
+/// Reachable by an honest client, not only an attacker: `Transaction.updates`
+/// and `currentEntitlements` have no ordering between them, so a single launch
+/// can hand the server the refund and then the purchase.
+///
+/// Buying again afterwards has to still work, which is the half a fix could
+/// easily break — hence the third submission.
+#[tokio::test]
+async fn a_refund_cannot_be_undone_by_resubmitting() {
+    let db = TestDatabase::create("entitlement_refund_replay").await;
+    let verifier = ScriptedVerifier::with(vec![
+        ("jws-plus", plus("2000000000000001")),
+        ("jws-refunded", refund("2000000000000001")),
+        ("jws-bought-again", plus("2000000000000002")),
+    ]);
+
+    submit(db.app_with_verifier(verifier.clone()), USER, "jws-plus").await;
+    let refunded = submit(db.app_with_verifier(verifier.clone()), USER, "jws-refunded").await;
+    assert_eq!(refunded.tier, pb::EntitlementTier::Free as i32);
+
+    let replayed = submit(db.app_with_verifier(verifier.clone()), USER, "jws-plus").await;
+    assert_eq!(replayed.tier, pb::EntitlementTier::Free as i32);
+    assert_eq!(
+        read(db.app_with_verifier(verifier.clone()), USER).await,
+        refunded
+    );
+
+    let bought_again = submit(
+        db.app_with_verifier(verifier.clone()),
+        USER,
+        "jws-bought-again",
+    )
+    .await;
+    assert_eq!(bought_again.tier, pb::EntitlementTier::Plus as i32);
+    assert_eq!(
+        read(db.app_with_verifier(verifier), USER).await,
+        bought_again
+    );
+}
+
+/// A `jwsRepresentation` is a string. Somebody can copy it off their own device
+/// and submit it from any client under any UUID they mint, and nothing inside
+/// the token names who may use it — so the binding has to come from the server.
+///
+/// This is money rather than principle. Coach's whole content is the language
+/// model and its allowance is counted per user per UTC day, so one shared token
+/// fanning out across self-minted identities is uncapped provider spend against
+/// a per-user ceiling.
+#[tokio::test]
+async fn a_purchase_entitles_one_identity_at_a_time() {
+    let db = TestDatabase::create("entitlement_replay").await;
+    let verifier = ScriptedVerifier::with(vec![(
+        "jws-coach",
+        subscription("2000000000000001", SubscriptionTier::Coach, MONTH),
+    )]);
+
+    let bought = submit(db.app_with_verifier(verifier.clone()), USER, "jws-coach").await;
+
+    let replayed = try_submit(
+        db.app_with_verifier(verifier.clone()),
+        OTHER_USER,
+        "jws-coach",
+    )
+    .await;
+    assert_eq!(replayed.status, tonic::Code::PermissionDenied as i32);
+
+    assert_eq!(
+        read(db.app_with_verifier(verifier.clone()), OTHER_USER)
+            .await
+            .tier,
+        pb::EntitlementTier::Free as i32
+    );
+    assert_eq!(
+        read(db.app_with_verifier(verifier), USER).await,
+        bought,
+        "the buyer keeps what they bought"
+    );
+}
+
+/// The other half of the binding, and the case the original schema comment chose
+/// not to bind at all for: there is no account recovery, so somebody who
+/// reinstalls and reaches this app with a new identity and the same Apple ID has
+/// to be able to take their purchase with them.
+///
+/// The transaction therefore moves rather than being refused outright — but only
+/// once it has sat still for the cooldown, because a binding that moved on demand
+/// would be the same fan-out taken in turns, one daily allowance at a time.
+/// Backdated in the column, because there is no way to make the clock move.
+#[tokio::test]
+async fn a_settled_purchase_follows_its_owner_to_a_new_identity() {
+    let db = TestDatabase::create("entitlement_transfer").await;
+    let verifier = ScriptedVerifier::with(vec![("jws-plus", plus("2000000000000001"))]);
+
+    let bought = submit(db.app_with_verifier(verifier.clone()), USER, "jws-plus").await;
+
+    sqlx::query(
+        "UPDATE users SET subscription_claimed_at = now() - interval '2 days' WHERE id = $1",
+    )
+    .bind(USER.parse::<uuid::Uuid>().expect("a valid uuid"))
+    .execute(&db.pool)
+    .await
+    .expect("the claim is backdated");
+
+    let moved = submit(
+        db.app_with_verifier(verifier.clone()),
+        OTHER_USER,
+        "jws-plus",
+    )
+    .await;
+    assert_eq!(moved.tier, bought.tier);
+    assert_eq!(moved.expires_at, bought.expires_at);
+
+    assert_eq!(
+        read(db.app_with_verifier(verifier), USER).await.tier,
+        pb::EntitlementTier::Free as i32,
+        "the transaction moved rather than being shared"
+    );
+}
+
+/// A real `jwsRepresentation` is a few kilobytes; without a bound the only
+/// ceiling is tonic's 4 MiB decode limit, and every byte under it would be
+/// split, base64-decoded three times and JSON-parsed on a path with no rate
+/// limit in front of it. The verifier's read count is the assertion that
+/// matters: rejecting the oversized token *after* doing the work would pass a
+/// test that only checked the status.
+#[tokio::test]
+async fn a_token_too_large_to_be_a_transaction_is_refused_unread() {
+    let db = TestDatabase::create("entitlement_oversized").await;
+    let verifier = ScriptedVerifier::with(vec![]);
+
+    let oversized = "j".repeat(64 * 1024);
+    let response = try_submit(db.app_with_verifier(verifier.clone()), USER, &oversized).await;
+
+    assert_eq!(response.status, tonic::Code::InvalidArgument as i32);
+    assert_eq!(verifier.reads(), 0, "nothing decoded it to find out");
 }
 
 /// A token the verifier refuses buys nothing and says so as `INVALID_ARGUMENT`,
