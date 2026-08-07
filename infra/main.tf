@@ -285,3 +285,22 @@ resource "aws_route53_record" "apex" {
   ttl     = 300
   records = [aws_eip.api.public_ip]
 }
+
+# Proves to Google that whoever holds this zone holds the domain, which is what
+# lets the name be added to a Workspace registered under a different one. Google
+# re-checks it, so removing it after enrolment un-verifies the domain.
+#
+# Every apex TXT string belongs in the `records` list below, not in a second
+# `aws_route53_record`. DNS keeps one TXT record set per name, so a second
+# resource pointed at the apex does not add to this one — the two fight over the
+# same set and whichever applies last wins. An SPF policy or a further
+# verification token is a new element here.
+resource "aws_route53_record" "apex_txt" {
+  zone_id = aws_route53_zone.primary.zone_id
+  name    = aws_route53_zone.primary.name
+  type    = "TXT"
+  # Long, unlike the A record above: this value changes when a provider is
+  # enrolled or retired, which is planned work, not an outage.
+  ttl     = 3600
+  records = ["google-site-verification=ytC4-ZAJ7dO3fLsV52iJmQDu8h27cLFsmFcLHrwgCdg"]
+}
