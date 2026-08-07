@@ -42,9 +42,36 @@ public final class ProfileStore {
         didSet { defaults.set(hasCompletedOnboarding, forKey: Self.completedKey) }
     }
 
+    /// How far the stored answers have got towards the server.
+    ///
+    /// One enum rather than a flag beside a reason, for the usual cause: the two
+    /// would admit "outstanding and already refused", which is the state this
+    /// exists to make unsayable.
+    public enum SyncState: Sendable, Equatable {
+        /// The server holds what this device holds.
+        case settled
+        /// Waiting for a chance to send. Every launch retries.
+        case pending
+        /// The server refused these answers and would refuse them again, so
+        /// nothing retries. Carries its reason, for the screen that asked.
+        case rejected(String)
+    }
+
+    /// Only `pending` is written to disk, as the flag it has always been: a
+    /// relaunch reads a refusal back as `settled` because the whole point of
+    /// the case is that no later attempt is made, and a stored one would keep
+    /// answering a question with no request behind it.
+    public private(set) var syncState: SyncState {
+        didSet { defaults.set(syncState == .pending, forKey: Self.pendingKey) }
+    }
+
     /// Whether the stored answers are still waiting to reach the server.
-    public private(set) var isPendingSync: Bool {
-        didSet { defaults.set(isPendingSync, forKey: Self.pendingKey) }
+    ///
+    /// Not public: no screen asks this, only the guard below and the tests that
+    /// pin it, and a second public name for a derived fact is a second thing to
+    /// keep in step.
+    var isPendingSync: Bool {
+        syncState == .pending
     }
 
     private let profiles: any ProfileSyncing
@@ -63,7 +90,7 @@ public final class ProfileStore {
             // one, and the questions are one screen away.
             ?? .unanswered
         hasCompletedOnboarding = defaults.bool(forKey: Self.completedKey)
-        isPendingSync = defaults.bool(forKey: Self.pendingKey)
+        syncState = defaults.bool(forKey: Self.pendingKey) ? .pending : .settled
     }
 
     /// Records the answers and closes onboarding, whether or not the network is
@@ -74,7 +101,7 @@ public final class ProfileStore {
     /// exact moment the app has the least credit to spend.
     public func complete(with profile: Profile) {
         self.profile = profile
-        isPendingSync = true
+        syncState = .pending
         hasCompletedOnboarding = true
     }
 
@@ -108,7 +135,7 @@ public final class ProfileStore {
     /// that made a reinstall overwrite a good profile in the first place.
     public func adopt(_ profile: Profile) {
         self.profile = profile
-        isPendingSync = false
+        syncState = .settled
         hasCompletedOnboarding = true
     }
 
@@ -118,20 +145,22 @@ public final class ProfileStore {
     /// Unlike `complete(with:)` this does await the upload, because the one
     /// screen that calls it is showing the person a name the server may change
     /// under them: a taken name comes back suffixed, and they should see that
-    /// rather than discover it on a board later. A failure is still not an
-    /// error — the flag stays set and the next launch retries.
+    /// rather than discover it on a board later. An unreachable server is still
+    /// not an error — the answers stay outstanding and the next launch retries.
+    /// A *refused* one is different, and `syncState` is how the screen tells the
+    /// two apart.
     public func save(_ profile: Profile) async {
         self.profile = profile
-        isPendingSync = true
+        syncState = .pending
         await syncIfNeeded()
     }
 
     /// Pushes anything the server has not seen.
     ///
     /// Safe to call on every launch and after every change: it returns
-    /// immediately when there is nothing outstanding, and a failure leaves the
-    /// flag set for the next attempt rather than surfacing an error — a profile
-    /// that syncs a day late costs the person nothing.
+    /// immediately when there is nothing outstanding, and a failure it can only
+    /// wait out leaves the answers outstanding rather than surfacing an error —
+    /// a profile that syncs a day late costs the person nothing.
     public func syncIfNeeded() async {
         guard isPendingSync else { return }
 
@@ -140,7 +169,14 @@ public final class ProfileStore {
             // server normalised does not leave this device disagreeing with it
             // and re-syncing forever.
             profile = try await profiles.update(profile)
-            isPendingSync = false
+            syncState = .settled
+        } catch let ProfileRepositoryError.rejected(reason) {
+            // Cleared rather than left outstanding: the server has judged the
+            // answers and not the connection, so every later attempt is the
+            // same doomed request on every cold launch for the life of the
+            // install. The reason survives for whoever asked for the change.
+            Self.logger.notice("profile refused: \(reason)")
+            syncState = .rejected(reason)
         } catch {
             Self.logger.notice("profile sync deferred: \(error.localizedDescription)")
         }

@@ -2,10 +2,19 @@ import BreatheAPI
 import Foundation
 
 public enum ProfileRepositoryError: Error, Equatable {
-    /// The RPC itself failed — no network, server down, non-OK gRPC status.
-    /// Includes `UNAUTHENTICATED`, which is what a call with no readable
-    /// Keychain identity comes back as.
+    /// The RPC failed on something a later attempt may not hit — no network, a
+    /// server that is down, a status this client can only wait out. Includes
+    /// `UNAUTHENTICATED`, which is what a call with no readable Keychain
+    /// identity comes back as, and which the next launch may well fix.
     case transport(String)
+    /// The server refused these answers themselves, and would refuse them again.
+    ///
+    /// Split from `.transport` because it is the one failure retrying cannot
+    /// mend: a profile left pending on an `INVALID_ARGUMENT` re-attempts on
+    /// every cold launch for the life of the install, while the screen that sent
+    /// it reads the refused value back and shows it as saved. Carries the
+    /// server's own message, which names what it objected to.
+    case rejected(String)
     /// The response parsed but described something this app cannot represent.
     /// Distinct from `.transport` because retrying will not help: the client and
     /// server contracts have diverged.
@@ -46,9 +55,7 @@ public struct ProfileRepository: ProfileSyncing {
         let response = await client.getProfile(request: Breathe_V1_GetProfileRequest())
 
         guard let message = response.message else {
-            throw ProfileRepositoryError.transport(
-                response.error?.localizedDescription ?? "the request failed with no message"
-            )
+            throw Self.failure(refused: response.code == .invalidArgument, response.error)
         }
 
         return try Profile(proto: message.profile)
@@ -62,12 +69,25 @@ public struct ProfileRepository: ProfileSyncing {
         let response = await client.updateProfile(request: request)
 
         guard let message = response.message else {
-            throw ProfileRepositoryError.transport(
-                response.error?.localizedDescription ?? "the request failed with no message"
-            )
+            throw Self.failure(refused: response.code == .invalidArgument, response.error)
         }
 
         return try Profile(proto: message.profile)
+    }
+
+    /// The one distinction a caller acts on: whether waiting could ever change
+    /// the answer.
+    ///
+    /// The status arrives as a flag rather than as a `Code` for the reason
+    /// `JourneyRepository.failure` gives: Connect is BreatheAPI's dependency and
+    /// not this target's. A `nil` error under a `nil` message would be a library
+    /// invariant violation, so the fallback text exists only to keep this total.
+    private static func failure(
+        refused: Bool,
+        _ error: (any Error)?
+    ) -> ProfileRepositoryError {
+        let message = error?.localizedDescription ?? "the request failed with no message"
+        return refused ? .rejected(message) : .transport(message)
     }
 }
 

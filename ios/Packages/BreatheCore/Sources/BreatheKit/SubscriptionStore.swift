@@ -54,16 +54,38 @@ public final class SubscriptionStore {
     /// what they cost.
     public private(set) var products: [SubscriptionProduct] = []
 
-    /// Whether a purchase or a restore is in flight, for the buttons to disable
-    /// themselves with. One flag for all of them: they are the same modal moment
-    /// as far as the screen is concerned, and none can start while another is
-    /// running.
-    public private(set) var isBusy = false
+    /// How far a purchase or a restore has got.
+    ///
+    /// One enum rather than the pair of flags it replaces, which is what every
+    /// other observable model here does and for the same reason: two booleans
+    /// admit four states, and "busy while awaiting approval" is not one of them.
+    /// A third condition would otherwise be a third flag and eight.
+    public enum PurchaseState: Sendable, Equatable {
+        case idle
+        /// A purchase or a restore is in flight, and no second one may start.
+        case working
+        /// The purchase went to Ask to Buy. The answer arrives later through
+        /// `updates`, so this is where it rests rather than a step on the way
+        /// back to `idle` — the buttons come back to life while somebody else
+        /// decides.
+        case awaitingApproval
+    }
 
-    /// Set when a purchase went to Ask to Buy. The answer arrives later through
-    /// `updates`, so the paywall says so rather than looking as though the
-    /// button did nothing.
-    public private(set) var isAwaitingApproval = false
+    public private(set) var purchaseState: PurchaseState = .idle
+
+    /// Whether a button should refuse to start anything, which is the only
+    /// question the paywall asks of `purchaseState`. Deliberately false while an
+    /// Ask to Buy is outstanding: that answer is somewhere else, and the buttons
+    /// have no reason to stay dead waiting for it.
+    public var isBusy: Bool {
+        purchaseState == .working
+    }
+
+    /// Whether a purchase went to Ask to Buy, so the paywall says so rather than
+    /// looking as though the button did nothing.
+    public var isAwaitingApproval: Bool {
+        purchaseState == .awaitingApproval
+    }
 
     private let front: any StoreFront
     private let entitlements: any EntitlementSyncing
@@ -162,22 +184,22 @@ public final class SubscriptionStore {
     /// rather than from the server's, so the screen changes the moment the sheet
     /// dismisses.
     public func purchase(_ tier: SubscriptionTier) async {
-        guard !isBusy else { return }
-        isBusy = true
-        isAwaitingApproval = false
-        defer { isBusy = false }
+        guard purchaseState != .working else { return }
+        purchaseState = .working
 
         do {
             switch try await front.purchase(tier) {
             case let .purchased(transaction):
                 await submit(transaction)
                 await refresh()
+                purchaseState = .idle
             case .pending:
-                isAwaitingApproval = true
+                purchaseState = .awaitingApproval
             case .cancelled:
-                break
+                purchaseState = .idle
             }
         } catch {
+            purchaseState = .idle
             // Not surfaced. Every failure here is either the person's own
             // cancellation dressed differently or an App Store outage, and a
             // paywall that shows a technical error has already lost the sale it
@@ -191,9 +213,13 @@ public final class SubscriptionStore {
     ///
     /// It prompts for an App Store password, so it runs only from a button.
     public func restore() async {
-        guard !isBusy else { return }
-        isBusy = true
-        defer { isBusy = false }
+        guard purchaseState != .working else { return }
+        // Restored to what it was rather than to idle: a restore run while an
+        // Ask to Buy is still outstanding must not clear the notice that
+        // explains why nothing has happened yet.
+        let resting = purchaseState
+        purchaseState = .working
+        defer { purchaseState = resting }
 
         do {
             try await front.restore()

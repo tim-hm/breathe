@@ -6,10 +6,30 @@ public enum JourneyRepositoryError: Error, Equatable {
     /// Everything the journey does over the network is optional, so a caller's
     /// correct response is almost always to try again later.
     case transport(String)
+    /// The server understood the request and refused it on a condition somebody
+    /// can put right. Today that is only `AgeBandUnset`: the decade board asked
+    /// for by a profile that has not said which decade. Its own case because
+    /// folding it into `.transport` presents the one actionable leaderboard
+    /// failure as an outage, to a person with full signal.
+    case failedPrecondition(String)
     /// The response parsed but described something this app cannot represent.
     /// Distinct from `.transport` because retrying will not help: the client and
     /// server contracts have diverged.
     case malformedResponse(String)
+    /// A value on this device does not fit the field the wire carries it in.
+    ///
+    /// These numbers come back from `sessions.json` and `bolt-scores.json`,
+    /// plain files a person may edit and a backup may restore, and every counter
+    /// the proto carries is unsigned 32-bit. Thrown rather than trapped because
+    /// `SessionSyncQueue.sync()` runs on every foreground: a trap there is a
+    /// crash loop with no way out short of deleting the app.
+    ///
+    /// What it costs is a sync that stops rather than an app that crashes — the
+    /// offending record sits at the head of the queue and everything later waits
+    /// behind it. Range-checking where the file is decoded, on `SessionRecord`
+    /// itself, would cost one record instead of all of them; this case is as
+    /// deep as the wire boundary can put it.
+    case malformedRequest(String)
 }
 
 /// The network side of the journey.
@@ -50,11 +70,18 @@ public struct JourneyRepository: JourneySyncing {
 
     public func record(_ sessions: [SessionRecord]) async throws {
         var request = Breathe_V1_RecordSessionsRequest()
-        request.sessions = sessions.map(\.proto)
+        // One unrepresentable session fails the batch rather than being dropped
+        // from it, matching what the server does with a batch it cannot accept:
+        // a send silently short of what the caller handed over is worse than a
+        // deferred one. See `malformedRequest` for what that costs.
+        request.sessions = try sessions.map { try $0.proto }
 
         let response = await client.recordSessions(request: request)
         guard response.message != nil else {
-            throw Self.transportError(response.error)
+            throw Self.failure(
+                unmetPrecondition: response.code == .failedPrecondition,
+                response.error
+            )
         }
     }
 
@@ -64,21 +91,27 @@ public struct JourneyRepository: JourneySyncing {
 
         let response = await client.deleteSessions(request: request)
         guard response.message != nil else {
-            throw Self.transportError(response.error)
+            throw Self.failure(
+                unmetPrecondition: response.code == .failedPrecondition,
+                response.error
+            )
         }
     }
 
     public func record(_ score: BoltScore) async throws {
         var request = Breathe_V1_RecordBoltScoreRequest()
         request.clientScoreID = score.id.uuidString
-        request.seconds = UInt32(max(0, score.seconds))
-        let measured = timestampParts(score.measuredAt)
+        request.seconds = try onTheWire(score.seconds, "a pause in seconds", of: score.id)
+        let measured = try timestampParts(score.measuredAt)
         request.measuredAt.seconds = measured.seconds
         request.measuredAt.nanos = measured.nanos
 
         let response = await client.recordBoltScore(request: request)
         guard response.message != nil else {
-            throw Self.transportError(response.error)
+            throw Self.failure(
+                unmetPrecondition: response.code == .failedPrecondition,
+                response.error
+            )
         }
     }
 
@@ -88,7 +121,10 @@ public struct JourneyRepository: JourneySyncing {
 
         let response = await client.getJourney(request: request)
         guard let message = response.message else {
-            throw Self.transportError(response.error)
+            throw Self.failure(
+                unmetPrecondition: response.code == .failedPrecondition,
+                response.error
+            )
         }
 
         return try message.recentSessions.map { try SessionRecord(proto: $0) }
@@ -105,7 +141,10 @@ public struct JourneyRepository: JourneySyncing {
 
         let response = await client.getLeaderboard(request: request)
         guard let message = response.message else {
-            throw Self.transportError(response.error)
+            throw Self.failure(
+                unmetPrecondition: response.code == .failedPrecondition,
+                response.error
+            )
         }
 
         return Leaderboard(
@@ -133,8 +172,20 @@ public struct JourneyRepository: JourneySyncing {
         Int32(TimeZone.current.secondsFromGMT() / 60)
     }
 
-    private static func transportError(_ error: (any Error)?) -> JourneyRepositoryError {
-        .transport(error?.localizedDescription ?? "the request failed with no message")
+    /// The one distinction a caller acts on: whether anything but waiting could
+    /// change the answer.
+    ///
+    /// The status arrives as a flag rather than as a `Code` because Connect is
+    /// BreatheAPI's dependency and not this target's — the same boundary
+    /// `timestampParts` keeps with SwiftProtobuf. Every call tests it, not only
+    /// the leaderboard's, so a server that begins refusing one of the others on
+    /// a condition does not arrive mislabelled as an outage.
+    private static func failure(
+        unmetPrecondition: Bool,
+        _ error: (any Error)?
+    ) -> JourneyRepositoryError {
+        let message = error?.localizedDescription ?? "the request failed with no message"
+        return unmetPrecondition ? .failedPrecondition(message) : .transport(message)
     }
 }
 
@@ -157,18 +208,24 @@ extension SessionRecord {
         )
     }
 
+    /// Throwing, unlike the decoders it sits beside, because every number here
+    /// arrives from `sessions.json` — a file `SessionRecord`'s own doc promises
+    /// a person can read, which a backup can restore and `JSONFileStore.load()`
+    /// range-checks not at all — and lands in an unsigned 32-bit field.
     var proto: Breathe_V1_SessionRecord {
-        var message = Breathe_V1_SessionRecord()
-        message.clientSessionID = id.uuidString
-        message.techniqueSlug = techniqueSlug
-        let started = timestampParts(startedAt)
-        message.startedAt.seconds = started.seconds
-        message.startedAt.nanos = started.nanos
-        message.durationMs = UInt32(max(0, durationMs))
-        message.cyclesCompleted = UInt32(max(0, cyclesCompleted))
-        message.breathCount = UInt32(max(0, breathCount))
-        message.completed = completed
-        return message
+        get throws {
+            var message = Breathe_V1_SessionRecord()
+            message.clientSessionID = id.uuidString
+            message.techniqueSlug = techniqueSlug
+            let started = try timestampParts(startedAt)
+            message.startedAt.seconds = started.seconds
+            message.startedAt.nanos = started.nanos
+            message.durationMs = try onTheWire(durationMs, "a duration in ms", of: id)
+            message.cyclesCompleted = try onTheWire(cyclesCompleted, "a cycle count", of: id)
+            message.breathCount = try onTheWire(breathCount, "a breath count", of: id)
+            message.completed = completed
+            return message
+        }
     }
 }
 
@@ -181,15 +238,41 @@ extension SessionRecord {
 /// rather than an obstacle to it.
 ///
 /// The nanoseconds are clamped, because a rounding that reached a full billion
-/// would encode a timestamp the server refuses.
-private func timestampParts(_ instant: Date) -> (seconds: Int64, nanos: Int32) {
+/// would encode a timestamp the server refuses. Past the seconds guard the
+/// fraction is known to be in `0 ..< 1`, so they cannot overflow.
+private func timestampParts(_ instant: Date) throws -> (seconds: Int64, nanos: Int32) {
     let interval = instant.timeIntervalSince1970
     let whole = interval.rounded(.down)
 
+    guard let seconds = Int64(exactly: whole) else {
+        throw JourneyRepositoryError.malformedRequest(
+            "\(instant) is not an instant the wire can carry"
+        )
+    }
+
     return (
-        seconds: Int64(whole),
+        seconds: seconds,
         nanos: min(999_999_999, Int32(((interval - whole) * 1_000_000_000).rounded()))
     )
+}
+
+/// One of the wire's unsigned 32-bit counters.
+///
+/// Refused rather than clamped: a clamp on either end reports a session nobody
+/// did, and a person's own figures are the ones they are most likely to believe.
+///
+/// - Parameters:
+///   - value: the count as this device stores it, in `Int`.
+///   - name: what it counts, for the log a skipped sync leaves behind.
+///   - owner: the record it belongs to, so the log names something findable in
+///     the file.
+private func onTheWire(_ value: Int, _ name: String, of owner: UUID) throws -> UInt32 {
+    guard let converted = UInt32(exactly: value) else {
+        throw JourneyRepositoryError.malformedRequest(
+            "\(owner) holds \(name) of \(value), which the wire cannot carry"
+        )
+    }
+    return converted
 }
 
 extension LeaderboardBoard {

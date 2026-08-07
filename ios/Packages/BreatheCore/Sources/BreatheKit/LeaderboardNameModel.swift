@@ -34,6 +34,25 @@ public final class LeaderboardNameModel {
     /// True while the save is in flight, so the screen can refuse a second one.
     public private(set) var isSaving = false
 
+    /// What the server said when it refused the answers, for the screen to show
+    /// beside the field; `nil` when it did not refuse.
+    ///
+    /// A refusal is not a failed send. An unreachable server leaves the answer
+    /// stored and retried, so showing it as saved is honest; a refused one never
+    /// becomes true, and the same silence would leave somebody watching for a
+    /// name that will never appear on a board.
+    ///
+    /// Read from the store rather than copied out of it, so a refusal that
+    /// arrives from anywhere else — a launch's `syncIfNeeded`, another screen —
+    /// cannot leave this one showing a verdict that has since been replaced.
+    public var rejection: String? {
+        if case let .rejected(reason) = store.syncState {
+            reason
+        } else {
+            nil
+        }
+    }
+
     private let store: ProfileStore
 
     public init(store: ProfileStore) {
@@ -55,8 +74,8 @@ public final class LeaderboardNameModel {
     ///
     /// Awaited, unlike onboarding's: a taken name comes back suffixed, and
     /// somebody should see that here rather than discover it on a board later. A
-    /// failure is still not an error — the answer is stored locally and the next
-    /// launch retries it.
+    /// server that could not be reached is still not an error — the answer is
+    /// stored locally and the next launch retries it.
     public func save() async {
         guard canSave else { return }
         isSaving = true
@@ -67,6 +86,15 @@ public final class LeaderboardNameModel {
         profile.birthYearBand = birthYearBand
 
         await store.save(profile)
-        displayName = store.profile.displayName
+
+        switch store.syncState {
+        case .rejected:
+            // The stored name is deliberately not read back here. It is the one
+            // the server refused, and putting it in the field would present a
+            // name nobody will ever see on a board as the one that was saved.
+            break
+        case .settled, .pending:
+            displayName = store.profile.displayName
+        }
     }
 }

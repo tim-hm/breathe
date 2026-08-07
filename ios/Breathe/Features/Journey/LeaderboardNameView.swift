@@ -27,12 +27,17 @@ struct LeaderboardNameView: View {
             } header: {
                 Text("Display name")
             } footer: {
-                Text(
-                    "This is the only thing other people see — no goals, no notes, no history. "
-                        + "Leave it empty and you stay invisible on every board while still "
-                        + "seeing your own place. If somebody already has the name, we'll add a "
-                        + "number to yours."
-                )
+                if let rejection = model.rejection {
+                    Text(rejection)
+                        .foregroundStyle(Theme.Accent.caution)
+                } else {
+                    Text(
+                        "This is the only thing other people see — no goals, no notes, no history. "
+                            + "Leave it empty and you stay invisible on every board while still "
+                            + "seeing your own place. If somebody already has the name, we'll add a "
+                            + "number to yours."
+                    )
+                }
             }
             .listRowBackground(Theme.Surface.raised)
 
@@ -56,7 +61,12 @@ struct LeaderboardNameView: View {
                 Button("Save") {
                     Task {
                         await model.save()
-                        dismiss()
+                        // A refusal keeps the screen up. Dismissing over it would
+                        // put the message somewhere nobody is looking, and leave
+                        // a name that will never reach a board reading as saved.
+                        if model.rejection == nil {
+                            dismiss()
+                        }
                     }
                 }
                 .disabled(!model.canSave)
