@@ -12,6 +12,7 @@
 // functions, which does not cover the harness's own helpers.
 #![allow(clippy::expect_used, clippy::panic)]
 
+mod account;
 mod assistant;
 mod entitlement;
 mod harness;

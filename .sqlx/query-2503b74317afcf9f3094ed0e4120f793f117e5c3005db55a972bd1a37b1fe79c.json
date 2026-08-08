@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO sessions (\n            user_id, client_session_id, technique_slug, started_at,\n            duration_ms, cycles_completed, breath_count, completed\n         ) VALUES ($1, $2, $3, now(), 60000, 5, 20, true)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2503b74317afcf9f3094ed0e4120f793f117e5c3005db55a972bd1a37b1fe79c"
+}

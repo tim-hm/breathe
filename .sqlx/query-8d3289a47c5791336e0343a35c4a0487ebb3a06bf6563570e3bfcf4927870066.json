@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT seconds FROM bolt_scores WHERE user_id = $1 ORDER BY seconds",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "seconds",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "bolt_scores",
+            "name": "seconds"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8d3289a47c5791336e0343a35c4a0487ebb3a06bf6563570e3bfcf4927870066"
+}

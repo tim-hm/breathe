@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE bolt_scores AS moving\n            SET user_id = $2\n          WHERE moving.user_id = $1\n            AND NOT EXISTS (\n              SELECT 1 FROM bolt_scores AS held\n               WHERE held.user_id = $2\n                 AND held.client_score_id = moving.client_score_id\n            )",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "14a6f65044c7dfe982728f5d7dde313d602bfdde0d5e349478398ec1f9f8475c"
+}

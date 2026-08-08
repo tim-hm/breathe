@@ -5,12 +5,14 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use tonic::service::Routes;
 
+use crate::features::account::handlers::grpc::AccountServiceImpl;
 use crate::features::assistant::handlers::grpc::AssistantServiceImpl;
 use crate::features::entitlement::handlers::grpc::EntitlementServiceImpl;
 use crate::features::journey::handlers::grpc::JourneyServiceImpl;
 use crate::features::profile::handlers::grpc::ProfileServiceImpl;
 use crate::features::technique::handlers::grpc::TechniqueServiceImpl;
 use crate::proto::ond::v1::FILE_DESCRIPTOR_SET;
+use crate::proto::ond::v1::account_service_server::AccountServiceServer;
 use crate::proto::ond::v1::assistant_service_server::AssistantServiceServer;
 use crate::proto::ond::v1::entitlement_service_server::EntitlementServiceServer;
 use crate::proto::ond::v1::journey_service_server::JourneyServiceServer;
@@ -66,6 +68,10 @@ pub fn build_services(state: &Arc<AppState>) -> Result<Routes> {
         .add_service(
             EntitlementServiceServer::new(EntitlementServiceImpl::new(Arc::clone(state)))
                 .max_decoding_message_size(MAX_REQUEST_BYTES),
+        )
+        .add_service(
+            AccountServiceServer::new(AccountServiceImpl::new(Arc::clone(state)))
+                .max_decoding_message_size(MAX_REQUEST_BYTES),
         );
 
     if state.config.is_local() {
@@ -88,6 +94,7 @@ mod tests {
     use tower::ServiceExt;
 
     use super::*;
+    use crate::account::AppleIdentityVerifier;
     use crate::assistant::DisabledModelClient;
     use crate::config::{Config, Environment};
     use crate::entitlement::AppStoreVerifier;
@@ -102,8 +109,8 @@ mod tests {
 
     /// A state with no database behind it. `connect_lazy` parses the URL and
     /// connects on first use, and registration touches neither — nor does it
-    /// touch the model or the verifier, which are here only because `AppState`
-    /// has the fields.
+    /// touch the model or either verifier, which are here only because
+    /// `AppState` has the fields.
     fn state_for(environment: Environment) -> Arc<AppState> {
         AppState::new(
             PgPool::connect_lazy(DATABASE_URL).unwrap(),
@@ -115,6 +122,7 @@ mod tests {
             },
             Arc::new(DisabledModelClient),
             Arc::new(AppStoreVerifier),
+            Arc::new(AppleIdentityVerifier::new().unwrap()),
         )
     }
 

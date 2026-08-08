@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package ond.v1;
+
+// AccountService attaches a real credential to the anonymous identity every
+// other service is scoped to.
+//
+// Everything else in this API answers whoever the `ond-user-id` header names,
+// and possession of that id is the whole of the claim. That works until the
+// device changes: a new phone, or a restore that missed the Keychain, and the
+// history is unreachable with nothing to prove it was ever yours. Signing in
+// with Apple is what makes it reachable again.
+//
+// Signing in is never required. The free tier is the whole app on one device,
+// and a person who never calls this keeps the anonymous identity they started
+// with — which is why this is a service of its own rather than a gate in front
+// of the others.
+service AccountService {
+  // Binds the caller's identity to an Apple account, and returns the identity
+  // the device should use from now on.
+  //
+  // The returned id is not always the one that called: an Apple account already
+  // bound to another row means that row is the person's real history, so their
+  // journey is merged into it and the device adopts its id. A client that
+  // ignores the response keeps writing to an identity that no longer exists.
+  rpc SignInWithApple(SignInWithAppleRequest) returns (SignInWithAppleResponse);
+}
+
+message SignInWithAppleRequest {
+  // The `identityToken` from `ASAuthorizationAppleIDCredential`, verbatim: a
+  // JWT Apple signed, whose `sub` names the Apple account.
+  //
+  // Sent rather than the `user` string beside it in the same credential,
+  // because that one is a plain value a modified client can type — and it is
+  // the key this server files somebody's whole history under.
+  string identity_token = 1;
+}
+
+message SignInWithAppleResponse {
+  // The identity to send in `ond-user-id` from now on, and to persist in place
+  // of whatever the device held.
+  //
+  // Equal to the caller on a first sign-in, and the older identity when this
+  // Apple account already had one — see the RPC's own note. Always populated,
+  // so a client stores it unconditionally rather than deciding whether the
+  // answer applies to it.
+  string user_id = 1;
+}

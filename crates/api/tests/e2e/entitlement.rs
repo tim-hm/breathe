@@ -22,8 +22,8 @@ use axum::Router;
 use chrono::{Duration, Utc};
 
 use crate::harness::{
-    GrpcWebResponse, ScriptedModel, TestDatabase, allowance, build_app_with, call_grpc_web_with,
-    subscribe,
+    GrpcWebResponse, ScriptedIdentityVerifier, ScriptedModel, TestDatabase, allowance,
+    build_app_with, call_grpc_web_with, subscribe,
 };
 
 const SUBMIT: &str = "/ond.v1.EntitlementService/SubmitAppStoreTransaction";
@@ -161,7 +161,12 @@ async fn recommend(
     user: &str,
 ) -> pb::GetRecommendationResponse {
     call_grpc_web_with::<_, pb::GetRecommendationResponse>(
-        build_app_with(db.pool.clone(), model, verifier),
+        build_app_with(
+            db.pool.clone(),
+            model,
+            verifier,
+            ScriptedIdentityVerifier::refusing(),
+        ),
         GET_RECOMMENDATION,
         &pb::GetRecommendationRequest::default(),
         &[(USER_ID_HEADER, user)],
