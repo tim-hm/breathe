@@ -96,6 +96,22 @@ public actor SessionSyncQueue {
         return await restore()
     }
 
+    /// Syncs, and walks the server's history again whatever this queue has
+    /// already restored.
+    ///
+    /// For the one event that makes an answered restore stale: adopting a
+    /// different identity. Signing in on a second device hands this install the
+    /// id whose history it came for, and the queue is built once at launch — so
+    /// without this the journey shows nothing until the app is next relaunched,
+    /// which is not a person restoring their practice.
+    ///
+    /// - Returns: whatever `sync()` returns — whether the local stores changed.
+    @discardableResult
+    public func syncAdoptedIdentity() async -> Bool {
+        hasRestored = false
+        return await sync()
+    }
+
     /// Tells the server about sessions deleted here, and forgets the tombstone
     /// only once it has said so.
     ///

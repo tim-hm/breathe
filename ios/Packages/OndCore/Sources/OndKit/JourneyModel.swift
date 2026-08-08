@@ -86,6 +86,18 @@ public final class JourneyModel {
         }
     }
 
+    /// The same sync, for the launch where the identity changed under it.
+    ///
+    /// Signing in can hand this device an older identity than the one it
+    /// arrived with, and the history behind that id is exactly what the person
+    /// signed in to get back. `sync()` would not go looking: its restore runs
+    /// once per queue, because only a reinstall used to change the answer.
+    public func syncAdoptedIdentity() async {
+        if await queue.syncAdoptedIdentity() {
+            await refresh()
+        }
+    }
+
     /// Stores a controlled-pause measurement and answers whether it is a new
     /// best.
     ///

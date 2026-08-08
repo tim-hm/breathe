@@ -90,6 +90,12 @@ private actor ServerSpy: JourneySyncing {
         isReachable = true
     }
 
+    /// Puts history behind the identity this "server" is being asked about —
+    /// what signing in on a second device changes about the answer.
+    func hold(_ sessions: [SessionRecord]) {
+        held = sessions
+    }
+
     func record(_ sessions: [SessionRecord]) async throws {
         guard isReachable else { throw Offline() }
         received.append(contentsOf: sessions.map(\.id))
@@ -286,6 +292,32 @@ struct SessionSyncQueueTests {
             await server.restoreCalls == afterFirst,
             "two further appearances cost nothing on the wire"
         )
+    }
+
+    /// The exception that guard has to make. Signing in hands this install the
+    /// identity whose history it came for, and the queue is built once at
+    /// launch — so a restore already answered under the old id is exactly the
+    /// answer that is now stale. Without this, a person restoring their journey
+    /// on a second device sees nothing until they next relaunch the app.
+    @Test("Adopting an identity restores again, whatever this queue already asked")
+    func anAdoptedIdentityRestoresAgain() async {
+        let theirs = session(-48)
+        let sessions = SessionSpy()
+        let server = ServerSpy()
+        let queue = SessionSyncQueue(
+            sessions: sessions,
+            scores: ScoreSpy(),
+            journeys: server,
+            ledger: SyncLedger(defaults: defaults())
+        )
+
+        await queue.sync()
+        #expect(await sessions.stored.isEmpty, "this device has no history of its own")
+
+        await server.hold([theirs])
+        #expect(await queue.sync() == false, "and would never ask a second time")
+        #expect(await queue.syncAdoptedIdentity(), "signing in is what asks again")
+        #expect(await sessions.stored.map(\.id) == [theirs.id])
     }
 
     /// The other half of that guard: "already run" has to mean the walk
