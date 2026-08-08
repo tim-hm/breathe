@@ -486,10 +486,46 @@ description = "Build the release image, ship it to the box over SSH, migrate, re
 env = { AWS_PROFILE = "ond" }
 run = ["""
   set -eu
-  # .dockerignore excludes .git, so build.rs cannot read the commit itself —
-  # without this, /about reports "unknown" and cannot say what is deployed.
+  # The hash /about will report, and it comes from origin/main rather than HEAD
+  # because every deploy runs from the gitbutler/workspace branch, whose HEAD is
+  # a synthetic commit on no branch: `git branch -a --contains` it and nothing
+  # comes back. An endpoint whose whole job is to say what is running must name
+  # something the reader can open on GitHub.
+  #
+  # A failed fetch is a warning rather than a stop. The last fetched origin/main
+  # is still a pushed commit, so the hash still resolves; only its currency is
+  # lost, and a GitHub outage should not also mean the box cannot be redeployed.
+  git fetch --quiet origin '+refs/heads/main:refs/remotes/origin/main' \
+    || echo 'deploy: could not fetch origin/main, comparing against the last fetched state' >&2
+  commit="$(git rev-parse --short origin/main)"
+
+  # That hash is a claim about what is in the image, so the tree being built has
+  # to be that commit. The diff catches uncommitted edits and workspace-only
+  # commits in one comparison; untracked files are asked for separately because
+  # they reach the build context and the rsyncs without ever reaching a commit.
+  drift="$(git diff --name-only origin/main --; git ls-files --others --exclude-standard)"
+  if [ -n "$drift" ]; then
+    # DEPLOY_DRIFT_ACK is the escape hatch, on the reasoning that this is the one
+    # task somebody reaches for when production is already broken, and a hotfix
+    # that cannot wait for a PR is a real thing. It is opt-in per invocation, so
+    # the default stays fail-closed; it demands a sentence rather than a boolean,
+    # so the reason travels with the run; and the hash it ships says -dirty,
+    # which means the shortcut is still visible in /about days later.
+    if [ -z "${DEPLOY_DRIFT_ACK:-}" ]; then
+      echo "deploy: the working tree is not origin/main ($commit), refusing to ship a hash that describes something else:" >&2
+      echo "$drift" >&2
+      echo 'deploy: land the work and `but pull`, or set DEPLOY_DRIFT_ACK="<why>" to ship it reported as -dirty' >&2
+      exit 1
+    fi
+    echo "deploy: drift acknowledged — ${DEPLOY_DRIFT_ACK}" >&2
+    echo "$drift" >&2
+    commit="$commit-dirty"
+  fi
+
+  # Passed in rather than read here: .dockerignore excludes .git, so build.rs
+  # has no repository to ask once the build context is assembled.
   docker build --platform linux/arm64 \
-    --build-arg GIT_COMMIT_HASH="$(git rev-parse --short HEAD)" \
+    --build-arg GIT_COMMIT_HASH="$commit" \
     -t ond-api:latest .
   """, """
   set -eu
