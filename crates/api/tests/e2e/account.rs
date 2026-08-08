@@ -23,6 +23,7 @@ use crate::harness::{
 };
 
 const SIGN_IN: &str = "/ond.v1.AccountService/SignInWithApple";
+const DELETE: &str = "/ond.v1.AccountService/DeleteAccount";
 
 /// The identity a person already had — the one a returning sign-in hands back.
 const OLD_DEVICE: &str = "acc00000-0000-4000-8000-000000000001";
@@ -53,6 +54,16 @@ async fn try_sign_in(
 /// The id the device should carry from now on.
 async fn sign_in(app: Router, caller: &str, token: &str) -> String {
     try_sign_in(app, caller, token).await.into_ok().user_id
+}
+
+async fn delete_account(app: Router, caller: &str) -> GrpcWebResponse<pb::DeleteAccountResponse> {
+    call_grpc_web_with(
+        app,
+        DELETE,
+        &pb::DeleteAccountRequest {},
+        &[(USER_ID_HEADER, caller)],
+    )
+    .await
 }
 
 /// A user row, as the identity layer would have created it on the device's first
@@ -153,6 +164,33 @@ async fn quota_of(pool: &PgPool, user: &str) -> Vec<(NaiveDate, i32)> {
     .into_iter()
     .map(|row| (row.usage_date, row.calls))
     .collect()
+}
+
+/// The App Store binding, written straight onto the row the way
+/// `EntitlementService` writes it. Separate from `subscribe` because it is the
+/// one subscription column a deletion has to *release* rather than merely erase.
+async fn given_app_store_binding(pool: &PgPool, user: &str, transaction_id: &str) {
+    sqlx::query!(
+        "UPDATE users
+            SET app_store_original_transaction_id = $2, subscription_claimed_at = now()
+          WHERE id = $1",
+        uuid(user),
+        transaction_id
+    )
+    .execute(pool)
+    .await
+    .expect("the binding is written");
+}
+
+/// Which identity holds an App Store transaction, or none.
+async fn holder_of_transaction(pool: &PgPool, transaction_id: &str) -> Option<Uuid> {
+    sqlx::query_scalar!(
+        "SELECT id FROM users WHERE app_store_original_transaction_id = $1",
+        transaction_id
+    )
+    .fetch_optional(pool)
+    .await
+    .expect("the row is readable")
 }
 
 async fn exists(pool: &PgPool, user: &str) -> bool {
@@ -477,5 +515,134 @@ async fn an_installation_bound_to_one_apple_account_is_refused_a_second() {
         apple_account_of(&db.pool, NEW_DEVICE).await.as_deref(),
         Some(APPLE_ACCOUNT),
         "the first account keeps the row it is the only record of"
+    );
+}
+
+/// The promise `web/privacy.html` makes, asserted table by table: a person with
+/// a profile, a signed-in binding, sessions, a controlled pause, spent assistant
+/// allowance and a subscription asks to be erased, and none of it survives.
+///
+/// Every child table is checked by name rather than trusting `ON DELETE CASCADE`
+/// in the abstract. A table added later with `ON DELETE SET NULL`, or with no
+/// foreign key at all, is exactly the change that would leave somebody's history
+/// behind while every other assertion here still passed.
+///
+/// The Apple account and the App Store transaction are checked from the other
+/// side — not "the column is gone", which the row's absence guarantees, but "the
+/// value is claimable again". Both are `UNIQUE`, so a deletion that somehow left
+/// either behind would lock the person out of ever coming back under the same
+/// Apple ID or being entitled by the subscription they are still paying for.
+#[tokio::test]
+async fn deleting_an_account_leaves_nothing_behind() {
+    let db = TestDatabase::create("account_delete").await;
+    let verifier = ScriptedIdentityVerifier::with(vec![("jws-apple", APPLE_ACCOUNT)]);
+    let transaction = "2000000900000001";
+
+    given_user(&db.pool, OLD_DEVICE, "Leaving").await;
+    given_session(
+        &db.pool,
+        OLD_DEVICE,
+        "5e551011-0000-4000-8000-00000000000a",
+        "breathed",
+    )
+    .await;
+    given_bolt_score(&db.pool, OLD_DEVICE, "b01f0000-0000-4000-8000-00000000000a", 37).await;
+    given_quota(&db.pool, OLD_DEVICE, 0, 4).await;
+    subscribe(&db.pool, OLD_DEVICE, "COACH").await;
+    given_app_store_binding(&db.pool, OLD_DEVICE, transaction).await;
+    sign_in(
+        db.app_with_identity(verifier.clone()),
+        OLD_DEVICE,
+        "jws-apple",
+    )
+    .await;
+
+    let response = delete_account(db.app_with_identity(verifier.clone()), OLD_DEVICE).await;
+    assert_eq!(response.status, tonic::Code::Ok as i32);
+
+    assert!(!exists(&db.pool, OLD_DEVICE).await);
+    assert!(sessions_of(&db.pool, OLD_DEVICE).await.is_empty());
+    assert!(bolt_seconds_of(&db.pool, OLD_DEVICE).await.is_empty());
+    assert!(quota_of(&db.pool, OLD_DEVICE).await.is_empty());
+    assert_eq!(holder_of_transaction(&db.pool, transaction).await, None);
+
+    let returning = sign_in(db.app_with_identity(verifier), NEW_DEVICE, "jws-apple").await;
+    assert_eq!(
+        returning, NEW_DEVICE,
+        "the Apple account is free, so a later sign-in is a first one rather than a merge"
+    );
+}
+
+/// Scoped to the caller, which is the whole of the authorisation on this RPC:
+/// the request carries no id, so the only person it can name is the one in the
+/// header.
+#[tokio::test]
+async fn deleting_an_account_leaves_everybody_else_alone() {
+    let db = TestDatabase::create("account_delete_scope").await;
+    let verifier = ScriptedIdentityVerifier::with(vec![("jws-apple", APPLE_ACCOUNT)]);
+
+    given_user(&db.pool, OLD_DEVICE, "Staying").await;
+    given_session(
+        &db.pool,
+        OLD_DEVICE,
+        "5e551011-0000-4000-8000-00000000000b",
+        "kept",
+    )
+    .await;
+    given_user(&db.pool, NEW_DEVICE, "Leaving").await;
+    given_session(
+        &db.pool,
+        NEW_DEVICE,
+        "5e551011-0000-4000-8000-00000000000c",
+        "erased",
+    )
+    .await;
+
+    delete_account(db.app_with_identity(verifier), NEW_DEVICE).await;
+
+    assert!(!exists(&db.pool, NEW_DEVICE).await);
+    assert_eq!(sessions_of(&db.pool, OLD_DEVICE).await.len(), 1);
+}
+
+/// The reason the client mints a fresh identity the instant this returns, pinned
+/// on the server side where the behaviour actually lives.
+///
+/// `identity::resolve` upserts a row for any well-formed id and cannot tell an
+/// erased one from a first launch, so a single later request on the old id
+/// brings the row back — empty, unreachable from any Apple account, and
+/// belonging to somebody who asked to be forgotten. There is no server-side
+/// defence to add without keeping a record of every id ever erased, which is the
+/// opposite of what was asked for.
+#[tokio::test]
+async fn a_request_on_an_erased_identity_recreates_it_empty() {
+    let db = TestDatabase::create("account_delete_resurrect").await;
+    let verifier = ScriptedIdentityVerifier::with(vec![("jws-apple", APPLE_ACCOUNT)]);
+
+    given_user(&db.pool, OLD_DEVICE, "Leaving").await;
+    given_session(
+        &db.pool,
+        OLD_DEVICE,
+        "5e551011-0000-4000-8000-00000000000d",
+        "erased",
+    )
+    .await;
+
+    delete_account(db.app_with_identity(verifier.clone()), OLD_DEVICE).await;
+    assert!(!exists(&db.pool, OLD_DEVICE).await);
+
+    // The catalogue: the most innocent request there is, and identified, which
+    // is all it takes.
+    let _: GrpcWebResponse<pb::ListTechniquesResponse> = call_grpc_web_with(
+        db.app_with_identity(verifier),
+        "/ond.v1.TechniqueService/ListTechniques",
+        &pb::ListTechniquesRequest {},
+        &[(USER_ID_HEADER, OLD_DEVICE)],
+    )
+    .await;
+
+    assert!(exists(&db.pool, OLD_DEVICE).await);
+    assert!(
+        sessions_of(&db.pool, OLD_DEVICE).await.is_empty(),
+        "the row is back, but nothing that was filed under it is"
     );
 }

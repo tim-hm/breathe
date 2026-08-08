@@ -7,9 +7,13 @@
 //! one device — which is why this is a service of its own rather than a gate in
 //! front of the others.
 //!
-//! The merge that a returning sign-in performs is the interesting half, and it
-//! is documented in full on `repository::merge`: what moves, what is summed, what
-//! is deliberately left behind, and why each of those follows from the schema.
+//! It is also where an identity stops existing, by either of the two routes
+//! there are. The merge a returning sign-in performs is documented in full on
+//! `repository::merge`: what moves, what is summed, what is deliberately left
+//! behind, and why each of those follows from the schema. `DeleteAccount` is the
+//! other, and keeps nothing at all — it is the promise `web/privacy.html` makes
+//! about erasure, and what Guideline 5.1.1(v) requires of any app that offers an
+//! account.
 //!
 //! `verifier/` is the seam, in the shape `entitlement::verifier` established — a
 //! trait, a real implementation, and a scripted one for the tests.
