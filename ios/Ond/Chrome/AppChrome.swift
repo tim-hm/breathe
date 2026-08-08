@@ -26,6 +26,7 @@ import SwiftUI
 /// buttons changed colour with a dial on another tab would read as a bug.
 struct AppChrome: View {
     let catalogue: TechniqueListModel
+    let own: UserTechniqueModel
     let sessions: any SessionRecording
     let journey: JourneyModel
     let profiles: ProfileStore
@@ -71,6 +72,7 @@ struct AppChrome: View {
     private var roots: AppRoots {
         AppRoots(
             catalogue: catalogue,
+            own: own,
             sessions: sessions,
             journey: journey,
             profiles: profiles,

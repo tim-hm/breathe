@@ -32,7 +32,7 @@ public enum UserTechniqueRepositoryError: LocalizedError, Equatable {
 /// The limits travel with the list rather than being fetched separately: a
 /// composer needs them before there is anything to list, which is exactly the
 /// first launch this call covers.
-public struct UserTechniqueList: Sendable, Equatable, Codable {
+public struct UserTechniqueList: Sendable, Equatable {
     public let techniques: [Technique]
     public let limits: AuthoringLimits
 
@@ -101,7 +101,10 @@ public struct UserTechniqueRepository: UserTechniqueStoring {
         return try Technique(authored: message.technique)
     }
 
-    public func updateUserTechnique(id: String, to draft: TechniqueDraft) async throws -> Technique {
+    public func updateUserTechnique(
+        id: String,
+        to draft: TechniqueDraft
+    ) async throws -> Technique {
         var request = Ond_V1_UpdateUserTechniqueRequest()
         request.id = id
         request.draft = draft.proto

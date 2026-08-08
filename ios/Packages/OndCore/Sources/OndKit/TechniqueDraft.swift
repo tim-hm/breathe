@@ -21,13 +21,11 @@ public struct DraftPhase: Sendable, Equatable, Identifiable {
 /// One stage somebody is composing. No `openEnded`: a hold the person ends
 /// belongs to the curated protocols that carry the copy explaining it, and the
 /// contract has no way to author one.
-public struct DraftStage: Sendable, Equatable, Identifiable {
-    public let id: UUID
+public struct DraftStage: Sendable, Equatable {
     public var phases: [DraftPhase]
     public var cycles: Int
 
-    public init(id: UUID = UUID(), phases: [DraftPhase], cycles: Int) {
-        self.id = id
+    public init(phases: [DraftPhase], cycles: Int) {
         self.phases = phases
         self.cycles = cycles
     }
@@ -87,7 +85,7 @@ public extension TechniqueDraft {
 }
 
 /// One phase kind, and how long a phase of it may be.
-public struct PhaseLimit: Sendable, Equatable, Codable {
+public struct PhaseLimit: Sendable, Equatable {
     public let kind: PhaseKind
     public let range: ClosedRange<Duration>
 
@@ -103,7 +101,7 @@ public struct PhaseLimit: Sendable, Equatable, Codable {
 /// seeded evidence and the counts are the server's ceilings, so a client that
 /// hardcoded either would be offering something the server may refuse — which is
 /// a dial somebody drags to a number that then will not save.
-public struct AuthoringLimits: Sendable, Equatable, Codable {
+public struct AuthoringLimits: Sendable, Equatable {
     /// In the order a cycle runs — inhale, hold, exhale, hold — which is the
     /// order a picker offers them in. A kind absent from this list cannot be
     /// authored at all.

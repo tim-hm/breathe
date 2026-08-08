@@ -32,7 +32,11 @@ public final class UserTechniqueModel {
 
     /// What has been composed, or nothing while the first load is in flight.
     public var techniques: [Technique] {
-        if case let .loaded(list) = state { list.techniques } else { [] }
+        if case let .loaded(list) = state {
+            list.techniques
+        } else {
+            []
+        }
     }
 
     /// What the server allows, or nil until it has said.
@@ -41,7 +45,11 @@ public final class UserTechniqueModel {
     /// rendered from a guess is one somebody drags to a number that will not
     /// save.
     public var limits: AuthoringLimits? {
-        if case let .loaded(list) = state { list.limits } else { nil }
+        if case let .loaded(list) = state {
+            list.limits
+        } else {
+            nil
+        }
     }
 
     /// Whether there is room for another, which is what a New button reads.
@@ -77,7 +85,10 @@ public final class UserTechniqueModel {
     /// to report, beside the field it objected to, and dropping the list to an
     /// error screen would take away the draft somebody is still editing.
     @discardableResult
-    public func save(_ draft: TechniqueDraft, replacing id: String? = nil) async throws -> Technique {
+    public func save(
+        _ draft: TechniqueDraft,
+        replacing id: String? = nil
+    ) async throws -> Technique {
         let stored = if let id {
             try await store.updateUserTechnique(id: id, to: draft)
         } else {

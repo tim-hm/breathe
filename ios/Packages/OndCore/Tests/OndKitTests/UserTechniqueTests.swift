@@ -74,19 +74,25 @@ private actor FakeStore: UserTechniqueStoring {
     }
 
     func createUserTechnique(_ draft: TechniqueDraft) async throws -> Technique {
-        if let refusal { throw refusal }
+        if let refusal {
+            throw refusal
+        }
         let technique = stored(draft, id: "id-\(techniques.count)")
         techniques.append(technique)
         return technique
     }
 
     func updateUserTechnique(id: String, to draft: TechniqueDraft) async throws -> Technique {
-        if let refusal { throw refusal }
+        if let refusal {
+            throw refusal
+        }
         return stored(draft, id: id)
     }
 
     func deleteUserTechnique(id: String) async throws {
-        if let refusal { throw refusal }
+        if let refusal {
+            throw refusal
+        }
         techniques.removeAll { $0.id == id }
     }
 }
