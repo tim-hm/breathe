@@ -20,8 +20,8 @@
 //!   decides who gets to spend money.
 //! - **The surface actually needed is one function.** Verifying a client's
 //!   `Transaction.jwsRepresentation` is the only thing this server does with the
-//!   App Store; there is no Server API client, no notification endpoint, and —
-//!   per the roadmap — deliberately no plan for one at V1.
+//!   App Store; there is no Server API client, no notification endpoint, and
+//!   deliberately no plan for one at V1.
 //!
 //! The trade is that Apple's payload schema is transcribed here rather than
 //! tracked upstream. Bounded, because only five fields are read, and additive
@@ -45,10 +45,10 @@
 //!
 //! A `jwsRepresentation` is a signed claim about a moment, not a live read of a
 //! subscription. A refund issued after the client last synced is invisible here
-//! until `StoreKit` hands the client the revoked transaction. That is the
-//! roadmap's deferral of App Store Server Notifications, and it is affordable
-//! because the worst case is honouring a refunded year — not because the gap
-//! isn't real.
+//! until `StoreKit` hands the client the revoked transaction. That is what
+//! deferring App Store Server Notifications costs, and it is affordable because
+//! the worst case is honouring a refunded year — not because the gap isn't
+//! real.
 //!
 //! ## What this rejects that you might not expect
 //!

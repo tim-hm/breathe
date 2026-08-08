@@ -3,9 +3,10 @@ import Testing
 
 /// The reduction from the phone's intensity curves to the wrist's four taps.
 ///
-/// The roadmap names this as M9's main risk: the coarser vocabulary still has to
-/// make an inhale and an exhale feel unmistakably different, and the simulator
-/// plays no haptics, so the mapping is worth pinning where it can be.
+/// This was the watch app's main risk and it has not stopped being one: the
+/// coarser vocabulary still has to make an inhale and an exhale feel
+/// unmistakably different, and the simulator plays no haptics, so the mapping is
+/// worth pinning where it can be.
 @Suite("Watch cues")
 struct WatchCueTests {
     @Test("A breath's direction survives the reduction")
