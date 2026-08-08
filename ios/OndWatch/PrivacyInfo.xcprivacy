@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  The watch app's privacy manifest.
+
+  A second file rather than a copy of the phone's, because the watch bundle is
+  validated on its own inside the submission and because it collects strictly
+  less: its composition root wires no onboarding, no coach, no StoreKit and no
+  leaderboard name, so the only things that leave the wrist are the identity
+  the phone handed it and the sessions breathed on it. Declaring the phone's
+  full set here would describe a bundle that does not exist.
+
+  Two consequences of that are worth stating, since both look like omissions.
+  The wrist writes Mindful Minutes to HealthKit and reads nothing from it, and
+  a write to the device's own Health store is not collection. Breath-hold
+  scores reach the wrist from the phone but are never recorded on it — the
+  sync queue's score store stays empty here — so nothing sends them back.
+-->
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array>
+		<dict>
+			<!-- The identity the phone hands over the pairing. The watch never
+			     mints one, so this is the phone's identifier arriving rather
+			     than a second one. Policy: "There is no account". -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeUserID</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<!-- One record per session breathed on the wrist, synced under the
+			     same rules as the phone's. Policy: "What we store" → "What you
+			     breathe". -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeFitness</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<!-- Same OndKit, same UserDefaults.standard, same reason as the
+			     phone's manifest: a container only this app reads and writes,
+			     with no App Group anywhere in the project. -->
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

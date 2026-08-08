@@ -62,8 +62,20 @@ targets:
         # under Resources and it would ship inside the release bundle.
         excludes:
           - Ond.storekit
+          - PrivacyInfo.xcprivacy
       - path: Ond/Ond.storekit
         buildPhase: none
+      # The privacy manifest, on the other hand, has to reach the bundle root —
+      # it is what App Store Connect derives the nutrition label from, and a
+      # build that ships without it has no label to derive. The glob would file
+      # it under Resources today by the same unrecognised-extension rule above,
+      # so this line is not what makes it work; it is what stops a future
+      # XcodeGen from silently changing its mind. `xcodegen` is pinned to
+      # `latest` in .mise.toml and its extension table has no entry for
+      # `xcprivacy`, so the correct phase is currently a default rather than a
+      # decision. Naming it makes it one.
+      - path: Ond/PrivacyInfo.xcprivacy
+        buildPhase: resources
     dependencies:
       # OndAPI is absent because it is not a product of OndCore at all —
       # the app cannot name that module even by accident. See the target notes in
@@ -180,6 +192,14 @@ targets:
     platform: watchOS
     sources:
       - path: OndWatch
+        excludes:
+          - PrivacyInfo.xcprivacy
+      # Declared for the same reason as the phone target's, and separately
+      # because the watch is validated as its own bundle inside the submission.
+      # Its contents differ: this bundle collects strictly less, and the file
+      # says why.
+      - path: OndWatch/PrivacyInfo.xcprivacy
+        buildPhase: resources
     dependencies:
       # Same three products, and OndAPI absent for the same reason: the
       # watch is another client of the domain, not a second place generated
