@@ -84,8 +84,49 @@ struct TechniqueFigureWordsTests {
 
         #expect(description == """
         One cycle: Breathe in for 4 seconds, Hold, lungs full for 4 seconds, \
-        Breathe out for 4 seconds, Hold, lungs empty for 4 seconds. Repeated 8 times.
+        Breathe out for 4 seconds, Hold, lungs empty for 4 seconds. Repeated 8 times, \
+        of which this figure draws 1.
         """)
+    }
+
+    /// The sentence used to report `stage.cycles` while the drawing fitted as
+    /// many cycles as a twenty-two second window held, so coherent breathing
+    /// announced twenty-seven over a picture of two. Both numbers are worth
+    /// hearing — one is the exercise, the other is the figure — but only if the
+    /// sentence says which is which.
+    @Test("The description counts the cycles drawn, not only the ones played")
+    func describesWhatIsDrawn() {
+        let coherent = SeededCatalogue.figure("coherent-breathing")
+
+        #expect(coherent.drawnCycles == 2)
+        #expect(coherent.description.hasSuffix("Repeated 27 times, of which this figure draws 2."))
+    }
+
+    /// The whole exercise on the page, so there is no shortfall to announce and
+    /// the second clause would be the first one restated.
+    @Test("A figure that draws every cycle says so once")
+    func describesAFullyDrawnStage() {
+        let sigh = SeededCatalogue.figure("physiological-sigh")
+
+        #expect(sigh.drawnCycles == 3)
+        #expect(sigh.description.hasSuffix("Repeated 3 times."))
+    }
+
+    /// The claim `mise run check:diagrams` enforces on the generated page, held
+    /// here too so a geometry change fails in seconds rather than at the gate:
+    /// one stroke per phase per drawn cycle, in both grammars.
+    @Test("Every figure draws exactly the cycles it announces")
+    func announcedCyclesAreTheDrawnOnes() {
+        for technique in SeededCatalogue.techniques {
+            for (figure, stage) in zip(TechniqueFigure.all(for: technique), technique.stages) {
+                let drawn = figure.strokes.filter { $0.role == .phase }.count
+
+                #expect(
+                    drawn == figure.drawnCycles * stage.phases.count,
+                    "`\(technique.slug)` announces \(figure.drawnCycles) cycles"
+                )
+            }
+        }
     }
 
     /// Bellows breath is the one exercise whose phases last exactly a second,

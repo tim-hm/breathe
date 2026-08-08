@@ -29,6 +29,10 @@ enum OndDiagrams {
 
         do {
             let techniques = try CatalogueExport.techniques(at: catalogue)
+            if let miscount = techniques.lazy.compactMap(miscounted).first {
+                fail(miscount)
+            }
+
             var html = try String(contentsOf: page, encoding: .utf8)
             var redrawn: [String] = []
 
@@ -62,6 +66,35 @@ enum OndDiagrams {
         } catch {
             fail("\(error)")
         }
+    }
+
+    /// Why a technique's figures announce a cycle count they do not draw, or
+    /// nil where every one of them adds up.
+    ///
+    /// The `aria-label` and the paths under it come out of one figure by two
+    /// routes — the sentence from `drawnCycles`, the strokes from the geometry —
+    /// and the page is where a disagreement between them reaches a person who
+    /// cannot see the picture to check. So this runs before anything is written:
+    /// the invariant is that every phase of every drawn cycle is exactly one
+    /// stroke, so the announced count times the phases in a cycle is how many
+    /// phase strokes there should be. Coherent breathing announcing its
+    /// twenty-seven session cycles over the two it draws failed this by 54 to 4.
+    ///
+    /// Every technique, not only the ones the page has markers for: the apps
+    /// hand the same sentence to VoiceOver, so a figure that miscounts is wrong
+    /// in three places and only one of them is this file.
+    private static func miscounted(_ technique: Technique) -> String? {
+        for (figure, stage) in zip(TechniqueFigure.all(for: technique), technique.stages) {
+            let drawn = figure.strokes.filter { $0.role == .phase }.count
+            let announced = figure.drawnCycles * stage.phases.count
+            guard drawn != announced else { continue }
+
+            return "\(technique.slug) announces \(figure.drawnCycles) cycles of "
+                + "\(stage.phases.count) phases, which is \(announced) strokes, "
+                + "but draws \(drawn)"
+        }
+
+        return nil
     }
 
     private static func fail(_ message: String) -> Never {
