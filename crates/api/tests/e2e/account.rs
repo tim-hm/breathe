@@ -518,6 +518,61 @@ async fn an_installation_bound_to_one_apple_account_is_refused_a_second() {
     );
 }
 
+/// The same refusal on the merge path, where an unguarded branch made it
+/// destructive rather than merely wrong.
+///
+/// This is the case above with one thing changed: somebody already holds the
+/// account being signed in to. That sent the call down `repository::merge`, which
+/// asked nothing about the caller's own binding — so the row bound to the first
+/// Apple account was reparented into the second and deleted, taking with it the
+/// only record that the first account had a history at all. Whether a bound
+/// caller was refused or silently absorbed turned entirely on whether the second
+/// account happened to have a row yet, which is not a distinction the caller can
+/// see or the server should act on.
+#[tokio::test]
+async fn an_installation_bound_to_one_apple_account_is_not_merged_into_another() {
+    let db = TestDatabase::create("account_rebind_merge").await;
+    let verifier = ScriptedIdentityVerifier::with(vec![
+        ("jws-apple", APPLE_ACCOUNT),
+        ("jws-other", OTHER_APPLE_ACCOUNT),
+    ]);
+
+    sign_in(
+        db.app_with_identity(verifier.clone()),
+        OLD_DEVICE,
+        "jws-apple",
+    )
+    .await;
+    sign_in(
+        db.app_with_identity(verifier.clone()),
+        NEW_DEVICE,
+        "jws-other",
+    )
+    .await;
+
+    let response = try_sign_in(db.app_with_identity(verifier), NEW_DEVICE, "jws-apple").await;
+
+    assert_eq!(
+        response.status,
+        tonic::Code::FailedPrecondition as i32,
+        "the same status the claim path returns, so a client needs no second case"
+    );
+    assert!(
+        exists(&db.pool, NEW_DEVICE).await,
+        "a refused sign-in does not delete the identity that made it"
+    );
+    assert_eq!(
+        apple_account_of(&db.pool, NEW_DEVICE).await.as_deref(),
+        Some(OTHER_APPLE_ACCOUNT),
+        "the caller's own Apple account is the only route back to its history"
+    );
+    assert_eq!(
+        apple_account_of(&db.pool, OLD_DEVICE).await.as_deref(),
+        Some(APPLE_ACCOUNT),
+        "the account signed in to is untouched by the refusal"
+    );
+}
+
 /// The promise `web/privacy.html` makes, asserted table by table: a person with
 /// a profile, a signed-in binding, sessions, a controlled pause, spent assistant
 /// allowance and a subscription asks to be erased, and none of it survives.

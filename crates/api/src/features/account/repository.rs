@@ -56,7 +56,15 @@ pub async fn delete_account(pool: &PgPool, caller: UserId) -> Result<(), Account
 /// - **The caller holds it.** Nothing to do. A client that signs in again on the
 ///   same installation gets its own id back rather than an error.
 /// - **Another row holds it.** That row is this person's real history, so the
-///   caller's is folded into it by [`merge`] and the device adopts its id.
+///   caller's is folded into it by [`merge`] and the device adopts its id —
+///   unless the caller is itself bound to some third Apple account, which is
+///   refused.
+///
+/// The refusal in the last two cases is one rule, not two: an identity already
+/// bound to an Apple account is never rebound, and both [`claim`] and [`merge`]
+/// answer `AlreadyBound`. Which of them a caller reaches depends only on whether
+/// anybody happens to hold the account being signed in to — invisible from the
+/// device, and no basis for the difference between an error and a deletion.
 ///
 /// One transaction over all three, with the holding row locked before anything
 /// is read off it: two devices signing into one Apple account at the same moment
@@ -140,6 +148,14 @@ async fn claim(
 /// id. The alternative — keeping `from` and moving the binding — would throw away
 /// whichever history was older, which is the thing signing in exists to recover.
 ///
+/// `from` must be anonymous, and the lock below is where that is checked. A row
+/// carrying an `apple_user_id` of its own belongs to somebody who proved a
+/// *different* Apple account, and folding it away would destroy the only record
+/// that that account has a history — so it is refused as `AlreadyBound`, the same
+/// answer [`claim`] gives the same person arriving by the other branch.
+/// Possession of an anonymous id is the whole of the claim to it (`identity.rs`
+/// says so), and that is not a credential this may weigh against a signed-in one.
+///
 /// Three sub-rules, each following from the schema rather than from taste:
 ///
 /// - **`sessions` and `bolt_scores`** reparent, skipping a row `into` already
@@ -186,18 +202,28 @@ async fn claim(
 /// than being cascaded away; the client resends under the id it has by then
 /// adopted, which is the outcome that loses nothing.
 ///
-/// It doubles as the existence check the `DELETE` would otherwise need: no row to
+/// It doubles as the existence check the `DELETE` would otherwise need — no row to
 /// lock is a caller whose identity vanished between the middleware creating it and
-/// this write.
+/// this write — and it reads the binding the anonymity check turns on, so proving
+/// `from` anonymous costs no statement of its own.
 async fn merge(
     tx: &mut Transaction<'_, Postgres>,
     from: UserId,
     into: Uuid,
 ) -> Result<(), AccountError> {
-    sqlx::query_scalar!("SELECT id FROM users WHERE id = $1 FOR UPDATE", from.0)
-        .fetch_optional(&mut **tx)
-        .await?
-        .ok_or(AccountError::Missing)?;
+    let bound_to = sqlx::query_scalar!(
+        "SELECT apple_user_id FROM users WHERE id = $1 FOR UPDATE",
+        from.0
+    )
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or(AccountError::Missing)?;
+
+    // `into` holds the Apple account being signed in to and is a different row,
+    // so `users.apple_user_id` being `UNIQUE` makes any binding here another one.
+    if bound_to.is_some() {
+        return Err(AccountError::AlreadyBound);
+    }
 
     sqlx::query!(
         "UPDATE sessions AS moving
