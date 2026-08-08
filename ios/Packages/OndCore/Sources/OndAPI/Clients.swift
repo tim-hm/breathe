@@ -44,6 +44,13 @@ public enum OndClients {
         Ond_V1_AssistantServiceClient(client: protocolClient(baseURL: baseURL, userId: userId))
     }
 
+    public static func accountService(
+        baseURL: URL,
+        userId: @escaping @Sendable () -> UUID?
+    ) -> Ond_V1_AccountServiceClient {
+        Ond_V1_AccountServiceClient(client: protocolClient(baseURL: baseURL, userId: userId))
+    }
+
     public static func entitlementService(
         baseURL: URL,
         userId: @escaping @Sendable () -> UUID?
