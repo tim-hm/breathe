@@ -70,6 +70,41 @@ public enum Theme {
         public static let faintest: Double = 0.05
     }
 
+    /// How far an accent is pulled towards the ground when a drawing needs a
+    /// quieter version of the same colour.
+    ///
+    /// The mirror of `Wash`: that one pours an accent over the ground to tint
+    /// it, this one pulls an accent towards the ground to hush it. What is
+    /// softened this way is a line rather than text — the exhale stroke on a
+    /// technique figure — so the bar is WCAG 1.4.11's 3:1 for a graphical object
+    /// that carries meaning, not the 4.5:1 the inks answer to.
+    ///
+    /// One fraction for both appearances, which is the part worth reading before
+    /// changing it. White has far less room than the near-black does: over the
+    /// dark ground every accent stays legible softened as far as 0.42, and over
+    /// white the tightest of them gives out at 0.24. But the two ranges overlap,
+    /// so one number under the tighter ceiling serves both grounds, and splitting
+    /// it in two would buy a little more separation in the dark appearance at the
+    /// price of the invariant this palette is built on — that the asset catalogue
+    /// is the whole of dark mode and no code branches on `colorScheme`.
+    ///
+    /// A named ceiling for the same reason `Wash.strongest` is one: raising it is
+    /// a legibility decision, and `ThemeColorTests` fails when it stops holding.
+    public enum Softening {
+        /// The most an accent gives up while still reading as itself against the
+        /// ground.
+        ///
+        /// `Accent/Settle` is the one that runs out first, and it hits the floor
+        /// between 0.24 and 0.25 — 2.9971:1 at the latter, which passes nothing
+        /// and rounds to a number that looks like it does. This sits well below
+        /// that on purpose: at 0.20 the same worst case is 3.27:1, which is the
+        /// margin a 1.6-point stroke wants before the next palette nudge spends
+        /// it. The value it replaced, 0.45, cleared 3:1 on no accent at all in
+        /// the light appearance, and on neither `Accent/Night` nor
+        /// `Accent/Attend` in the dark one.
+        public static let strongest: Double = 0.20
+    }
+
     /// The grounds content sits on. A screen that draws its own background — the
     /// session player, which covers the system's — picks from here rather than
     /// leaving whatever the presentation happened to put behind it.

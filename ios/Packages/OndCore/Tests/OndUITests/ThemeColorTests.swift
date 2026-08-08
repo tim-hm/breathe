@@ -1,5 +1,6 @@
 import Foundation
 @testable import OndUI
+import SwiftUI
 import Testing
 
 /// The catalogue's failure modes are all silent ones. A `ColorToken` whose name
@@ -147,6 +148,45 @@ struct ThemeColorTests {
         }
     }
 
+    /// A technique figure strokes its exhale in the goal's accent softened
+    /// towards the ground (`OndStyle/FigureShape.swift`). That is a graphical
+    /// object rather than text, so the bar is WCAG 1.4.11's 3:1 — and it is the
+    /// load-bearing mark on the drawing, the one telling the two halves of a
+    /// breath apart.
+    ///
+    /// Against `Surface/Ground` alone, unlike the ink tests above: every screen
+    /// that draws a figure grounds itself with `paletteGround()`, and the list
+    /// rows carrying the small ones are transparent over it, so a figure never
+    /// sits on a card. There would be nothing spare if one ever did —
+    /// `Accent/Settle` softened measures 2.99:1 on `Surface/Raised` — which is
+    /// the reason to come back here rather than assume it carries over.
+    @Test("every softenable accent survives being softened", arguments: softenable)
+    func softenedAccentIsPerceivableOnItsGround(_ accent: ColorToken) throws {
+        let accentSet = try #require(try ColorSet(at: ColorSet.palette, named: accent.rawValue))
+        let groundSet = try #require(try ColorSet(
+            at: ColorSet.palette,
+            named: ColorToken.surfaceGround.rawValue
+        ))
+
+        for appearance in Appearance.allCases {
+            let ground = try #require(groundSet[appearance]?.color)
+            let full = try #require(accentSet[appearance]?.color)
+            let softened = try #require(
+                full.softened(towards: ground, by: Theme.Softening.strongest)
+            )
+            let ratio = try #require(softened.contrast(against: ground))
+
+            #expect(
+                ratio >= 3,
+                """
+                \(accent.rawValue) softened by \(Theme.Softening.strongest) is \
+                \(ratio.formatted(.number.precision(.fractionLength(2)))):1 in \
+                \(appearance.rawValue), below WCAG 1.4.11's 3:1
+                """
+            )
+        }
+    }
+
     /// AA's 4.5:1 for normal text. Reported with the measured figure, because a
     /// bare "below 4.5" leaves whoever retunes the colour guessing how far.
     private func expectAA(
@@ -200,6 +240,14 @@ struct ThemeColorTests {
 /// this file exists to close.
 private let inks = ColorToken.allCases.filter { $0.rawValue.hasPrefix("Ink/") }
 private let accents = ColorToken.allCases.filter { $0.rawValue.hasPrefix("Accent/") }
+/// The accents something can ask for a quieter version of. Derived with two
+/// exclusions rather than listed, on the same terms as the line above, so a sixth
+/// goal accent is measured the day it is added: `Accent/Still` is drawn on a
+/// figure but never softened — a hold is the stillness slate at full strength —
+/// and `Accent/Caution` never strokes one. `Accent/Brand` stays in even though no
+/// goal wears it, because the marketing site strokes its figures in a softened
+/// brand and states the result as a hex nothing else measures.
+private let softenable = accents.filter { $0 != .accentStill && $0 != .accentCaution }
 /// `Surface/Line` is a hairline and never carries text, which is why the grounds
 /// are named rather than derived from the prefix.
 private let grounds: [ColorToken] = [.surfaceGround, .surfaceRaised]
@@ -320,6 +368,42 @@ private struct CatalogueColor: Decodable, Equatable {
             mixed[name] = String(mine * alpha + theirs * (1 - alpha))
         }
         return CatalogueColor(components: mixed)
+    }
+
+    /// This colour pulled `fraction` of the way towards `ground`, as
+    /// `Color.mix(with:by:)` pulls it.
+    ///
+    /// Through the real API rather than the arithmetic copy `blended` above is,
+    /// because the copy measures a colour the app never draws: `mix` interpolates
+    /// perceptually unless told otherwise, so `Accent/Brand` softened over white
+    /// resolves to `#629489` where the same fraction blended in sRGB gives
+    /// `#61958b`. Close, and not the same — and the second one is what a hand
+    /// calculation reaches for.
+    ///
+    /// Resolving against a default `EnvironmentValues` is sound here even though
+    /// the host has no compiled catalogue: both colours are built from literal
+    /// components, so nothing on this path resolves a name.
+    func softened(towards ground: CatalogueColor, by fraction: Double) -> CatalogueColor? {
+        guard let mine = color, let theirs = ground.color else { return nil }
+
+        let mixed = mine.mix(with: theirs, by: fraction).resolve(in: EnvironmentValues())
+        return CatalogueColor(components: [
+            "red": String(mixed.red),
+            "green": String(mixed.green),
+            "blue": String(mixed.blue),
+        ])
+    }
+
+    /// This entry as the `Color` the framework would mix, nil where a component
+    /// is in a form `channel(_:)` cannot read.
+    private var color: Color? {
+        guard
+            let red = channel("red"),
+            let green = channel("green"),
+            let blue = channel("blue")
+        else { return nil }
+
+        return Color(.sRGB, red: red, green: green, blue: blue)
     }
 
     /// WCAG relative luminance. Every colourset in this palette declares
