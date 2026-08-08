@@ -24,11 +24,19 @@ DerivedData/
 *.xcuserstate
 xcuserdata/
 
-# Secrets. `.env` holds exactly one value locally — OPENROUTER_API_KEY, the
-# assistant's provider key, loaded by .mise.toml so every task sees it. It is
-# optional: absent, the assistant answers from its rule-based fallback and
-# everything else behaves identically, which is what CI and a fresh clone get.
-# Nothing else belongs in it (CLAUDE.md §1.4).
+# Secrets and the handful of per-machine identifiers that behave like them.
+# `.env` is loaded by .mise.toml so every task sees it, and all of it is
+# optional — absent, the assistant answers from its rule-based fallback and the
+# simulator builds unsigned, which is what CI and a fresh clone get:
+#
+#   OPENROUTER_API_KEY  the assistant's provider key
+#   OND_DEV_TEAM        Apple Developer team id; signs device and archive builds
+#   OND_ASC_KEY_ID      App Store Connect API key, for `mise run ios:testflight`
+#   OND_ASC_ISSUER_ID   its issuer
+#
+# Nothing beyond a secret or an identifier that genuinely differs per developer
+# belongs in it (CLAUDE.md §1.4). The App Store Connect private key is a file,
+# not a value, and lives at ~/.appstoreconnect/private_keys/ — never in here.
 .env
 .env.*
 *.pem

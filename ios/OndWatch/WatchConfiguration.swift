@@ -13,9 +13,18 @@ import Foundation
 /// more often than from Xcode, and a setting that only applies under the
 /// debugger would be a setting that is usually not in effect.
 enum WatchConfiguration {
-    /// 18100 matches the port `crates/api` binds. The watch simulator shares the
-    /// Mac's loopback, so this reaches a backend started with `mise run dev`.
-    private static let defaultBaseURL = "http://localhost:18100"
+    // Where a build points when the baked development URL is absent.
+    //
+    // Split by configuration for the same reason the phone's is: a wrist that
+    // installed the app from TestFlight has no route to loopback, and the
+    // watch talks to the backend itself rather than borrowing the phone's.
+    // Debug keeps localhost, which the watch simulator shares with the Mac, so
+    // 18100 reaches a backend started with `mise run dev`.
+    #if DEBUG
+        private static let defaultBaseURL = "http://localhost:18100"
+    #else
+        private static let defaultBaseURL = "https://ondbreathe.app"
+    #endif
 
     /// A `let`, not a computed `var`: it is read once at composition and there
     /// is nothing about it that can change while the app runs.

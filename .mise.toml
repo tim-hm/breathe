@@ -592,3 +592,104 @@ dir = "{{config_root}}/ios"
 # the watch app, so building it covers both, but a watch-only change wants a
 # build that fails on the wrist's compiler errors alone.
 run = "xcodebuild -project Ond.xcodeproj -scheme OndWatch -destination 'generic/platform=watchOS Simulator' build"
+
+[tasks."ios:archive"]
+description = "Archive both apps, signed for release, into ios/build/Ond.xcarchive"
+depends = ["ios:gen"]
+dir = "{{config_root}}/ios"
+# One archive holds both apps. The Ond target embeds OndWatch (see the target
+# dependency in project.yml), so archiving the phone scheme signs the watch
+# bundle inside it — which is also the only shape App Store Connect accepts,
+# since a companion watch app is not a submission of its own.
+#
+# `generic/platform=iOS` rather than a named device, matching `ios:build`'s
+# generic simulator destination: an archive is not built for the phone that
+# happens to be plugged in.
+#
+# `-allowProvisioningUpdates` lets Xcode fetch and renew the profiles the two
+# bundles need instead of failing with a mismatch; without it, a machine that
+# has only ever built for the simulator has nothing to sign with.
+#
+# What comes out is a Release build signed with the *development* certificate,
+# and that is correct rather than a shortfall. Distribution signing is applied
+# when the archive is exported — `ios:testflight` re-signs it against the App
+# Store profiles — which is why an archive is worth taking on a machine that
+# has no distribution certificate at all yet.
+#
+# The build number is the commit count rather than a value committed in
+# project.yml. App Store Connect refuses a build number it has already accepted
+# for a version, so a constant fails on the second upload and a hand-bumped one
+# fails whenever somebody forgets; a count over history rises on its own and
+# points back at the commit that produced the build. Two archives of the *same*
+# commit do collide, which is the one case worth stating — and the right answer
+# to it is a commit, since two uploads of identical source are not two builds.
+run = '''
+  set -eu
+  if [ -z "${OND_DEV_TEAM:-}" ]; then
+    echo 'ios:archive: OND_DEV_TEAM is unset, so nothing signs.' >&2
+    echo 'It is the ten-character Apple Developer team id, and it belongs in' >&2
+    echo '.env beside the other machine-local values. Read it off a profile' >&2
+    echo 'Xcode has already installed rather than hunting for it in a browser:' >&2
+    echo '  security cms -D -i ~/Library/Developer/Xcode/UserData/Provisioning\\ Profiles/*.mobileprovision \\' >&2
+    echo '    | plutil -extract Entitlements.application-identifier raw -o - -' >&2
+    echo 'The team id is the part before the first dot. See docs/contributing.md.' >&2
+    exit 1
+  fi
+
+  # `ios:gen` has just baked this Mac's Bonjour address into both plists, and
+  # a release build reads no such thing (see AppConfiguration). Left in, the
+  # key would ship inside the IPA and tell every tester the name of the
+  # machine it was built on. The next `ios:gen` puts it back.
+  plutil -remove OndAPIBaseURL Ond/Info.plist
+  plutil -remove OndAPIBaseURL OndWatch/Info.plist
+
+  xcodebuild archive \
+    -project Ond.xcodeproj \
+    -scheme Ond \
+    -destination 'generic/platform=iOS' \
+    -archivePath build/Ond.xcarchive \
+    -allowProvisioningUpdates \
+    CURRENT_PROJECT_VERSION="$(git rev-list --count HEAD)"
+'''
+
+[tasks."ios:testflight"]
+description = "Archive, then upload the build to TestFlight"
+depends = ["ios:archive"]
+dir = "{{config_root}}/ios"
+# Export and upload are one xcodebuild invocation because ExportOptions.plist
+# asks for `destination: upload` — see that file for what each key buys.
+#
+# Authentication is an App Store Connect API key, not an Apple ID and password:
+# a key is scoped to this workspace, survives two-factor prompts a headless run
+# cannot answer, and can be revoked without changing anything about the account.
+# Only the two identifiers are configured; the private key's path is derived
+# from the key id at the location Apple's own tooling searches, so there is one
+# fewer value to keep in step and no absolute path to leak into a shell profile.
+run = '''
+  set -eu
+  if [ -z "${OND_ASC_KEY_ID:-}" ] || [ -z "${OND_ASC_ISSUER_ID:-}" ]; then
+    echo 'ios:testflight: OND_ASC_KEY_ID and OND_ASC_ISSUER_ID must both be set.' >&2
+    echo 'Create a key under App Store Connect > Users and Access > Integrations >' >&2
+    echo 'App Store Connect API, role Admin — App Manager can upload but cannot' >&2
+    echo 'mint the distribution certificate the first export needs. The page shows' >&2
+    echo 'both values; the .p8 downloads once and cannot be downloaded again.' >&2
+    echo 'Both identifiers belong in .env, beside OND_DEV_TEAM.' >&2
+    exit 1
+  fi
+
+  key="$HOME/.appstoreconnect/private_keys/AuthKey_$OND_ASC_KEY_ID.p8"
+  if [ ! -f "$key" ]; then
+    echo "ios:testflight: no private key at $key" >&2
+    echo 'Move the downloaded AuthKey_*.p8 there, keeping its filename.' >&2
+    exit 1
+  fi
+
+  xcodebuild -exportArchive \
+    -archivePath build/Ond.xcarchive \
+    -exportPath build/export \
+    -exportOptionsPlist ExportOptions.plist \
+    -allowProvisioningUpdates \
+    -authenticationKeyPath "$key" \
+    -authenticationKeyID "$OND_ASC_KEY_ID" \
+    -authenticationKeyIssuerID "$OND_ASC_ISSUER_ID"
+'''

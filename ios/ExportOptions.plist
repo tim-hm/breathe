@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  How `mise run ios:testflight` turns the archive into a build in App Store
+  Connect. A build input alongside project.yml, not a generated file: it is read
+  by `xcodebuild -exportArchive` and nothing rewrites it.
+
+  Deliberately carries no `teamID`. Omitted, xcodebuild takes the team from the
+  archive it is exporting, which is the one `${OND_DEV_TEAM}` signed — so the
+  team id stays out of the repository here for the same reason it does in
+  project.yml, and there is no second copy to fall out of step.
+-->
+<plist version="1.0">
+<dict>
+	<!--
+	  The App Store channel. Named `app-store-connect` since Xcode 15; the older
+	  `app-store` spelling still works but is what the tooling now warns about.
+	-->
+	<key>method</key>
+	<string>app-store-connect</string>
+	<!--
+	  Upload rather than write an .ipa to disk. One step instead of two, and it
+	  means no unsigned intermediate exists on the machine to be uploaded by
+	  hand later, out of step with the archive it came from.
+	-->
+	<key>destination</key>
+	<string>upload</string>
+	<!--
+	  Matches CODE_SIGN_STYLE in project.yml. Xcode resolves the distribution
+	  certificate and both App Store profiles itself, given
+	  `-allowProvisioningUpdates` and an App Store Connect key.
+	-->
+	<key>signingStyle</key>
+	<string>automatic</string>
+	<!--
+	  Ship the dSYMs, so a crash in TestFlight arrives symbolicated rather than
+	  as addresses nobody can act on.
+	-->
+	<key>uploadSymbols</key>
+	<true/>
+	<!--
+	  Load-bearing, and the default is the other way. Left true, Xcode picks the
+	  build number itself at upload time and quietly discards the commit count
+	  `ios:archive` derived — which is the only thing tying a TestFlight build
+	  back to the history that produced it.
+	-->
+	<key>manageAppVersionAndBuildNumber</key>
+	<false/>
+</dict>
+</plist>
