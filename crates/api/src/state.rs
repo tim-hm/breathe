@@ -8,6 +8,7 @@ use crate::config::Config;
 use crate::features::account::verifier::IdentityTokenVerifier;
 use crate::features::assistant::model::ModelClient;
 use crate::features::entitlement::verifier::TransactionVerifier;
+use crate::throttle::Throttle;
 
 /// Shared as `Arc<AppState>` by both transports.
 ///
@@ -44,6 +45,16 @@ pub struct AppState {
     /// so the seam is also what keeps a test suite off the network rather than
     /// merely off Apple's signatures.
     pub account: Arc<dyn IdentityTokenVerifier>,
+
+    /// What one caller may spend, on requests and on new identities.
+    ///
+    /// The one field here that is *not* a seam, and therefore the one that is
+    /// not a constructor parameter: nothing outside this crate chooses an
+    /// implementation, and there is nothing behind it to point somewhere
+    /// harmless. It is on `AppState` because its two readers — the layer in
+    /// `build_app` and `identity::resolve` — must share one set of counters,
+    /// and this is already the object both of them hold.
+    pub throttle: Throttle,
 }
 
 impl AppState {
@@ -60,6 +71,7 @@ impl AppState {
             assistant,
             entitlement,
             account,
+            throttle: Throttle::new(),
         })
     }
 }

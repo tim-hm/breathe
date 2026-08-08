@@ -27,6 +27,13 @@ ondbreathe.app {
 	# is what still says no to a box booted without it.
 	@api path /ond.v1.* /health /about
 
+	# No rate limiting here, deliberately: Caddy's is an xcaddy plugin, and
+	# building a custom image for it would mean a second `docker save | ssh
+	# docker load` leg in a deploy that has one of each. The ration lives in
+	# crates/api/src/throttle.rs instead, which is also what lets tests/e2e
+	# drive it. What this proxy does contribute is the key that limiter counts
+	# against: reverse_proxy appends the peer it accepted to X-Forwarded-For,
+	# and the limiter reads that right-most entry.
 	handle @api {
 		reverse_proxy api:18100
 	}

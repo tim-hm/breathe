@@ -72,6 +72,7 @@ pub mod identity;
 pub mod obs;
 pub mod proto;
 pub mod state;
+pub mod throttle;
 
 use std::sync::Arc;
 
@@ -100,6 +101,17 @@ pub fn build_app(state: Arc<AppState>) -> Result<Router> {
         .layer(axum::middleware::from_fn_with_state(
             Arc::clone(&state),
             identity::resolve,
+        ))
+        // Outside the identity layer, so a caller over their budget is turned
+        // away before the upsert below it can write anything; inside
+        // `GrpcWebLayer`, so the refusal reaches the client as a readable
+        // status rather than a bare HTTP code. Only the gRPC router carries it,
+        // for the same reason identity does: `/health` is what tells the deploy
+        // whether the box came back, and a health check that can be rationed is
+        // a deploy that can be made to look failed.
+        .layer(axum::middleware::from_fn_with_state(
+            Arc::clone(&state),
+            throttle::enforce,
         ))
         .layer(tonic_web::GrpcWebLayer::new());
 
