@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO leaderboard_snapshot (board, utc_offset_minutes, user_id, value)\n                 SELECT 'MINUTES_30D'::leaderboard_board, $1, user_id,\n                        (sum(duration_ms) / 60000)::integer\n                 FROM sessions\n                 WHERE started_at >= now() - interval '30 days'\n                 GROUP BY user_id\n                 HAVING sum(duration_ms) >= 60000",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c14cb34fb462d492b5f39d39e16daf7c34fa1bf07e2aa56e33a18f8ee8d06f2e"
+}

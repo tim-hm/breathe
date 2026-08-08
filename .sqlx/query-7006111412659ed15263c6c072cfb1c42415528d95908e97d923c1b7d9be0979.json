@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO leaderboard_snapshot (board, utc_offset_minutes, user_id, value)\n                 SELECT 'BOLT'::leaderboard_board, $1, user_id, max(seconds)\n                 FROM bolt_scores\n                 GROUP BY user_id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7006111412659ed15263c6c072cfb1c42415528d95908e97d923c1b7d9be0979"
+}

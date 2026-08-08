@@ -10,6 +10,18 @@ use super::{
 };
 use crate::harness::{GrpcWebResponse, TestDatabase, call_grpc_web_with};
 
+/// Ages every board past its time to live, which is the only handle a test has
+/// on a schedule measured in wall-clock minutes. Writing the stamp rather than
+/// deleting the rows is the point: it drives the production path — a request
+/// finds the key stale and re-folds it — instead of a refresh entry point that
+/// only tests call.
+async fn expire_snapshots(db: &TestDatabase) {
+    sqlx::query("UPDATE leaderboard_refresh SET refreshed_at = '-infinity'")
+        .execute(&db.pool)
+        .await
+        .expect("the refresh table exists");
+}
+
 /// The opt-in, from both sides. Somebody with no display name is counted in the
 /// ranking and named to nobody — they still see exactly where they stand, which
 /// is what makes the boards worth opting into rather than a wall someone has to
@@ -144,6 +156,92 @@ async fn a_streak_board_counts_the_whole_run_and_drops_the_lapsed() {
             .collect::<Vec<_>>(),
         vec![("Ada", 6)],
         "the whole run counts, and a run that has lapsed is not a current streak"
+    );
+}
+
+/// The boards are read from a snapshot, not folded per request. Both halves are
+/// worth pinning, and the first is the one that would rot silently: a board that
+/// quietly went back to folding live would pass every other test in this file,
+/// because a live board and a fresh snapshot give the same answer. The only
+/// visible difference is what happens to a board whose underlying sessions have
+/// moved since it was folded.
+#[tokio::test]
+async fn a_board_is_read_from_its_snapshot_until_that_snapshot_expires() {
+    let db = TestDatabase::create("journey_board_snapshot").await;
+
+    name(&db, ADA, "Ada").await;
+    record(
+        &db,
+        ADA,
+        vec![minutes_session(
+            "88888888-0000-4000-8000-000000000001",
+            hours_ago(1),
+            2,
+        )],
+    )
+    .await
+    .into_ok();
+
+    let first = board(
+        &db,
+        ADA,
+        pb::LeaderboardBoard::Minutes30d,
+        pb::LeaderboardScope::Global,
+    )
+    .await
+    .into_ok();
+    assert_eq!(
+        first.entries.first().map(|entry| entry.value),
+        Some(2),
+        "the first caller on a board nobody has folded gets it folded for them"
+    );
+
+    record(
+        &db,
+        ADA,
+        vec![minutes_session(
+            "88888888-0000-4000-8000-000000000002",
+            hours_ago(2),
+            10,
+        )],
+    )
+    .await
+    .into_ok();
+
+    let stale = board(
+        &db,
+        ADA,
+        pb::LeaderboardBoard::Minutes30d,
+        pb::LeaderboardScope::Global,
+    )
+    .await
+    .into_ok();
+    assert_eq!(
+        stale.entries.first().map(|entry| entry.value),
+        Some(2),
+        "the second read is answered from the snapshot the first one built"
+    );
+    assert_eq!(
+        stale.caller.expect("a standing is always returned").value,
+        2,
+        "the caller's own standing comes off the same snapshot, which is what \
+         sets how long one may be served for"
+    );
+
+    expire_snapshots(&db).await;
+
+    let refreshed = board(
+        &db,
+        ADA,
+        pb::LeaderboardBoard::Minutes30d,
+        pb::LeaderboardScope::Global,
+    )
+    .await
+    .into_ok();
+    assert_eq!(
+        refreshed.entries.first().map(|entry| entry.value),
+        Some(12),
+        "an expired snapshot is re-folded by the request that finds it expired"
     );
 }
 

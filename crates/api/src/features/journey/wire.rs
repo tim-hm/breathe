@@ -20,6 +20,10 @@ use super::errors::JourneyError;
 const MIN_UTC_OFFSET_MINUTES: i32 = -12 * 60;
 const MAX_UTC_OFFSET_MINUTES: i32 = 14 * 60;
 
+/// And every one of them is a whole number of quarter-hours — the odd ones,
+/// Kathmandu at +05:45 and Chatham at +12:45, are still multiples of fifteen.
+const UTC_OFFSET_STEP_MINUTES: i32 = 15;
+
 /// Narrows an aggregate the schema already constrains to be non-negative.
 ///
 /// Every `CHECK (… >= 0)` makes a negative value unreachable and no fold over
@@ -47,13 +51,21 @@ where
 ///
 /// A client bug rather than a malicious value, but accepting it would silently
 /// shift somebody's calendar days and therefore their streak.
+///
+/// The quarter-hour rule is also what keeps the leaderboard snapshot finite.
+/// The streak board is materialised once per day boundary it is asked for
+/// (`0013_leaderboard_snapshot.sql`), so the set of offsets this admits is the
+/// set of copies that can exist — a hundred and five of them, rather than one
+/// per minute of the range.
 pub fn validated_offset(minutes: i32) -> Result<i32, JourneyError> {
-    if (MIN_UTC_OFFSET_MINUTES..=MAX_UTC_OFFSET_MINUTES).contains(&minutes) {
+    if (MIN_UTC_OFFSET_MINUTES..=MAX_UTC_OFFSET_MINUTES).contains(&minutes)
+        && minutes % UTC_OFFSET_STEP_MINUTES == 0
+    {
         return Ok(minutes);
     }
 
     Err(JourneyError::Invalid(format!(
-        "`utc_offset_minutes` must be between {MIN_UTC_OFFSET_MINUTES} and {MAX_UTC_OFFSET_MINUTES}"
+        "`utc_offset_minutes` must be a multiple of {UTC_OFFSET_STEP_MINUTES} between {MIN_UTC_OFFSET_MINUTES} and {MAX_UTC_OFFSET_MINUTES}"
     )))
 }
 
@@ -117,15 +129,16 @@ mod tests {
         ));
     }
 
-    /// The offsets that exist run from -12:00 to +14:00. Anything else is a
-    /// client bug, and accepting it would silently shift somebody's calendar
-    /// days.
+    /// The offsets that exist run from -12:00 to +14:00 and are whole
+    /// quarter-hours. Anything else is a client bug, and accepting it would
+    /// silently shift somebody's calendar days — and mint a leaderboard
+    /// snapshot key no time zone will ever ask for again.
     #[test]
     fn only_real_utc_offsets_are_accepted() {
-        for minutes in [MIN_UTC_OFFSET_MINUTES, 0, 60, MAX_UTC_OFFSET_MINUTES] {
+        for minutes in [MIN_UTC_OFFSET_MINUTES, 0, 60, 345, MAX_UTC_OFFSET_MINUTES] {
             assert!(validated_offset(minutes).is_ok());
         }
-        for minutes in [MIN_UTC_OFFSET_MINUTES - 1, MAX_UTC_OFFSET_MINUTES + 1] {
+        for minutes in [MIN_UTC_OFFSET_MINUTES - 1, MAX_UTC_OFFSET_MINUTES + 1, 7] {
             assert!(matches!(
                 validated_offset(minutes),
                 Err(JourneyError::Invalid(_))
