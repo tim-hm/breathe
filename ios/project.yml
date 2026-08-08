@@ -86,6 +86,14 @@ targets:
       path: Ond/Ond.entitlements
       properties:
         com.apple.developer.healthkit: true
+        # Sign in with Apple. `Default` is the whole of the value for a
+        # first-party app signing into its own backend — the alternative,
+        # `Default` plus an existing-account grant, is for migrating people off
+        # a username and password this app has never had. The capability must
+        # also be enabled on the App ID in the developer portal, or a device
+        # build fails to sign with a provisioning-profile mismatch rather than
+        # anything naming Apple sign-in.
+        com.apple.developer.applesignin: [Default]
     # An `info:` block rather than more INFOPLIST_KEY_* settings above, because
     # those only carry scalars and arrays — NSAppTransportSecurity is a dict and
     # has no build-setting form. The generated plist is gitignored.

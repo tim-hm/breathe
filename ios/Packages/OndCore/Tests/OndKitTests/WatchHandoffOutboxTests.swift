@@ -3,12 +3,27 @@ import OndKit
 import os
 import Testing
 
-/// The phone's identity, without a Keychain behind it.
-private struct StubIdentity: UserIdentityStore {
-    let id: UUID?
+/// The phone's identity, without a Keychain behind it. Mutable, so a test can
+/// be the person who signs in between two foregrounds and has their id replaced
+/// by the one their Apple account already had.
+private final class StubIdentity: UserIdentityStore {
+    private let stored: OSAllocatedUnfairLock<UUID?>
+
+    init(id: UUID?) {
+        stored = OSAllocatedUnfairLock(initialState: id)
+    }
 
     func userId() -> UUID? {
-        id
+        stored.withLock { $0 }
+    }
+
+    @discardableResult
+    func adopt(_ id: UUID) -> Bool {
+        stored.withLock { current in
+            guard current != id else { return false }
+            current = id
+            return true
+        }
     }
 }
 
@@ -128,6 +143,26 @@ struct WatchHandoffOutboxTests {
         await outbox.handOver(radio.accept)
 
         #expect(radio.handed.map(\.boltBestSeconds) == [30, 45])
+    }
+
+    /// The wrist carries its own copy of the identity and caches it, so a
+    /// sign-in that swapped the phone's leaves the watch syncing to a row the
+    /// server has deleted — for as long as nothing tells it otherwise. What
+    /// tells it is this context, which is only sent because the outbox compares
+    /// what it holds rather than assuming an identity never changes.
+    @Test("An identity replaced by a sign-in is handed over")
+    func handsOverASwappedIdentity() async {
+        let radio = Radio()
+        let identity = StubIdentity(id: UUID())
+        let outbox = WatchHandoffOutbox(identity: identity, scores: StubScores(seconds: [30]))
+
+        await outbox.handOver(radio.accept)
+        let adopted = UUID()
+        identity.adopt(adopted)
+        await outbox.handOver(radio.accept)
+
+        #expect(radio.handed.count == 2)
+        #expect(radio.handed.last?.userId == adopted)
     }
 
     /// A worse score is not news. The watch mirrors the best, so a later, shorter

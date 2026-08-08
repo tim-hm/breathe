@@ -50,9 +50,34 @@ struct KeychainIdentityItem: Sendable {
         return id
     }
 
+    /// Writes `id` where there is nothing stored, and answers with whatever the
+    /// item holds afterwards.
+    ///
+    /// The `errSecDuplicateItem` branch is what makes minting safe against a
+    /// race: another caller wrote between this one's read and this write, theirs
+    /// is the stored identity, and both callers have to agree on it.
+    ///
+    /// - Returns: `id`, the value that beat it there, or nil where neither the
+    ///   write nor the re-read could be made — which is the Keychain being
+    ///   unreachable, and leaves this install anonymous for now rather than
+    ///   inventing an identity it cannot store.
+    func insert(_ id: UUID) -> UUID? {
+        switch add(id) {
+        case errSecSuccess:
+            return id
+
+        case errSecDuplicateItem:
+            return read()
+
+        case let status:
+            Self.logger.error("failed to store the anonymous identity: \(status)")
+            return nil
+        }
+    }
+
     /// Writes `id` only where there is nothing stored, reporting the raw status
     /// so a caller can tell a lost race (`errSecDuplicateItem`) from a failure.
-    func add(_ id: UUID) -> OSStatus {
+    private func add(_ id: UUID) -> OSStatus {
         var attributes = baseQuery()
         attributes[kSecValueData as String] = encode(id)
         // Readable once the device has been unlocked at all, rather than only
