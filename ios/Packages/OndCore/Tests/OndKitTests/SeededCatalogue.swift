@@ -37,6 +37,20 @@ enum SeededCatalogue {
         TechniqueFigure.all(for: technique(slug))[stage]
     }
 
+    /// Where the retention sits in the Wim Hof-style rounds — the catalogue's
+    /// one open-ended stage.
+    ///
+    /// Looked up rather than written down: the retention moves whenever the
+    /// protocol around it gains a phase, and a hardcoded index goes on passing
+    /// while asserting about whichever stage took its place.
+    static var retention: Int {
+        let stages = technique("wim-hof-rounds").stages
+        guard let index = stages.firstIndex(where: \.openEnded) else {
+            fatalError("the Wim Hof-style rounds have no open-ended stage")
+        }
+        return index
+    }
+
     /// Every point a figure's strokes pass through, for measuring a silhouette
     /// without caring which command drew it. The baseline is left out: it is
     /// reference rather than subject, and it spans the full width whatever the

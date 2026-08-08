@@ -201,7 +201,7 @@
     {
       "slug": "wim-hof-rounds",
       "name": "Wim Hof-style Rounds",
-      "summary": "Thirty full, unforced breaths, then let the air go and wait — the hold after them is the point, and it lasts as long as it lasts. One deep breath in, held for fifteen seconds, closes each round. Popular, well described by people who practise it, and thinner on trial evidence than its reputation suggests.",
+      "summary": "Thirty full, unforced breaths and one last deep one, then let the air go and wait — the hold after them is the point, and it lasts as long as it lasts. One deep breath in, held for fifteen seconds, closes each round. Popular, well described by people who practise it, and thinner on trial evidence than its reputation suggests.",
       "safetyNote": "Sitting or lying down, always. Never in water, never in the bath, never driving or standing — fast breathing can make you faint with no warning. Tingling in the hands and face is ordinary; dizziness means stop. Never push a hold to the limit: this app does not measure one.",
       "goal": "ENERGY",
       "stages": [
@@ -221,6 +221,24 @@
             }
           ],
           "cycles": 30,
+          "openEnded": false
+        },
+        {
+          "phases": [
+            {
+              "kind": "INHALE",
+              "durationMs": 4000,
+              "minDurationMs": 3000,
+              "maxDurationMs": 6000
+            },
+            {
+              "kind": "EXHALE",
+              "durationMs": 4000,
+              "minDurationMs": 2000,
+              "maxDurationMs": 6000
+            }
+          ],
+          "cycles": 1,
           "openEnded": false
         },
         {

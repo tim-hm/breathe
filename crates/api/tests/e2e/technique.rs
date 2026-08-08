@@ -112,21 +112,33 @@ async fn the_free_techniques_arrive_unlocked_and_the_rest_do_not() {
 }
 
 /// The multi-stage model exists for this technique, and every part of its shape
-/// is load-bearing: the retention has to arrive between the fast breaths and the
-/// recovery hold, flagged open-ended, or the client either schedules a hold the
-/// person is supposed to end or strands them on one that never ends. The rounds
-/// and the safety copy travel with it.
+/// is load-bearing: the retention has to arrive between the deep breath that
+/// empties the lungs and the recovery that refills them, flagged open-ended, or
+/// the client either schedules a hold the person is supposed to end or strands
+/// them on one that never ends. The rounds and the safety copy travel with it.
+///
+/// The deep breath is a stage of its own rather than a phase of the retention,
+/// because `open_ended` is a property of the stage: a breath sharing it would
+/// arrive as one the clock never ends.
 #[tokio::test]
 async fn the_wim_hof_rounds_arrive_as_ordered_stages() {
     let db = TestDatabase::create("wim_hof_stages").await;
     let response = list_techniques(&db).await;
 
     let wim_hof = find(&response, "wim-hof-rounds");
-    let [breaths, retention, recovery] = &wim_hof.stages[..] else {
+    let [breaths, transition, retention, recovery] = &wim_hof.stages[..] else {
         panic!(
-            "the Wim Hof-style rounds are three stages, not {}",
+            "the Wim Hof-style rounds are four stages, not {}",
             wim_hof.stages.len()
         );
+    };
+
+    let kinds = |stage: &pb::Stage| {
+        stage
+            .phases
+            .iter()
+            .map(|phase| phase.kind)
+            .collect::<Vec<_>>()
     };
 
     assert_eq!(wim_hof.goal, pb::TechniqueGoal::Energy as i32);
@@ -135,33 +147,26 @@ async fn the_wim_hof_rounds_arrive_as_ordered_stages() {
     assert!(!breaths.open_ended);
     assert_eq!(breaths.cycles, 30);
     assert_eq!(
-        breaths
-            .phases
-            .iter()
-            .map(|phase| phase.kind)
-            .collect::<Vec<_>>(),
+        kinds(breaths),
         vec![pb::PhaseKind::Inhale as i32, pb::PhaseKind::Exhale as i32]
+    );
+
+    assert!(!transition.open_ended);
+    assert_eq!(transition.cycles, 1);
+    assert_eq!(
+        kinds(transition),
+        vec![pb::PhaseKind::Inhale as i32, pb::PhaseKind::Exhale as i32],
+        "the retention begins where this stage's exhale leaves off"
     );
 
     assert!(retention.open_ended, "the retention is ended by the person");
     assert_eq!(retention.cycles, 1);
-    assert_eq!(
-        retention
-            .phases
-            .iter()
-            .map(|phase| phase.kind)
-            .collect::<Vec<_>>(),
-        vec![pb::PhaseKind::HoldOut as i32]
-    );
+    assert_eq!(kinds(retention), vec![pb::PhaseKind::HoldOut as i32]);
 
     assert!(!recovery.open_ended);
     assert_eq!(recovery.cycles, 1);
     assert_eq!(
-        recovery
-            .phases
-            .iter()
-            .map(|phase| phase.kind)
-            .collect::<Vec<_>>(),
+        kinds(recovery),
         vec![
             pb::PhaseKind::Inhale as i32,
             pb::PhaseKind::HoldIn as i32,

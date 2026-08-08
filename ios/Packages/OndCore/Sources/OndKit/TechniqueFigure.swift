@@ -184,9 +184,10 @@ public struct TechniqueFigure: Sendable, Equatable {
     /// One figure per stage, in play order.
     ///
     /// Per stage rather than per technique because a staged protocol mixes
-    /// families: a Wim Hof round is a rapid line, then an open-ended retention,
-    /// then a three-phase recovery that is a triangle. One drawing spanning all
-    /// three would have to pick a grammar and misrepresent two of them.
+    /// families: a Wim Hof round is a rapid line, then one deep breath, then an
+    /// open-ended retention, then a three-phase recovery that is a triangle. One
+    /// drawing spanning all of them would have to pick a grammar and
+    /// misrepresent the rest.
     public static func all(for technique: Technique) -> [Self] {
         // Both tables are stage-indexed and shape-checked against this very
         // technique, so a plain subscript is in bounds by construction — the
@@ -200,8 +201,8 @@ public struct TechniqueFigure: Sendable, Equatable {
                 sides: sides?[index],
                 hints: hints?[index],
                 // A staged protocol draws one figure per stage side by side, and
-                // three sets of labels at a third of the width is a smudge. The
-                // stage titles beside the chart carry what they would have said.
+                // a set of labels on each at that width is a smudge. The stage
+                // titles beside the chart carry what they would have said.
                 labelled: technique.stages.count == 1
             )
         }
@@ -212,8 +213,8 @@ public struct TechniqueFigure: Sendable, Equatable {
     ///     sides, from `PhaseHints.sides(for:)`. Nil draws one-sided.
     ///   - hints: the per-phase nostril hints, for the `L`/`R` marks.
     ///   - labelled: whether to write the phase durations onto the figure. A
-    ///     staged technique draws three small figures side by side, and three
-    ///     sets of labels at that size is a smudge.
+    ///     staged technique draws one small figure per stage side by side, and a
+    ///     set of labels on each at that size is a smudge.
     public init(
         stage: Stage,
         sides: [Double]? = nil,

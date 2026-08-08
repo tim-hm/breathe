@@ -291,10 +291,11 @@ const TECHNIQUES: &[TechniqueSeed] = &[
     TechniqueSeed {
         slug: "wim-hof-rounds",
         name: "Wim Hof-style Rounds",
-        summary: "Thirty full, unforced breaths, then let the air go and wait — the hold after \
-                  them is the point, and it lasts as long as it lasts. One deep breath in, held \
-                  for fifteen seconds, closes each round. Popular, well described by people who \
-                  practise it, and thinner on trial evidence than its reputation suggests.",
+        summary: "Thirty full, unforced breaths and one last deep one, then let the air go and \
+                  wait — the hold after them is the point, and it lasts as long as it lasts. One \
+                  deep breath in, held for fifteen seconds, closes each round. Popular, well \
+                  described by people who practise it, and thinner on trial evidence than its \
+                  reputation suggests.",
         safety_note: "Sitting or lying down, always. Never in water, never in the bath, never \
                       driving or standing — fast breathing can make you faint with no warning. \
                       Tingling in the hands and face is ordinary; dizziness means stop. Never \
@@ -310,9 +311,30 @@ const TECHNIQUES: &[TechniqueSeed] = &[
                 // bottom of the thirty-to-forty range people practise it at.
                 30,
             ),
-            // The retention. Its duration is what a settled practitioner tends
-            // to reach, shown as a typical hold rather than a target — the
-            // range is a single point because there is no dial here at all.
+            // The last deep breath, in and out, which the thirty above do not
+            // contain and which the catalogue used to leave to chance: the
+            // session ran the thirtieth exhale straight into the retention, so
+            // the hold started a breath before the person did. Slower than the
+            // thirty because it fills the lungs rather than keeping their pace.
+            stage(
+                &[
+                    phase(PhaseKind::Inhale, 4000, (3000, 6000)),
+                    phase(PhaseKind::Exhale, 4000, (2000, 6000)),
+                ],
+                1,
+            ),
+            // The retention, held empty, as the published protocol describes
+            // it: the breath above goes out, and nothing comes in until the
+            // person decides it does.
+            //
+            // Alone in its stage because open-endedness is a property of the
+            // stage rather than the phase — every phase inside one is a phase
+            // the clock never ends, so a breath sharing it would wait for a tap
+            // nothing asks for and draw as a hold nobody times.
+            //
+            // Its duration is what a settled practitioner tends to reach, shown
+            // as a typical hold rather than a target — the range is a single
+            // point because there is no dial here at all.
             open_ended_stage(&[phase(PhaseKind::HoldOut, 60000, (60000, 60000))]),
             stage(
                 &[
@@ -794,6 +816,13 @@ mod tests {
     /// retention in the Wim Hof-style protocol is the only place it belongs, and
     /// it is a single emptied-lung hold — anything else marked open-ended is a
     /// mistake, and so is the retention losing the flag.
+    ///
+    /// The breath either side of it is pinned here too, and that is the half
+    /// worth keeping: the retention has to be entered on an exhale and left on
+    /// an inhale, and neither of those breaths may live inside the open-ended
+    /// stage, because a phase inside one is a phase the clock never ends. The
+    /// stage before is the deep breath that the fast sequence used to run
+    /// straight past.
     #[test]
     fn only_the_wim_hof_retention_is_open_ended() {
         for technique in TECHNIQUES {
@@ -815,9 +844,28 @@ mod tests {
                 );
                 assert_eq!(stage.phases[0].kind, PhaseKind::HoldOut);
                 assert_eq!(stage.cycles, 1, "an open-ended stage repeats nothing");
-                assert!(
-                    ordinal > 0,
-                    "a retention follows the breathing that earns it"
+
+                let before = technique.stages[..ordinal]
+                    .last()
+                    .and_then(|stage| stage.phases.last())
+                    .map(|phase| phase.kind);
+                assert_eq!(
+                    before,
+                    Some(PhaseKind::Exhale),
+                    "the retention in `{}` is entered on nothing",
+                    technique.slug
+                );
+
+                let after = technique
+                    .stages
+                    .get(ordinal + 1)
+                    .and_then(|stage| stage.phases.first())
+                    .map(|phase| phase.kind);
+                assert_eq!(
+                    after,
+                    Some(PhaseKind::Inhale),
+                    "the retention in `{}` is never breathed out of",
+                    technique.slug
                 );
             }
         }
