@@ -20,6 +20,17 @@ variable "admin_cidr" {
   type        = string
 }
 
+variable "assistant_inference_profile" {
+  description = "Bedrock inference profile the coach invokes. Must match BEDROCK_MODEL_ID in crates/api/src/config.rs — two literals naming one model, with nothing reconciling them, the same arrangement the Caddyfile hostname has with the Route 53 record."
+  type        = string
+  default     = "eu.anthropic.claude-haiku-4-5-20251001-v1:0"
+}
+
+variable "assistant_profile_regions" {
+  description = "Every destination region of `assistant_inference_profile`, read from its detail page in the Bedrock console. Required and deliberately undefaulted: the IAM policy has to name the underlying foundation model in each one, a guessed list is wrong in a way that only shows up as AccessDenied on a call Bedrock happened to route to the missing region, and a plan that stops for a missing value is a far cheaper place to find that out. It is also what `web/privacy.html` asserts about where coach requests are processed, so it is not a value to infer."
+  type        = list(string)
+}
+
 variable "data_volume_gb" {
   description = "Size of the EBS volume holding Postgres data. Separate from the root volume so the instance stays disposable: replace the box, reattach the data."
   type        = number

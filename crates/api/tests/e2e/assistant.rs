@@ -784,9 +784,9 @@ async fn a_broken_chat_stream_keeps_arrived_text() {
 ///
 /// `#[ignore]` and named `smoke_*`, which is the category `mise run
 /// assistant:smoke` runs and nothing else does — so it never runs in `mise run
-/// test:e2e` or in CI. It is the only way to find out whether the credentials,
-/// the IAM policy, the model id, the request body, and the parser agree with a
-/// provider that is not a test double. Everything above this line is deterministic; this is the seam's other
+/// test:e2e` or in CI. It is the only way to find out whether the model id, the
+/// request body, and the parser agree with a provider that is not a test
+/// double. Everything above this line is deterministic; this is the seam's other
 /// side, and it can only be checked by calling it.
 ///
 /// Skips rather than fails without AWS credentials, because a machine that

@@ -58,12 +58,17 @@ swiftformat = { version = "latest", os = ["macos"] }
 opentofu = "latest"
 
 [env]
-# The one secret this repo takes, and the only reason a dotenv file exists here
-# at all: OPENROUTER_API_KEY, the assistant's provider key. `.env` is gitignored
-# and optional — absent, the API boots with the assistant answering from its
-# rule-based fallback, which is what CI and a fresh clone get. `redact` keeps
-# the value out of `mise env` and task output; nothing else should ever print
-# it.
+# `.env` is gitignored, optional, and holds only machine-local values for the
+# iOS release tasks — see docs/contributing.md. `redact` keeps them out of
+# `mise env` and task output.
+#
+# Nothing the *backend* needs is in here, and nothing should be: it takes no
+# secret from the environment at all. Its one credential is the AWS identity the
+# assistant signs Bedrock calls with — the instance profile on the box, a
+# developer's own profile otherwise — which the AWS SDK finds through its
+# default credential chain rather than reading as a variable. A new server-side
+# entry here means the footprint has grown; check it belongs in the environment
+# at all first (CLAUDE.md §1.4).
 _.file = { path = ".env", redact = true }
 
 # Global so every cargo invocation reads the committed .sqlx cache rather than
@@ -407,16 +412,21 @@ depends = ["dev:db"]
 # machine, which is why it is `#[ignore]`d out of every other suite rather than
 # guarded by a variable someone could set by accident. One call, on the cheapest
 # model in the catalogue, through the same service path an RPC takes — so what
-# it proves is that the key, the model id, the request body, and the parser all
-# still agree with a provider no test double can stand in for.
+# it proves is that the model id, the request body, the streaming decoder, and
+# the parser all still agree with a provider no test double can stand in for.
+#
+# What it deliberately does *not* prove is the deployment's permission. It runs
+# as `ond`, which carries AdministratorAccess, while the box runs as the
+# `ond-api` role under one scoped policy — so a policy missing a foundation-model
+# ARN passes here and fails there. Only a call from the box tests that.
 #
 # The filter names a *category* — every `smoke_*` test — rather than one
 # function, so renaming a test cannot quietly make this task pass by running
 # nothing, and a second paid check joins by being named.
 #
-# `--no-capture` because the printed answer *is* the result. No key in the
-# environment is a skip, not a failure.
-env = { CARGO_TARGET_DIR = "{{env.CHECK_TARGET_DIR}}" }
+# `--no-capture` because the printed answer *is* the result. No usable AWS
+# identity is a skip, not a failure.
+env = { CARGO_TARGET_DIR = "{{env.CHECK_TARGET_DIR}}", AWS_PROFILE = "ond" }
 run = "cargo nextest run -p api --test e2e --run-ignored only -E 'test(/::smoke_/)' --no-capture"
 
 [tasks."test:swift"]
