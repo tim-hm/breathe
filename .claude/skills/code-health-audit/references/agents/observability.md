@@ -105,15 +105,15 @@ Logs must never contain secrets, and this repo has two specific exposures worth 
 
 **What to check:**
 
-- **`OPENROUTER_API_KEY`.** The only secret the backend reads. Check that it never reaches a log, an error message, or a `Debug` derive on a struct that holds it. A `#[derive(Debug)]` on a config struct containing the key will print it the first time anyone logs that struct.
-- **`DATABASE_URL`.** Carries credentials. Logging a connection string on a failed connect is the classic way this leaks — check `crates/migrate/src/main.rs` and any pool construction.
+- **AWS credentials.** There is no provider key: the assistant signs its Bedrock calls with credentials the AWS SDK resolves from its default chain — the EC2 instance profile on the box. The SDK's own cache is the only thing that should hold them, because it also refreshes them before they expire. Flag any code that calls `provide_credentials()` and keeps the result, that stores an access key or session token in a struct of this repo's own, or that logs an `SdkConfig` or `Credentials` value. `BedrockClient::connect` probes the chain once at boot and deliberately discards what it gets; a change that starts retaining it is the finding.
+- **`DATABASE_URL`.** The only credential `Config` holds, which is why that struct's `Debug` is hand-written rather than derived — re-deriving it re-exposes the password, and `debug_redacts_the_database_password` is the test that fails when someone does. Logging a connection string on a failed connect is the other classic leak — check `crates/migrate/src/main.rs` and any pool construction.
 - **The user id.** `ond-user-id` is an anonymous UUID rather than a name or an email, so it is fine to log and useful for correlation. Do not flag it as PII; do flag it appearing in a place that is shared or exported.
 - **Prompt and completion text.** The assistant handles free text a person wrote about how they feel. Logging a prompt or a completion body — even at `debug` — puts that text in the log aggregator. Flag any body-level logging of model input or output; log token counts, durations, and outcomes instead.
 - **sqlx errors reaching the client.** The inverse of the log-before-converting rule: the detail belongs in the log and must not be forwarded in the `tonic::Status` message, because it can carry table and column names.
 
 **Severity guide:**
 
-- API key, database URL, or any credential in a log or an error message → Critical
+- AWS credentials, database URL, or any other credential in a log or an error message → Critical
 - sqlx error text forwarded to the client in a `Status` message → Warning
 - Assistant prompt or completion body logged at any level → Warning
 - Blanket request/response body logging with no field filtering → Warning
@@ -126,13 +126,13 @@ Logs must never contain secrets, and this repo has two specific exposures worth 
 
 - **Level configuration.** `RUST_LOG` overrides the filter; the default is `api=info,tower_http=info,warn`, chosen at boot in `crates/api/src/obs.rs` from `OND_ENV`. Flag ad-hoc level gating anywhere else — a hand-rolled `if verbose` is a second configuration surface for something already configured.
 - **Format selection.** JSON in production, human-readable in dev, decided once in `obs.rs`. Flag any second place that formats log output.
-- **New environment variables.** `CLAUDE.md` §1.4 caps the backend at three: `OND_ENV`, `DATABASE_URL`, and the optional `OPENROUTER_API_KEY`. A fourth read anywhere — including one that only affects logging — is a convention violation, because it is a value that can differ between a laptop and a deployment without anything noticing.
+- **New environment variables.** `CLAUDE.md` §1.4 caps the backend at two: `OND_ENV` and `DATABASE_URL`. A third read anywhere — including one that only affects logging — is a convention violation, because it is a value that can differ between a laptop and a deployment without anything noticing. A reintroduced provider key is the specific regression to watch for: the assistant's credentials come from the AWS default credential chain precisely so that no variable names them, and `AWS_REGION` is not an exception — the region is a constant in `config.rs` for the same reason the model id is.
 - **Metrics and tracing export.** `docs/observability.md` says neither exists yet, and that when metrics arrive they must be served on a **separate port** from the public listener so the scrape target is never exposed. If an exporter has appeared on the main listener, that is the finding.
 
 **Severity guide:**
 
 - A metrics or debug endpoint served on the public listener → Warning
-- A fourth environment variable read by the backend → Warning
+- A third environment variable read by the backend, or a reintroduced provider key → Warning
 - Ad-hoc level gating or a second log-format decision outside `obs.rs` → Suggestion
 
 ---

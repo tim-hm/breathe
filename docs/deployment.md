@@ -47,22 +47,33 @@ The one-pager's technique glyphs are the reference for the apps' own drawings, w
 
 ## Environment
 
-The container gets exactly the three variables `crates/api/src/config.rs` reads, and no more — anything else belongs in config.rs as a derivation, per CLAUDE.md §1.4.
+The container gets exactly the two variables `crates/api/src/config.rs` reads, and no more — anything else belongs in config.rs as a derivation, per CLAUDE.md §1.4.
 
-| Variable             | Required | Where it comes from                                                              |
-| :------------------- | :------- | :------------------------------------------------------------------------------- |
-| `OND_ENV`            | yes      | Literal `production` in `infra/box/compose.yaml` — JSON logs, no permissive CORS |
-| `DATABASE_URL`       | yes      | Assembled in the same file from the generated `POSTGRES_PASSWORD`                |
-| `OPENROUTER_API_KEY` | no       | `/srv/data/ond.env`, added by hand — see below                                   |
+| Variable       | Required | Where it comes from                                                              |
+| :------------- | :------- | :------------------------------------------------------------------------------- |
+| `OND_ENV`      | yes      | Literal `production` in `infra/box/compose.yaml` — JSON logs, no permissive CORS |
+| `DATABASE_URL` | yes      | Assembled in the same file from the generated `POSTGRES_PASSWORD`                |
 
-`OPENROUTER_API_KEY` is the assistant's provider key, and the only optional one. Absent, the API boots normally and the assistant answers from its rule-based fallback; every RPC still returns a real answer, flagged so the client can say so. Add it the same way the password lives — appended to `/srv/data/ond.env` on the data volume, which `/srv/ond/.env` symlinks onto, so it survives replacing the instance:
+**The assistant has no variable, and that is the design.** It calls Amazon Bedrock directly, signing each call with the `ond-api` instance profile that `infra/main.tf` attaches — reachable from inside the container because `http_put_response_hop_limit` is 2, the same reason the backup cron's `aws s3 cp` works. So there is no key on the box, nothing to add after a rebuild, and nothing to rotate. Where the box cannot sign for Bedrock at all — a laptop with no AWS identity, a CI runner — the API boots normally and the assistant answers from its rule-based fallback; every RPC still returns a real answer, flagged so the client can say so.
 
-```sh
-ssh ubuntu@<elastic_ip> 'printf "OPENROUTER_API_KEY=%s\n" "<key>" | sudo tee -a /srv/data/ond.env >/dev/null'
-ssh ubuntu@<elastic_ip> 'cd /srv/ond && docker compose up -d api'
+The two things that _are_ configuration live in code and in OpenTofu: which model, in `BEDROCK_MODEL_ID`; and which regions its inference profile may route to, in `assistant_profile_regions`. See [the assistant's permission](#the-assistants-permission) below.
+
+## The assistant's permission
+
+`aws_iam_role_policy.invoke_model` in `infra/main.tf` is what lets the box call the coach's model. It grants `bedrock:InvokeModel` and `bedrock:InvokeModelWithResponseStream` — the streaming one is not optional, because the chat RPC streams — over two ARN families, and both are required:
+
+- the **inference profile**, `arn:aws:bedrock:eu-west-2:<account>:inference-profile/eu.anthropic.…`, which is where the call is addressed; and
+- the **underlying foundation model** in every region that profile may forward to, `arn:aws:bedrock:<destination>::foundation-model/anthropic.…`.
+
+A policy granting only the first is the failure worth knowing about. It is valid, it plans, it applies — and then every call comes back `AccessDenied`, on the box, because an invocation is authorised against both. The foundation-model id is derived from the profile id rather than written twice, so those two cannot drift.
+
+The destination list is `assistant_profile_regions`, and it has **no default on purpose**. It is read from the inference profile's detail page in the Bedrock console, and a guessed list fails only when Bedrock happens to route to the region that was left out — so a plan that stops for a missing value is where that mistake belongs. The same list is what `web/privacy.html` asserts about where coach requests are processed, which is the other reason not to infer it. It lives in `infra/terraform.tfvars` beside `ssh_public_key` and `admin_cidr`:
+
+```hcl
+assistant_profile_regions = ["eu-west-1", "eu-central-1", ...]  # from the console
 ```
 
-The key never leaves the box: the model is called server-side precisely so no build of the app ever carries one. Rotating it is the same two commands with the old line removed first.
+Changing the model means changing `BEDROCK_MODEL_ID` in `crates/api/src/config.rs` and `assistant_inference_profile` here together, then re-reading the destination list — a different profile can have a different one. That constant's doc comment carries the standing constraint on which models may be adopted at all.
 
 ## Identity and state
 

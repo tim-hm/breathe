@@ -147,6 +147,56 @@ data "aws_iam_policy_document" "write_backups" {
   }
 }
 
+data "aws_caller_identity" "current" {}
+
+locals {
+  # The foundation model behind the inference profile: the same id with the
+  # geography prefix taken off, because that prefix is the profile and not part
+  # of the model's name. Derived rather than written out a second time — two
+  # literals naming one model is a pair that can disagree, and the way it would
+  # disagree is an AccessDenied at invoke time.
+  #
+  # The optional group matches `eu.`, `us.`, `apac.` and anything else shaped
+  # like a geography, and leaves a profile id carrying no prefix alone.
+  assistant_foundation_model = regex("^(?:[a-z]{2,4}\\.)?(.*)$", var.assistant_inference_profile)[0]
+}
+
+# The assistant's model calls. Scoped to one profile and one model rather than
+# `bedrock:*` on `*`, because this role is what an SSRF in anything the box runs
+# would be reaching for.
+#
+# Both ARN families are load-bearing and the second one is the trap. Invoking a
+# cross-region inference profile is authorised twice: once against the profile,
+# which is where the call is addressed, and once against the underlying
+# foundation model in whichever destination region Bedrock forwards it to. A
+# policy naming only the profile is accepted by a plan, applies cleanly, and
+# then fails every call with AccessDenied — in production, because that is the
+# first place a real invocation happens.
+#
+# `var.assistant_profile_regions` therefore has to be the profile's *complete*
+# destination list, not the regions we expect to be used: a region left out is a
+# failure that appears only when Bedrock happens to route there under load.
+data "aws_iam_policy_document" "invoke_model" {
+  statement {
+    actions = [
+      "bedrock:InvokeModel",
+      # Not optional: the chat RPC streams, so this is the action the coach
+      # actually uses on the path a person watches.
+      "bedrock:InvokeModelWithResponseStream",
+    ]
+
+    resources = concat(
+      # System-defined inference profiles are account-scoped and live in the
+      # region the call is signed for — the box's own.
+      ["arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:inference-profile/${var.assistant_inference_profile}"],
+      # Foundation models are not account-scoped, hence the empty account field.
+      [for destination in var.assistant_profile_regions :
+        "arn:aws:bedrock:${destination}::foundation-model/${local.assistant_foundation_model}"
+      ],
+    )
+  }
+}
+
 resource "aws_iam_role" "api" {
   name               = "ond-api"
   assume_role_policy = data.aws_iam_policy_document.assume_ec2.json
@@ -156,6 +206,12 @@ resource "aws_iam_role_policy" "write_backups" {
   name   = "write-backups"
   role   = aws_iam_role.api.id
   policy = data.aws_iam_policy_document.write_backups.json
+}
+
+resource "aws_iam_role_policy" "invoke_model" {
+  name   = "invoke-model"
+  role   = aws_iam_role.api.id
+  policy = data.aws_iam_policy_document.invoke_model.json
 }
 
 # Break-glass. SSH is the only other way in, and the situations worth planning

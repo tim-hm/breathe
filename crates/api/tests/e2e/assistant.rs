@@ -1,11 +1,11 @@
 //! `AssistantService`, over the wire the iOS client uses, against a scripted
 //! model.
 //!
-//! No network and no key. The seam in `features::assistant::model` exists so
-//! that everything worth testing here — validation, quota, the breaker, the
+//! No network and no credentials. The seam in `features::assistant::model`
+//! exists so that everything worth testing here — validation, quota, the breaker, the
 //! fallback, and the streaming frames — is testable deterministically; the only
-//! code these tests do not reach is the thin layer in `openrouter` that turns a
-//! `ModelRequest` into an HTTP body.
+//! code these tests do not reach is the thin layer in `bedrock` that turns a
+//! `ModelRequest` into a signed Bedrock call.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -784,35 +784,34 @@ async fn a_broken_chat_stream_keeps_arrived_text() {
 ///
 /// `#[ignore]` and named `smoke_*`, which is the category `mise run
 /// assistant:smoke` runs and nothing else does — so it never runs in `mise run
-/// test:e2e` or in CI. It is the only way to find out whether the key, the model
-/// id, the request body, and the parser agree with a provider that is not a test
+/// test:e2e` or in CI. It is the only way to find out whether the model id, the
+/// request body, and the parser agree with a provider that is not a test
 /// double. Everything above this line is deterministic; this is the seam's other
 /// side, and it can only be checked by calling it.
 ///
-/// Skips rather than fails without a key, because "no key" is a supported state
-/// of this repo and not a broken smoke test.
+/// Skips rather than fails without AWS credentials, because a machine that
+/// cannot sign for Bedrock is a supported state of this repo and not a broken
+/// smoke test.
 #[tokio::test]
 #[ignore = "calls the real model provider; run it with `mise run assistant:smoke`"]
 // The whole output of this test is what it printed — a status line nobody reads
 // is not a smoke test.
 #[allow(clippy::print_stdout)]
 async fn smoke_the_real_model_answers() {
-    let Some(key) = std::env::var("OPENROUTER_API_KEY")
-        .ok()
-        .filter(|key| !key.trim().is_empty())
-    else {
-        println!("OPENROUTER_API_KEY is not set — nothing to smoke-test");
-        return;
+    let client = match api::assistant::BedrockClient::connect().await {
+        Ok(client) => client,
+        Err(error) => {
+            println!("no AWS credentials — nothing to smoke-test ({error})");
+            return;
+        }
     };
-
-    let client = api::assistant::OpenRouterClient::new(&key).expect("the HTTP client builds");
 
     let db = TestDatabase::create("assistant_smoke").await;
     set_goals(&db, USER, &[pb::TechniqueGoal::Sleep]).await;
 
     let response = recommend(&db, Arc::new(client), USER).await;
 
-    println!("model:  {}", api::config::OPENROUTER_MODEL_ID);
+    println!("model:  {}", api::config::BEDROCK_MODEL_ID);
     println!(
         "source: {:?}",
         pb::AssistantSource::try_from(response.source)
@@ -831,10 +830,10 @@ async fn smoke_the_real_model_answers() {
 
 /// The chat path's own paid check, on `smoke_the_real_model_answers`'s exact
 /// terms — `#[ignore]`d everywhere but `mise run assistant:smoke`, skipping
-/// without a key.
+/// without AWS credentials.
 ///
 /// What it proves that the first smoke cannot: the turns emission in
-/// `openrouter` — the instruction message followed by genuine alternating
+/// `bedrock` — the instruction message followed by genuine alternating
 /// user/assistant messages, consecutive same-role messages included — is a
 /// shape the provider accepts and streams an answer to. Every deterministic
 /// test stops at the seam; this is the only check of the layer under it.
@@ -844,15 +843,13 @@ async fn smoke_the_real_model_answers() {
 // is not a smoke test.
 #[allow(clippy::print_stdout)]
 async fn smoke_the_real_model_chats() {
-    let Some(key) = std::env::var("OPENROUTER_API_KEY")
-        .ok()
-        .filter(|key| !key.trim().is_empty())
-    else {
-        println!("OPENROUTER_API_KEY is not set — nothing to smoke-test");
-        return;
+    let client = match api::assistant::BedrockClient::connect().await {
+        Ok(client) => client,
+        Err(error) => {
+            println!("no AWS credentials — nothing to smoke-test ({error})");
+            return;
+        }
     };
-
-    let client = api::assistant::OpenRouterClient::new(&key).expect("the HTTP client builds");
 
     let db = TestDatabase::create("assistant_smoke_chat").await;
     set_goals(&db, USER, &[pb::TechniqueGoal::Sleep]).await;
@@ -875,7 +872,7 @@ async fn smoke_the_real_model_chats() {
     .into_ok();
 
     let text: String = chunks.iter().map(|chunk| chunk.text.as_str()).collect();
-    println!("model:  {}", api::config::OPENROUTER_MODEL_ID);
+    println!("model:  {}", api::config::BEDROCK_MODEL_ID);
     println!("chunks: {}", chunks.len());
     let preview: String = text.chars().take(180).collect();
     println!("reply:  {preview}…");

@@ -97,7 +97,7 @@ The assistant sends text a person wrote to a third party and renders what comes 
 ### Cost and availability controls
 
 - **Server-side enforcement.** The spend ceiling and the circuit breaker are the controls that stop a bad day from becoming an unbounded bill. Both must be enforced on the server, per user, before the provider call. A quota checked in the app, or checked after the call, is not a control. `an_exhausted_quota_answers_from_the_rules` and `the_breaker_trips_and_then_recovers` pin the current behaviour — check any new provider call path goes through the same gate rather than around it.
-- **Absent-key behaviour.** `CLAUDE.md` §1.4 says the assistant answers from its rule-based fallback when `OPENROUTER_API_KEY` is absent. Check that path degrades rather than erroring, and that it does not leak the reason to the client.
+- **No-credentials behaviour.** `CLAUDE.md` §1.4 says the assistant answers from its rule-based fallback where the AWS default credential chain resolves to nothing — a fresh clone, a CI runner, any machine with no AWS identity. The trigger is the chain, not an absent key; there is no key. The check is unchanged and still the point: that path must degrade rather than erroring, and must not leak the reason to the client. `from_config` is now `install`, and the two outcomes are both normal by design, so a change that makes a missing identity fatal at boot is the finding.
 - Timeouts on the provider call. An unbounded upstream hold is a resource exhaustion vector with no attacker required.
 
 **Severity guide:**
@@ -136,8 +136,8 @@ The assistant sends text a person wrote to a third party and renders what comes 
 **What to check:**
 
 - **No secrets in source.** Strings shaped like API keys, base64 blobs, `password = "…"`, connection strings with credentials. Check test files too — test secrets must be obviously fake.
-- **`.env` is gitignored** (`.gitignore:25`) and must not be tracked. Verify with `git ls-files` rather than assuming, and check the same for `*.pem`, `*.key`, `*.p8` (the App Store connect key shape), and anything under `infra/` holding state or credentials.
-- **The three-variable rule.** `CLAUDE.md` §1.4: the backend reads `OND_ENV`, `DATABASE_URL`, and the optional `OPENROUTER_API_KEY`, and nothing else. A fourth is a config value that can differ between a laptop and a deployment without anything noticing — which is a correctness problem before it is a security one, but it is often both.
+- **`.env` is gitignored** and must not be tracked. Verify with `git ls-files` rather than assuming, and check the same for `*.pem`, `*.key`, `*.p8` (the App Store Connect key shape), and anything under `infra/` holding state or credentials. Nothing the backend reads is in `.env` any more — it carries only the per-machine values the iOS release tasks need — so a server-side variable appearing there is itself the finding, before anyone asks whether it is secret.
+- **The two-variable rule.** `CLAUDE.md` §1.4: the backend reads `OND_ENV` and `DATABASE_URL`, and nothing else. A third is a config value that can differ between a laptop and a deployment without anything noticing — which is a correctness problem before it is a security one, but it is often both. The assistant takes no key at all: it signs Bedrock calls with credentials the AWS SDK finds through its default chain, so a variable carrying a provider key, an AWS access key, or a region is a regression rather than an addition.
 - **No default value for a secret.** A fallback that is a real key is the worst case; a fallback that is a placeholder which then _works_ against something is nearly as bad.
 - **`Debug` derives on structs holding secrets.** A `#[derive(Debug)]` on a config struct containing the API key prints it the first time anything logs that struct.
 - **Deployment configuration.** Check `infra/` and `Dockerfile` for a secret baked into an image layer or a Terraform variable with a committed default.

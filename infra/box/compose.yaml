@@ -41,12 +41,11 @@ services:
     environment:
       OND_ENV: production
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@db:5432/ond?sslmode=disable
-      # The assistant's provider key, from the same env file the password comes
-      # from. Optional and defaulted to empty: an unset key is a supported state
-      # — the assistant answers from its rule-based fallback and the rest of the
-      # API is unaffected — and without the default, compose would refuse to
-      # start the stack on a box where nobody has added one.
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      # Nothing here for the assistant, deliberately. It signs its Bedrock calls
+      # with the instance profile, which the AWS SDK reads from the metadata
+      # endpoint — reachable from inside this container because the instance's
+      # http_put_response_hop_limit is 2 (see infra/main.tf). So there is no key
+      # to add to this box and none to rotate.
     depends_on:
       db:
         condition: service_healthy

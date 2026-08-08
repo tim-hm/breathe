@@ -1,16 +1,17 @@
 //! Boot-time configuration.
 //!
-//! Three values come from the environment: `OND_ENV`, `DATABASE_URL`, and
-//! the optional `OPENROUTER_API_KEY`. Everything else is *derived* from the
-//! environment name (CLAUDE.md §1.4–1.5). The reason is that every environment
-//! variable is a value that can differ between a developer's machine and a
-//! deployment without anything noticing — a derived value cannot drift, because
-//! there is only one of it.
+//! Two values come from the environment: `OND_ENV` and `DATABASE_URL`.
+//! Everything else is *derived* from the environment name (CLAUDE.md §1.4–1.5).
+//! The reason is that every environment variable is a value that can differ
+//! between a developer's machine and a deployment without anything noticing — a
+//! derived value cannot drift, because there is only one of it.
 //!
-//! The third is a secret, which is the one thing the principle admits, and it
-//! is the *only* assistant value that comes from outside: which provider and
-//! which model are constants below, so a laptop and a deployment cannot end up
-//! talking to different models without anybody noticing.
+//! Nothing here configures the assistant. Its credentials are the EC2 instance
+//! profile, which the AWS SDK finds through its default credential chain
+//! without being told; its region and its model are the constants below. So the
+//! variable the principle would have admitted — a provider key — does not
+//! exist, and a laptop and a deployment cannot end up talking to different
+//! models without anybody noticing.
 
 use std::fmt;
 use std::str::FromStr;
@@ -31,33 +32,21 @@ pub struct Config {
     pub environment: Environment,
     pub database_url: String,
     pub port: u16,
-    /// The assistant's provider key, or `None` where nobody supplied one.
-    ///
-    /// Optional on purpose: a fresh clone, a CI run, and the integration tests
-    /// all work without it, and the assistant answers from its rules instead.
-    /// The key never leaves this process — it is why the model is called from
-    /// the server rather than the app at all.
-    pub openrouter_api_key: Option<String>,
 }
 
-/// Hand-written because the derive published both credentials.
+/// Hand-written because the derive published a credential.
 ///
 /// `database_url` carries the Postgres password inline in the deployed compose
-/// file and `openrouter_api_key` is the provider key, and `AppState` holds the
-/// whole struct — so one `tracing::error!(?config, …)` or one
-/// `.context(format!("{config:?}"))` would have put both in the production JSON
-/// stream permanently, with nothing failing to compile. The field doc above
-/// claims the key never leaves this process; this impl is what makes it true.
+/// file, and `AppState` holds the whole struct — so one
+/// `tracing::error!(?config, …)` or one `.context(format!("{config:?}"))` would
+/// have put it in the production JSON stream permanently, with nothing failing
+/// to compile.
 impl fmt::Debug for Config {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Config")
             .field("environment", &self.environment)
             .field("database_url", &redacted(&self.database_url))
             .field("port", &self.port)
-            .field(
-                "openrouter_api_key",
-                &self.openrouter_api_key.as_ref().map(|_| REDACTED),
-            )
             .finish()
     }
 }
@@ -150,26 +139,39 @@ const DEFAULT_PORT: u16 = 18100;
 /// in `ios/project.yml`.
 pub const BUNDLE_ID: &str = "xyz.holmie.ond";
 
-/// Where the assistant's model calls go.
+/// The AWS region the assistant's calls are signed for and sent to.
 ///
-/// `OpenRouter` rather than a provider directly: it fronts every model behind one
-/// OpenAI-shaped API, so trying a different model is the constant below rather
-/// than a new client. No trailing slash — the paths appended to it supply one.
-pub const OPENROUTER_BASE_URL: &str = "https://openrouter.ai/api/v1";
+/// The box itself is in London, so a coach request reaches Bedrock's regional
+/// endpoint without leaving the region the rest of the deployment lives in.
+/// Where it goes *after* that is the inference profile's business — see below.
+///
+/// A constant rather than `AWS_REGION`, for the reason the whole module exists:
+/// a region that could differ between a laptop and the deployment would route
+/// coach traffic somewhere `web/privacy.html` does not describe.
+pub const BEDROCK_REGION: &str = "eu-west-2";
 
-/// The model the assistant asks.
+/// The model the assistant asks, named as an **EU cross-region inference
+/// profile**.
 ///
-/// A constant, not a variable, for the reason the whole module exists: a model
-/// id that could differ between a laptop and a deployment would make "the
-/// assistant sounds different in production" a thing nobody could see.
+/// The `eu.` prefix is the profile, not a region tag. Bedrock forwards each
+/// call to one of the profile's destination regions for capacity, which is why
+/// `web/privacy.html` says coach requests are processed across Amazon's EU
+/// regions rather than naming one — and why the IAM policy in `infra/main.tf`
+/// has to grant the underlying foundation model in *every* destination region
+/// alongside the profile itself. A policy naming only the profile passes a plan
+/// and then fails at invoke time.
 ///
-/// The leading `~` **is part of the id** — it is how `OpenRouter` names a
-/// floating alias, and this one tracks the newest Anthropic Haiku. Haiku
-/// because both RPCs are short, structured, and latency-sensitive, and because
-/// per-call cost is what makes a generous free-tier quota possible at all.
-/// Verify a replacement against `GET https://openrouter.ai/api/v1/models`,
-/// which needs no key.
-pub const OPENROUTER_MODEL_ID: &str = "~anthropic/claude-haiku-latest";
+/// Haiku because both RPCs are short, structured, and latency-sensitive, and
+/// because per-call cost is what makes a generous free-tier quota possible at
+/// all.
+///
+/// **Standing constraint on replacing this.** `web/privacy.html` states that
+/// what a person types is neither retained nor used to train any model. A model
+/// whose Bedrock listing requires provider data sharing — one whose
+/// `allowed_modes` does not offer `none` — makes that page untrue the moment it
+/// is adopted. Such a model cannot be put here without changing that page in
+/// the same commit.
+pub const BEDROCK_MODEL_ID: &str = "eu.anthropic.claude-haiku-4-5-20251001-v1:0";
 
 pub fn load() -> Result<Config> {
     let environment = environment_from(std::env::var("OND_ENV"))?;
@@ -182,20 +184,7 @@ pub fn load() -> Result<Config> {
         environment,
         database_url,
         port: DEFAULT_PORT,
-        openrouter_api_key: secret_from(std::env::var("OPENROUTER_API_KEY")),
     })
-}
-
-/// Reads an optional secret, treating blank as absent.
-///
-/// A variable set to the empty string is what a deployment template that forgot
-/// to fill it in produces, and it must mean the same as not setting it: an
-/// empty bearer token would otherwise reach the provider and come back as a
-/// 401 on every call for as long as nobody looked.
-fn secret_from(var: Result<String, std::env::VarError>) -> Option<String> {
-    var.ok()
-        .map(|value| value.trim().to_owned())
-        .filter(|value| !value.is_empty())
 }
 
 /// Interprets the raw `OND_ENV` lookup. Split from `load` so the branching
@@ -236,37 +225,18 @@ mod tests {
         assert_eq!(parsed.expect("absence is not an error"), Environment::Dev);
     }
 
-    /// A template that was never filled in sets the variable to nothing, and
-    /// that has to mean "no key" — not "send an empty bearer token", which
-    /// fails every call with a 401 nobody is watching for.
-    #[test]
-    fn a_blank_secret_is_no_secret() {
-        for blank in [String::new(), "   ".to_owned(), "\n".to_owned()] {
-            assert_eq!(secret_from(Ok(blank)), None);
-        }
-
-        assert_eq!(secret_from(Err(std::env::VarError::NotPresent)), None);
-        assert_eq!(
-            secret_from(Ok("  sk-or-v1-example  ".to_owned())),
-            Some("sk-or-v1-example".to_owned()),
-            "a key pasted with whitespace around it is still that key"
-        );
-    }
-
     /// The check that survives the next editor: whatever else the impl prints,
-    /// neither credential may appear. Re-deriving `Debug` fails this.
+    /// the Postgres password may not appear. Re-deriving `Debug` fails this.
     #[test]
-    fn debug_redacts_both_credentials() {
+    fn debug_redacts_the_database_password() {
         let config = Config {
             environment: Environment::Production,
             database_url: "postgres://postgres:hunter2@db:5432/ond?sslmode=disable".to_owned(),
             port: DEFAULT_PORT,
-            openrouter_api_key: Some("sk-or-v1-example".to_owned()),
         };
 
         let rendered = format!("{config:?}");
         assert!(!rendered.contains("hunter2"), "{rendered}");
-        assert!(!rendered.contains("sk-or-v1-example"), "{rendered}");
         assert!(
             rendered.contains("db:5432/ond"),
             "the host and database name are the part worth keeping: {rendered}"

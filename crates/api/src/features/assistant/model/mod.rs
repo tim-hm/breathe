@@ -1,19 +1,19 @@
 //! The seam every language model sits behind.
 //!
-//! One trait, three implementations: `super::openrouter` calls a provider,
+//! One trait, three implementations: `super::bedrock` calls a provider,
 //! [`DisabledModelClient`] calls nothing, and the integration tests script one.
 //! Everything else in this feature — quota, circuit breaker, validation,
 //! fallback — is written against the trait, so all of it is exercised without a
-//! network call and the only untested code is the thin layer that builds an
-//! HTTP body.
+//! network call and the only untested code is the thin layer that builds a
+//! request body.
 //!
 //! The vocabulary is deliberately not a provider's. A `ModelRequest` is a
-//! cacheable prefix, an instruction, and a ceiling; how that becomes a
-//! chat-completions call is `openrouter`'s business.
+//! cacheable prefix, an instruction, and a ceiling; how that becomes a Messages
+//! API call is `bedrock`'s business.
 
+pub mod bedrock;
 pub mod breaker;
 pub mod disabled;
-pub mod openrouter;
 
 use std::pin::Pin;
 use std::sync::Arc;
@@ -21,10 +21,10 @@ use std::time::Duration;
 
 use tokio_stream::Stream;
 
+use self::bedrock::BedrockClient;
 use self::breaker::GuardedModelClient;
 use self::disabled::DisabledModelClient;
-use self::openrouter::OpenRouterClient;
-use crate::config::Config;
+use crate::config::Environment;
 
 /// Text arriving a piece at a time, in order.
 ///
@@ -131,8 +131,8 @@ pub trait ModelClient: Send + Sync {
     /// `stream` still refuse on their own, because the breaker can trip between
     /// this answer and the call. What it buys is that the caller can skip the
     /// work a refusal would waste: a quota claim, which is a database write, and
-    /// the prompt, which walks the whole catalogue. With no key configured that
-    /// is every request in the process.
+    /// the prompt, which walks the whole catalogue. Where no AWS credentials
+    /// resolved that is every request in the process.
     ///
     /// Defaulted to `true` so an implementation that always tries — the
     /// provider, a test double — says nothing.
@@ -155,40 +155,53 @@ fn millis(duration: Duration) -> u64 {
 ///
 /// Two outcomes, and both are normal:
 ///
-/// - **A key is configured** — `OpenRouter`, behind the circuit breaker.
-/// - **No key** — [`DisabledModelClient`], which is not a degraded mode so much
-///   as the app's offline-first promise applied at boot: every RPC still
+/// - **AWS credentials resolve** — Bedrock, behind the circuit breaker. On the
+///   box those credentials are the instance profile, reached over the metadata
+///   endpoint; on a developer's machine they are whatever `AWS_PROFILE` names.
+/// - **They do not** — [`DisabledModelClient`], which is not a degraded mode so
+///   much as the app's offline-first promise applied at boot: every RPC still
 ///   answers, from the rules, flagged `FALLBACK`. That is what lets a fresh
-///   clone run `mise run dev` and the integration tests run in CI with no
-///   secret at all.
+///   clone run `mise run dev` and the integration tests run in CI with no AWS
+///   identity at all.
+///
+/// Nothing about *which* model is configurable — region and model are
+/// constants, and the credentials are found rather than supplied. The
+/// environment is taken for one reason, which is the level the second outcome is
+/// logged at: on a laptop or a CI runner it is the supported state this repo
+/// documents, and on the box the same line means the coach is down. Async only
+/// because finding credentials is.
 ///
 /// One log line either way, because "the assistant is quiet today" is otherwise
-/// indistinguishable from "the key is missing" from outside the process.
-pub fn from_config(config: &Config) -> Arc<dyn ModelClient> {
-    let Some(key) = config.openrouter_api_key.as_deref() else {
-        tracing::info!(
-            feature = "assistant",
-            "OPENROUTER_API_KEY is not set — answering from the rule-based fallback"
-        );
-        return Arc::new(DisabledModelClient);
-    };
+/// indistinguishable from "this machine cannot sign for Bedrock" from outside
+/// the process.
+pub async fn install(environment: Environment) -> Arc<dyn ModelClient> {
+    // One message, logged at two levels below. `tracing` takes its level as a
+    // compile-time constant, so the level cannot be a variable and the two calls
+    // cannot share a literal without this.
+    const QUIET: &str =
+        "the assistant cannot reach Bedrock — answering from the rule-based fallback";
 
-    let client = match OpenRouterClient::new(key) {
-        Ok(client) => client,
-        Err(error) => {
-            tracing::error!(
+    let error = match BedrockClient::connect().await {
+        Ok(client) => {
+            tracing::info!(
                 feature = "assistant",
-                %error,
-                "the HTTP client could not be built — answering from the rule-based fallback"
+                model = crate::config::BEDROCK_MODEL_ID,
+                region = crate::config::BEDROCK_REGION,
+                "the assistant is live"
             );
-            return Arc::new(DisabledModelClient);
+            return Arc::new(GuardedModelClient::new(Arc::new(client)));
         }
+        Err(error) => error,
     };
 
-    tracing::info!(
-        feature = "assistant",
-        model = crate::config::OPENROUTER_MODEL_ID,
-        "the assistant is live"
-    );
-    Arc::new(GuardedModelClient::new(Arc::new(client)))
+    // On a laptop or a CI runner this is the supported state docs/deployment.md
+    // describes; on the box it is the coach being down, and only one of those is
+    // worth a `warn`. A match on `Environment` rather than a bool, which is the
+    // convention config.rs sets for everything that differs between the two.
+    match environment {
+        Environment::Production => tracing::warn!(feature = "assistant", %error, "{QUIET}"),
+        Environment::Dev => tracing::info!(feature = "assistant", %error, "{QUIET}"),
+    }
+
+    Arc::new(DisabledModelClient)
 }
