@@ -73,6 +73,12 @@ public enum ReminderIntensity: String, Sendable, CaseIterable, Codable, Identifi
 /// Bands by birth decade rather than by age, so a person's band never changes
 /// under them. Optional everywhere: it exists so the age-band leaderboard can
 /// compare like with like, and nobody has to answer it to use the app.
+///
+/// Both pickers render `allCases`, so the youngest case here is the youngest
+/// band önd offers — which has to agree with the children's paragraph in the
+/// privacy policy and with the age answers on the App Store Connect
+/// questionnaire. The reasoning is on `BirthYearBand` in
+/// `proto/ond/v1/profile_service.proto`.
 public enum BirthYearBand: String, Sendable, CaseIterable, Codable, Identifiable {
     case before1960
     case sixties
