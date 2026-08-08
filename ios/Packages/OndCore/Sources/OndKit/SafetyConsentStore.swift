@@ -27,8 +27,20 @@ import Observation
 /// screen is consent nobody gave.
 @MainActor
 @Observable
-public final class SafetyConsentStore {
+public final class SafetyConsentStore: PersonalStore {
     private static let key = "safety.consent"
+
+    /// `SafetyNoteStore`'s key, kept for the sole purpose of deleting it.
+    ///
+    /// That store — a per-slug record of which exercises' cautions somebody had
+    /// put away — was replaced by this one, and its key would otherwise sit in
+    /// `UserDefaults` naming the contraindicated exercises an erased person had
+    /// been reading about. Swept from `erase()` rather than from a launch-time
+    /// migration: the deletion is the only place a stale key is worth anything
+    /// more than the code it takes to remove it, and a migration would be a
+    /// permanent fixture for a one-off. It therefore lingers, harmlessly, on
+    /// every install that never asks to be forgotten.
+    private static let dismissedNotesKey = "safety.dismissedNotes"
 
     /// What this person agreed to, or nil if they never have.
     public private(set) var agreed: AgreedSafetyConsent?
@@ -81,6 +93,25 @@ public final class SafetyConsentStore {
 
         defaults.set(encoded, forKey: Self.key)
         agreed = record
+    }
+
+    /// Forgets the agreement, so the terms are asked again on the next launch.
+    ///
+    /// This is the store a deletion must not miss. Everything else on the device
+    /// holds what somebody *did*; this holds a dated statement that they agreed
+    /// to something, which is precisely the trace it exists to keep — and
+    /// keeping it about a person who has asked to be forgotten would make
+    /// "delete everything" a lie about the one record that was designed to
+    /// outlast a memory.
+    ///
+    /// Asked again rather than carried forward, and that is the honest
+    /// consequence rather than an oversight: `ProfileStore.erase` puts
+    /// onboarding back, the safety terms are a step of it, and the next person
+    /// on this device has agreed to nothing.
+    public func erase() async {
+        agreed = nil
+        defaults.removeObject(forKey: Self.key)
+        defaults.removeObject(forKey: Self.dismissedNotesKey)
     }
 }
 

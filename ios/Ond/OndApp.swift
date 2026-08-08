@@ -153,7 +153,8 @@ struct OndApp: App {
                 // missing from this line is a "delete everything" that quietly
                 // leaves that one behind.
                 stores: [
-                    sessions, scores, queue, profiles, schedules, plus, LiveHealth.model, outbox,
+                    sessions, scores, queue, profiles, consent, schedules, plus, LiveHealth.model,
+                    outbox,
                 ],
                 onIdentityChange: Self.identityChange(telling: watch, and: journey)
             )

@@ -3,80 +3,6 @@ import Foundation
 import os
 import Testing
 
-/// A server that erases on demand, or refuses to.
-///
-/// Only the deletion is modelled: `signIn` is unreachable from every test here
-/// and pinned in `AccountModelTests` besides.
-private final class ErasingAccounts: AccountSyncing {
-    private let state = OSAllocatedUnfairLock(initialState: 0)
-    private let failure: (any Error)?
-
-    init(failingWith failure: (any Error)? = nil) {
-        self.failure = failure
-    }
-
-    /// How many erasures actually reached the server.
-    var deletions: Int {
-        state.withLock { $0 }
-    }
-
-    func signIn(identityToken _: String) async throws -> UUID {
-        throw AccountRepositoryError.transport("not what this suite is about")
-    }
-
-    func delete() async throws {
-        if let failure {
-            throw failure
-        }
-
-        state.withLock { $0 += 1 }
-    }
-}
-
-/// A profile server that holds nothing and accepts everything, so the store
-/// under test behaves exactly as it does on a device that has been online.
-private struct SettledProfiles: ProfileSyncing {
-    func fetch() async throws -> Profile {
-        .unanswered
-    }
-
-    @discardableResult
-    func update(_ profile: Profile) async throws -> Profile {
-        profile
-    }
-}
-
-/// `StoreKit` with one live subscription on it, which is the state that makes
-/// the interesting assertion possible: the account goes, the subscription does
-/// not.
-private struct SubscribedStoreFront: StoreFront {
-    func products() async -> [SubscriptionProduct] {
-        []
-    }
-
-    func currentEntitlements() async -> [SubscriptionTransaction] {
-        [
-            SubscriptionTransaction(
-                id: 1,
-                productID: SubscriptionTier.coach.productIdentifier ?? "",
-                expirationDate: .distantFuture,
-                revocationDate: nil,
-                jws: "jws-coach"
-            ),
-        ]
-    }
-
-    func updates() -> AsyncStream<SubscriptionTransaction> {
-        AsyncStream { $0.finish() }
-    }
-
-    func purchase(_: SubscriptionTier) async throws -> PurchaseOutcome {
-        .cancelled
-    }
-
-    func restore() async throws {}
-}
-
 /// Records the transactions the client pushes, which is how a test sees the
 /// entitlement being re-claimed under the identity that replaced the erased one.
 private final class RecordingEntitlements: EntitlementSyncing {
@@ -89,43 +15,6 @@ private final class RecordingEntitlements: EntitlementSyncing {
     func submit(_: String) async throws {
         state.withLock { $0 += 1 }
     }
-}
-
-/// Records every list the store re-synced it with, which is how a test sees the
-/// pending notification requests being taken back — an empty sync is what
-/// removes them.
-private final class RecordingNotifier: ScheduleNotifying {
-    private let state = OSAllocatedUnfairLock(initialState: [[Schedule]]())
-
-    var synced: [[Schedule]] {
-        state.withLock { $0 }
-    }
-
-    func requestAuthorization() async -> Bool {
-        true
-    }
-
-    func sync(_ schedules: [Schedule]) async {
-        state.withLock { $0.append(schedules) }
-    }
-}
-
-/// Health that has nothing to say, because none of this is about what it holds —
-/// the model stores exactly one thing, and it is the person's own choice.
-private struct SilentHealthStore: HealthStore {
-    func requestReadAuthorization() async {}
-
-    func requestWriteAuthorization() async {}
-
-    func restingHeartRate(from _: Date, to _: Date) async -> [DailyQuantity] {
-        []
-    }
-
-    func heartRateVariability(from _: Date, to _: Date) async -> [DailyQuantity] {
-        []
-    }
-
-    func writeMindfulSession(from _: Date, to _: Date) async {}
 }
 
 /// Deleting an account, over the real stores rather than spies of them.
@@ -151,6 +40,7 @@ struct AccountDeletionTests {
         let scores: FileBoltScoreStore
         let queue: SessionSyncQueue
         let profiles: ProfileStore
+        let consent: SafetyConsentStore
         let schedules: ScheduleStore
         let notifier: RecordingNotifier
         let plus: SubscriptionStore
@@ -179,6 +69,7 @@ struct AccountDeletionTests {
             ledger: SyncLedger(defaults: defaults)
         )
         let profiles = ProfileStore(profiles: SettledProfiles(), defaults: defaults)
+        let consent = SafetyConsentStore(defaults: defaults)
         let notifier = RecordingNotifier()
         let schedules = ScheduleStore(notifier: notifier, defaults: defaults)
         let entitlements = RecordingEntitlements()
@@ -189,7 +80,12 @@ struct AccountDeletionTests {
         )
         let health = HealthContextModel(store: SilentHealthStore(), defaults: defaults)
         let outbox = WatchHandoffOutbox(identity: identity, scores: scores, defaults: defaults)
-        let told = OSAllocatedUnfairLock(initialState: 0)
+        let account = accountModel(
+            identity: identity,
+            accounts: accounts,
+            stores: [sessions, scores, queue, profiles, consent, schedules, plus, health, outbox],
+            defaults: defaults
+        )
 
         return Install(
             identity: identity,
@@ -198,6 +94,7 @@ struct AccountDeletionTests {
             scores: scores,
             queue: queue,
             profiles: profiles,
+            consent: consent,
             schedules: schedules,
             notifier: notifier,
             plus: plus,
@@ -205,16 +102,34 @@ struct AccountDeletionTests {
             health: health,
             outbox: outbox,
             defaults: defaults,
-            account: AccountModel(
-                identity: identity,
-                accounts: accounts,
-                stores: [sessions, scores, queue, profiles, schedules, plus, health, outbox],
-                defaults: defaults
-            ) {
-                told.withLock { $0 += 1 }
-            },
-            told: told
+            account: account.model,
+            told: account.told
         )
+    }
+
+    /// The model under test, and the counter its identity-change hook bumps.
+    ///
+    /// Its own function because the store list is what this suite is really
+    /// about: `OndApp` writes the same one out by hand, and a store missing from
+    /// either copy is the bug these tests exist to catch. The counter comes back
+    /// with the model because nothing else makes it and nothing else raises it.
+    private func accountModel(
+        identity: KeychainUserIdentityStore,
+        accounts: ErasingAccounts,
+        stores: [any PersonalStore],
+        defaults: UserDefaults
+    ) -> (model: AccountModel, told: OSAllocatedUnfairLock<Int>) {
+        let told = OSAllocatedUnfairLock(initialState: 0)
+        let model = AccountModel(
+            identity: identity,
+            accounts: accounts,
+            stores: stores,
+            defaults: defaults
+        ) {
+            told.withLock { $0 += 1 }
+        }
+
+        return (model, told)
     }
 
     /// A person who has used the app: onboarded, breathed twice, deleted one of
@@ -229,6 +144,11 @@ struct AccountDeletionTests {
                 intentNote: "to sleep"
             )
         )
+        install.consent.record()
+        // What an install upgraded from the version before the consent screen
+        // still carries: `SafetyNoteStore`'s key, naming the contraindicated
+        // exercises this person had been reading about.
+        install.defaults.set(["wim-hof-rounds"], forKey: "safety.dismissedNotes")
         install.health.coachReadsHeartTrends = true
         install.schedules.add(
             Schedule(
@@ -307,6 +227,21 @@ struct AccountDeletionTests {
             "an empty profile encoded into the defaults is still a record of somebody"
         )
 
+        // The one store here that holds a dated statement rather than a
+        // practice. Left behind, it would be the app keeping the single record
+        // designed to outlast a memory, about somebody who asked to be
+        // forgotten — and the terms are what onboarding asks again for.
+        #expect(install.consent.agreed == nil)
+        #expect(install.consent.needsConsent)
+        #expect(
+            install.defaults.object(forKey: "safety.consent") == nil,
+            "a consent record surviving `delete everything` is the one it must not"
+        )
+        #expect(
+            install.defaults.object(forKey: "safety.dismissedNotes") == nil,
+            "the retired dismissal key still named the exercises this person read about"
+        )
+
         #expect(install.identity.userId() != nil)
         #expect(install.identity.userId() != before, "one request on the old id resurrects it")
         #expect(install.account.state == .localOnly)
@@ -340,6 +275,10 @@ struct AccountDeletionTests {
         let sessions = await install.sessions.recordedSessions()
         #expect(sessions.count == 1)
         #expect(install.profiles.hasCompletedOnboarding)
+        #expect(
+            !install.consent.needsConsent,
+            "an unreachable server is no reason to make somebody agree to the terms again"
+        )
         #expect(install.schedules.schedules.count == 1)
         #expect(install.identity.userId() == before)
         #expect(install.account.failure != nil)
