@@ -29,10 +29,44 @@ struct SessionHoldTests {
         recommendedRounds: 1
     )
 
-    private func startedSession() async throws -> (SessionModel, RecordingCues) {
+    /// A retention with a stage on each side of it — breathe, hold, recover —
+    /// which is the shape a Wim Hof-style round actually has and the one
+    /// `retention` does not: that fixture opens on the hold, so nothing there
+    /// says the plan resumes into a *following stage* rather than merely into
+    /// the next beat of the same one.
+    ///
+    /// The breathing either side runs in tens of milliseconds so the test does
+    /// not, while the hold keeps its nominal minute for the same reason as above.
+    private static let sequence = Technique(
+        id: "id",
+        slug: "wim-hof-rounds",
+        name: "Wim Hof-style Rounds",
+        summary: "",
+        goal: .energy,
+        stages: [
+            Stage(
+                phases: [
+                    Phase(kind: .inhale, duration: .milliseconds(30)),
+                    Phase(kind: .exhale, duration: .milliseconds(30)),
+                ],
+                cycles: 1
+            ),
+            Stage(
+                phases: [Phase(kind: .holdOut, duration: .milliseconds(60000))],
+                cycles: 1,
+                openEnded: true
+            ),
+            Stage(phases: [Phase(kind: .holdIn, duration: .milliseconds(30))], cycles: 1),
+        ],
+        recommendedRounds: 1
+    )
+
+    private func startedSession(
+        of technique: Technique = SessionHoldTests.retention
+    ) async throws -> (SessionModel, RecordingCues) {
         let cues = RecordingCues()
         let model = SessionModel(
-            technique: Self.retention,
+            technique: technique,
             cues: cues,
             recorder: DiscardingRecorder()
         )
@@ -102,6 +136,56 @@ struct SessionHoldTests {
         #expect(model.holdElapsed >= heldWhenPaused, "the hold's timer carried on")
         #expect(model.elapsed == .zero, "and the plan is still pinned")
         #expect(cues.played.count == 1, "resuming mid-hold does not re-cue it")
+    }
+
+    /// The clause chaining stages has to not break: a hold the person ends,
+    /// reached partway through a sequence, stops the plan where it stands and
+    /// hands the rest of the sequence back when they release it.
+    ///
+    /// Nothing about the hold is special-cased on position, and this is what
+    /// keeps it that way — a plan that resumed at the wrong offset would skip or
+    /// repeat the recovery stage, which is the part of the protocol the hold
+    /// exists to be followed by.
+    @Test("A hold partway through a sequence stops the clock and hands the rest back")
+    func holdsInsideASequence() async throws {
+        let (model, cues) = try await startedSession(of: Self.sequence)
+
+        let held = try #require(model.currentBeat)
+        #expect(held.stage == 1, "the hold is the second of three stages")
+        #expect(
+            model.elapsed == .milliseconds(60),
+            "the plan is pinned at the top of the hold, not at zero"
+        )
+
+        try await Task.sleep(for: .milliseconds(40))
+        #expect(model.elapsed == .milliseconds(60), "and it has not moved")
+        #expect(model.realElapsed >= .milliseconds(60), "while the person has been holding")
+
+        model.release()
+
+        #expect(model.status == .running)
+        #expect(
+            model.elapsed >= .milliseconds(60060),
+            "the plan jumped the whole hold and landed in the stage after it"
+        )
+
+        try await waitFor("the session to finish") { model.status == .finished }
+
+        // Which stages were cued and in what order, rather than how many beats
+        // of each: a wake-up late by more than a 30 ms phase legitimately skips
+        // cueing it, and a test that counted beats would fail on a busy machine
+        // for a reason that is not a bug.
+        let cued = cues.played.map(\.stage)
+        #expect(cued.first == 0, "the sequence began in the stage before the hold")
+        #expect(cued.filter { $0 == 1 }.count == 1, "the hold was cued once, on entry")
+        #expect(cued.last == 2, "and the stage after it ran once the hold was released")
+        #expect(cued == cued.sorted(), "no stage was cued out of order")
+
+        let record = try #require(model.record)
+        #expect(record.completed)
+        #expect(record.cyclesCompleted == 3, "one cycle from each stage")
+        // The plan is a minute long and this session was not.
+        #expect(record.duration < .seconds(5))
     }
 
     /// Ending a session mid-hold records what happened rather than what was
