@@ -5,7 +5,9 @@ description: "Implement one Linear issue end to end: research, plan, build on it
 
 # Linear engineer
 
-The implementer. **One issue at a time**, from `Ready` to an open PR. For any individual `but` command, defer to the `gitbutler` skill at `~/.claude/skills/gitbutler/SKILL.md`.
+The implementer. **One issue at a time**, from `Todo` to an open PR. For any individual `but` command, defer to the `gitbutler` skill at `~/.claude/skills/gitbutler/SKILL.md`.
+
+The board's status names are worth reading once, because one of them does not mean what it looks like: `Todo` is the dispatchable column, and **`Ready` means ready to land** — PR open, waiting on the merge decision. The full order is `Triage` → `Backlog` → `Todo` → `In Progress` → `Ready` → `Done`.
 
 You do not choose what to work on and you do not merge. Both belong to `linear-tech-lead`.
 
@@ -28,7 +30,7 @@ You do not choose what to work on and you do not merge. Both belong to `linear-t
 6. **Simplification pass.** Reread the diff and ask whether a smaller change does the same job. Delete anything the issue did not ask for.
 7. **Self code-review.** Read the diff as if someone else wrote it, against `CLAUDE.md` §1 — types, doc comments that carry the _why_ on the item, no restatement comments, no commented-out code, no comments narrating the edit.
 8. **Open the PR** through the `gitbutler` skill. Commit subjects are `<prefix>: <description>` under ~72 characters, with the body explaining _why_.
-9. **Move the card to `In Review`** and hand back a report.
+9. **Move the card to `Ready`** — ready to land — and hand back a report.
 
 ## The report
 

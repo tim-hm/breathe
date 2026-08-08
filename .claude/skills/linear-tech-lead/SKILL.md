@@ -17,9 +17,11 @@ Linear team **`TIM`**, in the launch project. Linear is the only tracker: **neve
 
 Statuses on team `TIM`, in the order an issue travels them:
 
-`Triage` → `Backlog` → `Todo` → `Ready` → `In Progress` → `In Review` → `Done`
+`Triage` → `Backlog` → `Todo` → `In Progress` → `Ready` → `Done`
 
-`In Review` may not exist yet. Add it once, as a `started`-type status, so a PR waiting on review is distinguishable from work in flight. Do not invent any other status.
+**`Ready` means ready to land, not ready to start.** It is the review column: a PR is open, CI has been given its chance, and the only thing left is the merge decision. The column that means "refined and dispatchable" is `Todo`.
+
+That reading is worth stating because the name pulls the other way. Reusing `Ready` rather than adding a seventh status keeps the board to the states that actually change what happens next. Do not invent any others.
 
 ## The loop
 
@@ -27,10 +29,10 @@ For each issue, in this order:
 
 1. **Read the board.** Take the highest-priority issue that is unblocked and whose dependencies are `Done`. Dependencies are named on the issue as `Depends on:`.
 2. **Refine it until it is unambiguous** — see "What an issue looks like" for the shape. If refining it surfaces a product or design question, that is an escalation, not a guess.
-3. **Move it `Backlog` → `Todo` → `Ready`.** Only an issue you would be willing to review the diff of reaches `Ready`.
-4. **Dispatch one engineer agent** running the `linear-engineer` skill, given the issue identifier and nothing else it cannot read from Linear. One issue per agent, one lane per issue.
+3. **Move it `Backlog` → `Todo`.** Only an issue you would be willing to review the diff of reaches `Todo`.
+4. **Dispatch one engineer agent** running the `linear-engineer` skill, given the issue identifier and nothing else it cannot read from Linear. One issue per agent, one lane per issue. The engineer moves the card to `In Progress`, and to `Ready` when its PR is open.
 5. **Receive the PR and the engineer's report.** The report names what was verified, what was assumed, and any judgment call made.
-6. **Review against `Done when:`**, then merge or escalate.
+6. **Review against `Done when:`**, then merge or escalate. An escalation leaves the card in `Ready` with the question on it.
 7. **Move the card to `Done`** only after the PR is merged.
 
 ## What an issue looks like
@@ -67,7 +69,7 @@ Escalate to Tim, and do not merge, whenever the change touches any of:
 
 …and whenever **the engineer flagged ambiguity, regardless of how small the diff is.** An engineer who had to guess is the signal, not the size of the guess.
 
-When escalating: say what the decision is, give the options with a recommendation, and leave the PR open with the card in `In Review`. Then move on to something else that can proceed.
+When escalating: say what the decision is, give the options with a recommendation, and leave the PR open with the card in `Ready`. Then move on to something else that can proceed.
 
 ## Blocked issues: build up to the boundary, then hand off
 
@@ -84,7 +86,7 @@ A handoff is not "this is blocked on Tailscale". It is:
 
 Then check your own requirements are actually met before sending it. If step 3 needs a value that only step 5 produces, that is your bug, not Tim's. If the handoff would work better as a `mise` task he runs rather than clicks he makes, write the task.
 
-The issue stays in `Backlog` with the branch parked and the handoff on the card, so nothing half-finished sits in `Ready`. When Tim reports back, verify the result yourself rather than taking it on trust, then let the issue proceed.
+The issue stays in `Backlog` with the branch parked and the handoff on the card, so nothing waiting on an outside action sits in a column that means work is moving. When Tim reports back, verify the result yourself rather than taking it on trust, then let the issue proceed.
 
 Ask once, clearly, with everything prepared — and never ask twice for something you could have looked up. The current blockers are cloud model access, App Store Connect settings, a personal Tailscale account, and the artwork hire.
 
