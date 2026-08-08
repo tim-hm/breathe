@@ -24,11 +24,15 @@ DerivedData/
 *.xcuserstate
 xcuserdata/
 
-# Secrets. `.env` holds exactly one value locally — OPENROUTER_API_KEY, the
-# assistant's provider key, loaded by .mise.toml so every task sees it. It is
-# optional: absent, the assistant answers from its rule-based fallback and
-# everything else behaves identically, which is what CI and a fresh clone get.
-# Nothing else belongs in it (CLAUDE.md §1.4).
+# Secrets, and the per-machine Apple identifiers that behave like them. `.env`
+# is loaded by .mise.toml so every task sees it, and every entry is optional —
+# absent, the simulator still builds and the suite still runs, which is what CI
+# and a fresh clone get. docs/contributing.md enumerates what goes in; listing
+# them here too would be a second copy to fall out of step.
+#
+# Nothing beyond a secret or a value that genuinely differs per developer
+# belongs in it (CLAUDE.md §1.4). The App Store Connect signing key is a file
+# rather than a value, and lives under ~/.appstoreconnect/ — never in here.
 .env
 .env.*
 *.pem

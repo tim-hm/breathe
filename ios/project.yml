@@ -29,6 +29,23 @@ settings:
     # and now that the phone app embeds the watch app both bundles must be
     # signed by the same team, which is why this sits at project level.
     DEVELOPMENT_TEAM: ${OND_DEV_TEAM}
+    # Xcode mints and renews the certificates and profiles itself. Stated
+    # rather than left to default because the alternative — manual signing —
+    # means committing profile names that expire, and `ios:archive` passes
+    # `-allowProvisioningUpdates` on the strength of this line.
+    CODE_SIGN_STYLE: Automatic
+    # Both version numbers sit at project level because the two bundles may not
+    # disagree: App Store validation rejects a submission whose embedded watch
+    # app carries a different CFBundleShortVersionString or CFBundleVersion
+    # from its host. Set per target, they would drift on the first release
+    # somebody bumped in one place.
+    #
+    # CURRENT_PROJECT_VERSION is the floor, not the shipped value:
+    # `ios:archive` overrides it with the commit count, because App Store
+    # Connect refuses a build number it has already seen and a number derived
+    # from history cannot repeat.
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
 
 packages:
   OndCore:
@@ -67,6 +84,13 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: xyz.holmie.ond
+        # iPhone only. Xcode's default is iPhone and iPad, and the pair is not
+        # coherent with the portrait-only rule below: iPadOS 26 ignores
+        # UIRequiresFullScreen, so an iPad build must support every orientation
+        # or fail validation — and a session held still in one hand is not an
+        # iPad. Claiming the family would also oblige the listing to carry iPad
+        # screenshots of a layout nobody has designed.
+        TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # The catalogue's AccentColor mirrors Accent/Brand in OndUI, in both
@@ -100,6 +124,14 @@ targets:
     info:
       path: Ond/Info.plist
       properties:
+        # Answers App Store Connect's export-compliance question in the bundle
+        # instead of in the web UI. Without the key every upload lands in
+        # "Missing Compliance" and cannot go to a single tester until someone
+        # clicks through the same question again. `false` is the declaration
+        # for an app whose only cryptography is the HTTPS the OS provides —
+        # önd ships no algorithm of its own — and it is the answer that would
+        # be given by hand anyway, made once and reviewably.
+        ITSAppUsesNonExemptEncryption: false
         # The dev backend is plain HTTP on localhost, which App Transport
         # Security blocks by default. `NSAllowsLocalNetworking` is the narrow
         # exemption for exactly that: it permits cleartext to loopback, .local,
@@ -161,6 +193,9 @@ targets:
         # target at all.
         WKApplication: true
         WKCompanionAppBundleIdentifier: xyz.holmie.ond
+        # Same declaration as the phone target's, and needed separately: the
+        # watch app is validated as its own bundle inside the submission.
+        ITSAppUsesNonExemptEncryption: false
         # The watch talks to the backend itself — it holds its own copy of the
         # identity and its own catalogue cache, so a session on the wrist must
         # not stall waiting for a phone that is in another room.

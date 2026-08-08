@@ -87,6 +87,32 @@ CI (`.github/workflows/checks.yml`) runs the formatting and lint subset on every
 | Change the API contract         | Edit `proto/ond/v1/…`, then `mise run generate`                               |
 | Add a Swift file                | Create it under `ios/Ond/` or `ios/OndWatch/`; `mise run ios:gen` picks it up |
 | Build the apps headlessly       | `mise run ios:build`, `mise run ios:build:watch`                              |
+| Ship a beta                     | `mise run ios:testflight` — see below                                         |
+
+## Releasing to TestFlight
+
+One archive carries both apps: the phone target embeds the watch app, and a companion watch app is not a submission of its own.
+
+```bash
+mise run ios:archive      # signed archive in ios/build/Ond.xcarchive
+mise run ios:testflight   # archives, re-signs for distribution, uploads
+```
+
+Three values, all machine-local and all in `.env`, which `.mise.toml` loads:
+
+| Variable            | What it is                                                                |
+| :------------------ | :------------------------------------------------------------------------ |
+| `OND_DEV_TEAM`      | the ten-character Apple Developer team id, substituted into `project.yml` |
+| `OND_ASC_KEY_ID`    | App Store Connect API key id                                              |
+| `OND_ASC_ISSUER_ID` | that key's issuer id                                                      |
+
+The key's `.p8` is a file rather than a value and never goes in `.env`: put it at `~/.appstoreconnect/private_keys/AuthKey_<key id>.p8`, the path Apple's own tooling searches, which is why only the id is configured. Create the key under **Users and Access → Integrations → App Store Connect API** with the **Admin** role — App Manager can upload but cannot mint the distribution certificate the first export needs — and note that the `.p8` downloads exactly once.
+
+Both tasks refuse with an explanation rather than a signing error when something is missing, so running them is the fastest way to find out what you still need.
+
+Two things the tasks decide for you. The **build number is the commit count** (`git rev-list --count HEAD`), because App Store Connect refuses a number it has already accepted; two archives of the same commit collide, and the answer to that is a commit. The **version** is `MARKETING_VERSION` in `project.yml`, set at project level so the watch app cannot disagree with its host — a mismatch fails validation.
+
+Xcode signs the archive itself with the _development_ certificate; distribution signing is applied when `ios:testflight` exports it. That is why an archive is worth taking on a machine that has no distribution certificate yet.
 
 ## Things that will bite you
 
@@ -94,7 +120,7 @@ CI (`.github/workflows/checks.yml`) runs the formatting and lint subset on every
 
 **The Xcode project is generated.** `ios/Ond.xcodeproj` is gitignored and rebuilt from `ios/project.yml`. Changing build settings in Xcode's UI works until the next `mise run ios:gen` throws it away — make the change in `project.yml` instead.
 
-**Device builds need signing; the simulator doesn't.** `project.yml` deliberately carries no `DEVELOPMENT_TEAM`, so simulator builds work on any machine with no Apple ID. To run on a physical iPhone, set your team in Xcode's Signing & Capabilities tab — and expect the previous rule to apply: the next `mise run ios:gen` discards it. If device builds become routine, add `DEVELOPMENT_TEAM` to `project.yml`.
+**Device builds need signing; the simulator doesn't.** `project.yml` reads `DEVELOPMENT_TEAM` from `${OND_DEV_TEAM}`, which XcodeGen substitutes at generate time. Unset, the reference is written through and Xcode resolves it as an undefined setting — no team, which is exactly what a simulator build wants and why a fresh clone needs no Apple ID. A device or archive build does need it; see the release section below.
 
 **Regenerated Swift is committed.** After editing a `.proto`, `mise run generate:proto` rewrites files under `ios/Packages/OndCore/Sources/OndAPI/Generated/`. Commit them; the Xcode build does not run `buf`.
 
