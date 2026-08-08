@@ -113,8 +113,8 @@ struct TechniqueFigureWordsTests {
     /// would promise a length the session does not keep.
     @Test("The retention is described as the person's to end")
     func describesTheRetention() {
-        let description = TechniqueFigure
-            .all(for: SeededCatalogue.technique("wim-hof-rounds"))[1]
+        let description = SeededCatalogue
+            .figure("wim-hof-rounds", stage: SeededCatalogue.retention)
             .description
 
         #expect(description.contains("as long as you can"))

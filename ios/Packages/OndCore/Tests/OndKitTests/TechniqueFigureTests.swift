@@ -55,21 +55,28 @@ struct TechniqueFigureTests {
     }
 
     /// The only staged technique in the catalogue, and the only one that mixes
-    /// families: fast breathing, a retention nobody times, then a recovery hold
-    /// that has corners again.
-    @Test("A Wim Hof round draws three figures, and only the middle one is dashed")
+    /// families: fast breathing, one deep breath, a retention nobody times, then
+    /// a recovery hold that has corners again.
+    ///
+    /// Only the retention may draw dashed. A dash means "no length the clock
+    /// owns", so a dashed breath beside it would say the person decides when
+    /// that breath ends too.
+    @Test("A Wim Hof round draws a figure per stage, and only the retention is dashed")
     func wimHofRounds() {
         let figures = TechniqueFigure.all(for: SeededCatalogue.technique("wim-hof-rounds"))
 
-        #expect(figures.count == 3)
-        #expect(!figures[0].strokes.contains { $0.dashed })
-        #expect(figures[1].strokes.contains { $0.dashed })
-        #expect(!figures[2].strokes.contains { $0.dashed })
+        #expect(figures.count == 4)
 
-        // The recovery stage holds, so it is the triangle; the fast stage does
-        // not, so it is a line.
+        for (index, figure) in figures.enumerated() {
+            let dashed = figure.strokes.contains { $0.dashed }
+            #expect(dashed == (index == SeededCatalogue.retention), "figure \(index)")
+        }
+
+        // The recovery stage holds, so it is the triangle; every other stage is
+        // under three phases, so none of them can be.
         #expect(figures[0].family == .line)
-        #expect(figures[2].family == .polygon)
+        #expect(figures[SeededCatalogue.retention].family == .line)
+        #expect(figures[3].family == .polygon)
     }
 
     // MARK: The polygon
@@ -259,7 +266,7 @@ struct TechniqueFigureTests {
     /// The retention has no length the clock owns, so it must not draw one.
     @Test("An open-ended retention draws flat and dashed, and repeats once")
     func openEndedRetention() {
-        let stage = SeededCatalogue.technique("wim-hof-rounds").stages[1]
+        let stage = SeededCatalogue.technique("wim-hof-rounds").stages[SeededCatalogue.retention]
         let rhythm = BreathRhythm(stage: stage)
 
         // Hoisted out of `#expect`: the formatter rewrites a trailing closure
