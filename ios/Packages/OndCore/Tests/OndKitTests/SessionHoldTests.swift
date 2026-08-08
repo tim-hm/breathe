@@ -155,7 +155,30 @@ final class RecordingCues: SessionCueing {
     /// the interesting failure is both of them firing.
     private(set) var stops = 0
 
+    /// Defaulted to the answer that makes a departure stop the session, because
+    /// that is the behaviour every suite here predates. Only the background
+    /// suite passes the other one.
+    let playsInBackground: Bool
+
+    init(playsInBackground: Bool = false) {
+        self.playsInBackground = playsInBackground
+    }
+
+    /// Counted rather than flagged for the same reason `stops` is: what the
+    /// background suite asserts is that a pause hands the runtime back exactly
+    /// once and a resume takes it again, not merely that both were mentioned.
+    private(set) var pauses = 0
+    private(set) var resumes = 0
+
     func prepare() {}
+
+    func pause() {
+        pauses += 1
+    }
+
+    func resume() {
+        resumes += 1
+    }
 
     func play(_ beat: SessionTimeline.Beat) {
         played.append(beat)

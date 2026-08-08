@@ -16,9 +16,32 @@ final class SessionCues: SessionCueing {
         audio = mode.playsAudio ? SessionAudioPlayer() : nil
     }
 
+    /// Sound is the whole of the answer, and deliberately so.
+    ///
+    /// The runtime a backgrounded session lives on is granted for playing audio,
+    /// so a session with sound switched off has no honest claim to it — and it is
+    /// the claim, not the code, that App Review reads. Haptics only therefore
+    /// keeps pausing on departure, which is a real gap for the mode most likely
+    /// to be used with the eyes shut. Closing it means answering whether
+    /// CoreHaptics fires at all in a backgrounded app, and that question has no
+    /// answer off a physical device.
+    var playsInBackground: Bool {
+        audio != nil
+    }
+
     func prepare() {
         haptics?.prepare()
         audio?.prepare()
+    }
+
+    /// Only the audio side has anything to hand back: the haptic engine plays
+    /// nothing between boundaries, so a pause costs it nothing to sit through.
+    func pause() {
+        audio?.pause()
+    }
+
+    func resume() {
+        audio?.resume()
     }
 
     func play(_ beat: SessionTimeline.Beat) {

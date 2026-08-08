@@ -60,6 +60,21 @@ public enum ToneSynthesizer {
         return container(samples)
     }
 
+    /// A stretch of pure silence, in the same format as the tones above.
+    ///
+    /// This is what holds a backgrounded session's place on the phone. iOS keeps
+    /// an app with the `audio` background mode scheduled only while it is
+    /// actually playing something, and the cue tones are tenths of a second
+    /// inside phases that run for four to eleven; a session left to them alone is
+    /// suspended in the first gap. Looped underneath, this makes those gaps the
+    /// inside of one continuous playback rather than the end of it.
+    ///
+    /// - Parameter seconds: how long a loop to build. Long enough not to restart
+    ///   constantly, short enough to stay a rounding error in memory.
+    public static func silence(seconds: Double) -> Data {
+        container([Int16](repeating: 0, count: Int(seconds * sampleRate)))
+    }
+
     /// Fade in, then decay to silence — a struck-bell shape. Both ends taper to
     /// zero, because a waveform cut mid-cycle is a click.
     private static func envelope(at time: Double, of duration: Double) -> Double {

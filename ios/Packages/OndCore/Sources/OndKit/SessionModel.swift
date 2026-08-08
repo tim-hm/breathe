@@ -1,24 +1,6 @@
 import Foundation
 import Observation
 
-/// Whatever turns a phase boundary into something you can feel or hear.
-///
-/// The player drives this rather than owning it: `CHHapticEngine` and
-/// `AVAudioPlayer` are UIKit-era, iOS-only APIs, and the watch app in M9 has a
-/// different haptic vocabulary entirely. Keeping the protocol here and the
-/// implementations in the app target is what lets the session engine be the same
-/// code on both, and lets it run on the host under test with no cues at all.
-@MainActor
-public protocol SessionCueing {
-    /// Called before the first beat. Engine warm-up belongs here, not on the
-    /// first boundary, where the latency would land inside the cue.
-    func prepare()
-    func play(_ beat: SessionTimeline.Beat)
-    /// The session reached its end, as opposed to being ended.
-    func playCompletion()
-    func stop()
-}
-
 /// Drives one session: the clock, the phase the person is in, and the record
 /// left behind at the end.
 ///
@@ -238,6 +220,7 @@ public final class SessionModel {
         anchor = nil
         cueLoop?.cancel()
         cueLoop = nil
+        cues.pause()
         status = .paused
     }
 
@@ -250,7 +233,12 @@ public final class SessionModel {
     /// eyes shut — so the caller narrows to `.background` and this remembers
     /// who asked, which is what keeps `resumeIfSceneDriven()` from starting a
     /// hand-paused session up under its owner.
+    ///
+    /// Cues that outlive the departure make the whole question moot: putting the
+    /// phone down is what the technique asks for, and a session that stopped for
+    /// it would be broken at the one moment it matters most.
     public func pauseForScene() {
+        guard !cues.playsInBackground else { return }
         guard status == .running || status == .holding else { return }
         pausedByScene = true
         pause()
@@ -307,7 +295,11 @@ public final class SessionModel {
         cues.stop()
     }
 
+    /// The one path back onto the clock, from a start, a resume, or a released
+    /// hold — which is why the cues are told here rather than at each of the
+    /// three, and why telling them twice on a start has to be harmless.
     private func resumeClock() {
+        cues.resume()
         anchor = clock.now
         cueLoop?.cancel()
         cueLoop = Task { await self.runCueLoop() }
