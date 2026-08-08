@@ -263,7 +263,15 @@ extension TechniqueFigure {
     /// now the figure carries its own labels. The same string becomes the
     /// generated SVG's `aria-label`, so the page and the app describe a
     /// technique identically.
-    static func describe(stage: Stage, hints: [String?]?) -> String {
+    ///
+    /// - Parameter drawn: how many cycles the figure puts on the page. Passed
+    ///   in rather than read off the stage, because reading it off the stage is
+    ///   the bug this parameter exists to make impossible: `stage.cycles` is how
+    ///   often the exercise repeats, not how much of it the drawing shows, and
+    ///   announcing the first over a picture of the second told a screen-reader
+    ///   user about twenty-seven coherent breathing cycles beside a figure that
+    ///   draws two.
+    static func describe(stage: Stage, hints: [String?]?, drawn: Int) -> String {
         let phases = stage.phases.enumerated().map { index, phase -> String in
             let instruction = PhaseHints.spoken(phase.kind, hint: PhaseHints.hint(hints, at: index))
 
@@ -276,6 +284,12 @@ extension TechniqueFigure {
 
         let cycle = phases.joined(separator: ", ")
         guard stage.cycles > 1 else { return "One cycle: \(cycle)." }
-        return "One cycle: \(cycle). Repeated \(stage.cycles) times."
+
+        // Named only where the drawing falls short of the exercise. A line that
+        // fits every cycle of its stage — the physiological sigh's three — has
+        // already shown what the clause before it claims, and saying so twice is
+        // noise in a sentence somebody is listening to rather than skimming.
+        let shortfall = drawn < stage.cycles ? ", of which this figure draws \(drawn)" : ""
+        return "One cycle: \(cycle). Repeated \(stage.cycles) times\(shortfall)."
     }
 }

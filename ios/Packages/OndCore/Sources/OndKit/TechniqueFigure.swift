@@ -152,6 +152,18 @@ public struct TechniqueFigure: Sendable, Equatable {
     public let fill: [Command]
     /// How many times this stage repeats in a session. A caption, not a shape.
     public let cycles: Int
+    /// How many of those cycles are actually on the page.
+    ///
+    /// Rarely `cycles`, and never by coincidence: a polygon is one lap however
+    /// often the stage repeats, and a line draws whatever its window holds —
+    /// two of coherent breathing's twenty-seven, eleven of bellows breath's
+    /// twenty. The two numbers had no reason to meet until `description` needed
+    /// both, and while it only had `cycles` it announced twenty-seven cycles
+    /// over a drawing of two.
+    ///
+    /// Taken from the branch that draws, so the count comes from the same
+    /// geometry as the strokes rather than from a second reading of the stage.
+    public let drawnCycles: Int
     /// What a screen reader should say instead of describing a picture.
     public let description: String
     /// The ink extent of the drawing, control points included.
@@ -222,7 +234,6 @@ public struct TechniqueFigure: Sendable, Equatable {
         labelled: Bool = true
     ) {
         cycles = stage.cycles
-        description = Self.describe(stage: stage, hints: hints)
 
         if BreathPolygon.suits(stage) {
             let polygon = BreathPolygon(stage: stage)
@@ -230,6 +241,9 @@ public struct TechniqueFigure: Sendable, Equatable {
             strokes = Self.strokes(of: polygon)
             labels = labelled ? Self.labels(of: polygon, phases: stage.phases) : []
             fill = polygon.outline
+            // A closed figure has room for exactly one lap: its corners are one
+            // cycle's phase boundaries, and a second lap would retrace the first.
+            drawnCycles = 1
         } else {
             let rhythm = BreathRhythm(stage: stage, signs: sides)
             family = .line
@@ -240,8 +254,13 @@ public struct TechniqueFigure: Sendable, Equatable {
             // a stroke count — which is what let every hold-free technique pick
             // up a gradient across a path it never draws.
             fill = []
+            drawnCycles = rhythm.cycles
         }
 
+        // After the branch, deliberately: the sentence states how many cycles
+        // are on the page, so it has to be written by whichever grammar put
+        // them there rather than ahead of the choice.
+        description = Self.describe(stage: stage, hints: hints, drawn: drawnCycles)
         bounds = Self.extent(of: strokes)
         drawable = Self.merge(strokes)
     }
