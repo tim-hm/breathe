@@ -29,7 +29,7 @@ struct AssistantGuidanceTests {
 
         model.startIfNeeded()
         script.yield(AssistantChunk(text: "A longer exhale ", source: .model))
-        try await settle()
+        try await settle(until: { model.state != .waiting })
 
         #expect(
             model.state == .reading(
@@ -41,7 +41,9 @@ struct AssistantGuidanceTests {
         )
 
         script.yield(AssistantChunk(text: "lengthens each breath.", source: .model))
-        try await settle()
+        try await settle(
+            until: { model.state.reading?.text == "A longer exhale lengthens each breath." }
+        )
 
         #expect(
             model.state == .reading(
@@ -52,7 +54,7 @@ struct AssistantGuidanceTests {
         )
 
         script.finish()
-        try await settle()
+        try await settle(until: { model.state.reading?.isComplete == true })
 
         #expect(
             model.state == .reading(
@@ -78,7 +80,7 @@ struct AssistantGuidanceTests {
         model.startIfNeeded()
         script.yield(AssistantChunk(text: "The mechanism is ", source: .fallback))
         script.finish(throwing: AssistantRepositoryError.transport("the stream broke"))
-        try await settle()
+        try await settle(until: { model.state != .waiting })
 
         #expect(
             model.state == .reading(
@@ -98,7 +100,7 @@ struct AssistantGuidanceTests {
 
         model.startIfNeeded()
         script.finish(throwing: AssistantRepositoryError.transport("no network"))
-        try await settle()
+        try await settle(until: { model.state != .waiting })
 
         #expect(model.state == .unavailable)
     }
@@ -117,14 +119,16 @@ struct AssistantGuidanceTests {
             return
         }
     }
+}
 
-    /// Lets the model's reader task drain what the script has yielded.
-    ///
-    /// A sleep rather than a single `Task.yield()`: the reader runs on its own
-    /// task, and yielding once does not reliably carry it through a loop
-    /// iteration.
-    private func settle() async throws {
-        try await Task.sleep(for: .milliseconds(20))
+private extension ExplanationModel.State {
+    /// What the model has published so far, or nil before it has published
+    /// anything. Lets a test wait on the part of the state that moves — the text
+    /// growing, the answer completing — while leaving the source and the exact
+    /// wording for the assertion to check.
+    var reading: (text: String, isComplete: Bool)? {
+        guard case let .reading(text, _, isComplete) = self else { return nil }
+        return (text, isComplete)
     }
 }
 

@@ -194,20 +194,6 @@ struct CoachChatTests {
         #expect(call.history.map(\.text) == ["first", "An answer."])
         #expect(call.history.map(\.role) == [.person, .coach])
     }
-
-    /// Lets the model's reader task catch up, polling for the condition the
-    /// next assertion needs rather than napping a fixed slice — under a loaded
-    /// parallel test run a single sleep loses the scheduling race often enough
-    /// to flake. Gives up after two seconds and lets the assertion fail with
-    /// its own message.
-    private func settle(until condition: @MainActor () -> Bool) async throws {
-        for _ in 0 ..< 400 {
-            if condition() {
-                return
-            }
-            try await Task.sleep(for: .milliseconds(5))
-        }
-    }
 }
 
 @Suite("Sentence buffer")
