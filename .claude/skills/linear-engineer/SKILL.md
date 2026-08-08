@@ -47,6 +47,17 @@ Three things, plainly:
 - **Escalate rather than guess.** Stopping to ask costs one message. A wrong guess costs a revert and the trust in every other issue you closed.
 - **No tracking files in the repo.** Progress lives on the Linear issue. `docs/` holds architecture, documentation and conventions only.
 
+## When the issue needs something only Tim can do
+
+An account that has to exist, a setting in someone else's console, a person who has to be hired. Build everything on this side of it anyway — the implementation behind its seam, the config, the migration, the tests against a double, the brief. What you hand back is a branch complete except for the one thing, plus a handoff Tim can execute without re-deriving anything:
+
+- **what to do**, numbered, naming the exact page, toggle, command or wording
+- **why each step**, in one clause, so he can tell when a UI has moved under the instructions
+- **where the result goes** — which file, which environment variable, which field — and what to hand back
+- **how you will verify it** once it lands
+
+Check the handoff against itself before sending: if step 3 needs a value step 5 produces, that is your bug. If it would be better as a `mise` task he runs than as clicks he makes, write the task. Ask once, with everything ready — never twice for something you could have looked up.
+
 ## When it will not finish
 
 Say so, on the issue, with what is done and what is left. A partially finished issue moved back to `Todo` with an accurate note is a good outcome. A PR that claims a `Done when:` it does not meet is not.

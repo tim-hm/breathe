@@ -26,12 +26,25 @@ Statuses on team `TIM`, in the order an issue travels them:
 For each issue, in this order:
 
 1. **Read the board.** Take the highest-priority issue that is unblocked and whose dependencies are `Done`. Dependencies are named on the issue as `Depends on:`.
-2. **Refine it until it is unambiguous.** A dispatchable issue states: what changes and why; a `Done when:` that a reviewer can check without asking a question; the paths it is expected to touch; its dependencies. If refining it surfaces a product or design question, that is an escalation, not a guess — see below.
+2. **Refine it until it is unambiguous** — see "What an issue looks like" for the shape. If refining it surfaces a product or design question, that is an escalation, not a guess.
 3. **Move it `Backlog` → `Todo` → `Ready`.** Only an issue you would be willing to review the diff of reaches `Ready`.
 4. **Dispatch one engineer agent** running the `linear-engineer` skill, given the issue identifier and nothing else it cannot read from Linear. One issue per agent, one lane per issue.
 5. **Receive the PR and the engineer's report.** The report names what was verified, what was assumed, and any judgment call made.
 6. **Review against `Done when:`**, then merge or escalate.
 7. **Move the card to `Done`** only after the PR is merged.
+
+## What an issue looks like
+
+**One to three short paragraphs, then the criteria. Never pages.** An issue nobody finishes reading is an issue nobody follows, and the detail belongs in the code and its doc comments — that is where this repo keeps its reasoning, and a Linear issue that restates it is a second copy free to rot.
+
+The shape:
+
+- **Context** — one paragraph of background and the current state, with the evidence named at `file:line` so a reader can check the claim rather than trust it.
+- **The ask** — a user story where there is a user (`As someone who …, I want …, so that …`), or one plain sentence of intent where there is not. Infrastructure and debt do not need to be dressed as user stories.
+- **`Done when:`** — a short list a reviewer can check without asking a question. This is the acceptance criteria and the only definition of finished.
+- **`Depends on:` / `Blocked on:`** — only where the ordering or an external action is genuinely load-bearing.
+
+If an issue needs more than that to be understood, it is probably two issues. Split it rather than lengthening it.
 
 ## The merge rule
 
@@ -56,11 +69,26 @@ Escalate to Tim, and do not merge, whenever the change touches any of:
 
 When escalating: say what the decision is, give the options with a recommendation, and leave the PR open with the card in `In Review`. Then move on to something else that can proceed.
 
-## Blocked issues never enter `Ready`
+## Blocked issues: build up to the boundary, then hand off
 
-An issue carrying a `Blocked on:` line waits in `Backlog` until Tim clears the external dependency. Name the blocker, keep it visible, ask once, and move on. The known ones are: the legal entity, cloud model access, App Store Connect settings, a personal Tailscale account, and the artwork hire.
+An issue carrying a `Blocked on:` line names an action only Tim can take — an account that has to exist, a setting in someone else's console, a person who has to be hired. **The blocker is not permission to stop.** It is a line in the work, and everything on this side of it is still yours.
 
-Do not work around a blocker by narrowing the issue. If part of a blocked issue can genuinely proceed alone, that is a **separate issue**, filed as one, with the blocked remainder left where it is.
+So: dispatch the issue anyway, scoped to everything that does not need the external action. The engineer builds the implementation behind its seam, the configuration, the migration, the tests against a double, the brief — whatever the shape is. What comes back is a branch that is complete except for the one thing, and a **handoff**.
+
+A handoff is not "this is blocked on Tailscale". It is:
+
+- **what to do**, as numbered steps precise enough to follow without re-deriving anything — the exact console page, the exact toggle, the exact command, the exact wording to send
+- **why each step**, in one clause, so Tim can tell when a UI has moved under the instructions
+- **where the result goes** — which file, which environment variable, which Linear field — and what to hand back
+- **how it will be verified** once it lands, named up front so the loop closes without another round trip
+
+Then check your own requirements are actually met before sending it. If step 3 needs a value that only step 5 produces, that is your bug, not Tim's. If the handoff would work better as a `mise` task he runs rather than clicks he makes, write the task.
+
+The issue stays in `Backlog` with the branch parked and the handoff on the card, so nothing half-finished sits in `Ready`. When Tim reports back, verify the result yourself rather than taking it on trust, then let the issue proceed.
+
+Ask once, clearly, with everything prepared — and never ask twice for something you could have looked up. The current blockers are cloud model access, App Store Connect settings, a personal Tailscale account, and the artwork hire.
+
+Do not work around a blocker by narrowing the issue's stated outcome. If part of it can genuinely ship alone, that is a **separate issue**, filed as one, with the blocked remainder left where it is.
 
 ## Working the repo alongside other agents
 
