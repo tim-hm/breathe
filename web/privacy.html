@@ -22,8 +22,8 @@
           store what you tell us during onboarding and what you breathe, so your history and streaks survive a new phone. We sell nothing to anybody.
         </p>
         <p>
-          The one thing worth reading past the summary for: if you subscribe to the coach tier, some of what you told us is sent to a language-model provider so it can answer. What that includes, and
-          what it never includes, is in
+          The one thing worth reading past the summary for: if you subscribe to the coach tier, some of what you told us is sent to Amazon Bedrock so a language model can answer. It is not used to
+          train anything and it is not kept. What that includes, and what it never includes, is in
           <a href="#coach">The coach and the language model</a>
           below.
         </p>
@@ -85,10 +85,10 @@
       <section id="coach">
         <h2>The coach and the language model</h2>
         <p>
-          The coach tier answers using a large language model. We do not run that model ourselves — calls go from our server to
-          <a href="https://openrouter.ai/">OpenRouter</a>, which routes them to a model provider. Our API key stays on our server and never ships inside the app.
+          The coach tier answers using a large language model. We do not run that model ourselves — calls go from our server straight to Amazon Bedrock, Amazon Web Services' own model service, with no
+          broker or reseller in between. The credentials for those calls stay on our server and never ship inside the app.
         </p>
-        <p>To answer usefully, the request sent to OpenRouter includes some of what you have told us:</p>
+        <p>To answer usefully, the request sent to Bedrock includes some of what you have told us:</p>
         <ul>
           <li>Your goals and your stated experience level</li>
           <li>Your birth-year band and gender, if you gave them, because published breath-hold reference ranges differ by both</li>
@@ -97,13 +97,13 @@
           <li>The question or technique you asked about</li>
         </ul>
         <p>
-          Your display name is never sent. Neither is your identifier, so the provider has nothing to attach one conversation to another with. Treat the free-text note as the field to be thoughtful
-          about — it is the one place you can type anything at all, and it is included verbatim.
+          Your display name is never sent. Neither is your identifier, so there is nothing at the other end to attach one conversation to another with. Treat the free-text note as the field to be
+          thoughtful about — it is the one place you can type anything at all, and it is included verbatim.
         </p>
         <p>
           We store none of it. Prompts, replies, and explanations are never written to our database — the daily counter described above is the whole of what survives a coach conversation on our side.
-          What happens at the other end is not ours to promise: OpenRouter and the model provider it routes to handle your request under their own terms, which you can read in
-          <a href="https://openrouter.ai/privacy">OpenRouter's privacy policy</a>.
+          Nor is it stored at the other end. Amazon handles coach requests on our instructions and under our contract with them: your words are not used to train or improve any model, they are not
+          retained once the answer has come back, and the company that built the model never receives them.
         </p>
         <p>The coach gives general wellness guidance about breathing. It is not a doctor, it does not diagnose, and nothing it says is medical advice.</p>
       </section>
@@ -134,8 +134,8 @@
       <section>
         <h2>Where your data lives</h2>
         <p>
-          On one server in Amazon Web Services' London region (eu-west-2), in the United Kingdom. The exception is the coach: those requests go to OpenRouter and on to a model provider, which may
-          process them outside the UK.
+          On one server in Amazon Web Services' London region (eu-west-2), in the United Kingdom. Everything we store is there. Coach requests are the one exception: Amazon Bedrock processes them
+          across Amazon's EU regions, so a coach request leaves the United Kingdom. It stays inside Amazon Web Services throughout, and nothing about it is stored at either end.
         </p>
       </section>
 
