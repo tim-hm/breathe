@@ -18,9 +18,10 @@ struct CountdownView: View {
             VStack(spacing: Theme.Spacing.close) {
                 Text("Get comfortable")
                     .font(.title2.weight(.medium))
+                // No step down in tone: this is drawn over `accentGround(_:)`,
+                // where secondary ink measures 3.26:1 at `.subheadline`.
                 Text("Starting in")
                     .font(.subheadline)
-                    .foregroundStyle(Theme.Ink.secondary)
             }
 
             Text("\(count)")

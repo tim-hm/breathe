@@ -50,6 +50,26 @@ public enum Theme {
         public static let selection: Double = 0.45
     }
 
+    /// How strongly an accent is poured over `Surface.ground` when a whole
+    /// screen wears a technique's colour.
+    ///
+    /// Its own scale rather than `Glass`'s: glass carries luminance of its own
+    /// and these values go straight onto the ground, where they move it far
+    /// enough to decide what can be read on top. At `strongest` the ground
+    /// lands mid-luminance whichever accent it carries — `Ink.secondary`
+    /// measures 3.26:1 there and `Ink.tertiary` 2.40:1, both below AA, while
+    /// `Ink.primary` holds 7.01:1 at its worst. That is the whole reason this
+    /// is a named ceiling instead of a literal beside a gradient: raising it is
+    /// a legibility decision, and `ThemeColorTests` fails when it stops holding.
+    public enum Wash {
+        /// The top of the gradient, and the only value the guarantee is
+        /// measured at — text can sit anywhere under it.
+        public static let strongest: Double = 0.35
+        /// The bottom of it, where the accent is barely present and the ground
+        /// is almost the palette's own.
+        public static let faintest: Double = 0.05
+    }
+
     /// The grounds content sits on. A screen that draws its own background — the
     /// session player, which covers the system's — picks from here rather than
     /// leaving whatever the presentation happened to put behind it.

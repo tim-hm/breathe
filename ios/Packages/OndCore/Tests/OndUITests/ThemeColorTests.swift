@@ -59,7 +59,7 @@ struct ThemeColorTests {
     /// light appearance for as long as it shipped, and looked like a design
     /// choice.
     @Test(
-        "every ink clears WCAG AA on every ground, in both appearances",
+        "every ink clears WCAG AA on every ground, on every surface",
         arguments: inks,
         grounds
     )
@@ -109,6 +109,44 @@ struct ThemeColorTests {
         }
     }
 
+    /// The session player washes a goal's accent over the ground at
+    /// `Theme.Wash.strongest` and reads text on top of it. The wash drags the
+    /// ground towards mid-luminance from whichever end it started, so this is
+    /// the tightest background in the app and the only ink that survives it is
+    /// the primary one — which is why `accentGround(_:)` documents that and why
+    /// this measures it.
+    ///
+    /// Against `Theme.Wash.strongest` rather than a literal, so strengthening
+    /// the wash is what fails here: the position line and the nostril hint were
+    /// unreadable for as long as the accent behind them was nobody's measured
+    /// value.
+    @Test("primary ink clears WCAG AA over the strongest accent wash", arguments: accents)
+    func primaryInkIsLegibleOverTheAccentGround(_ accent: ColorToken) throws {
+        let accentSet = try #require(try ColorSet(at: ColorSet.palette, named: accent.rawValue))
+        let groundSet = try #require(try ColorSet(
+            at: ColorSet.palette,
+            named: ColorToken.surfaceGround.rawValue
+        ))
+        let inkSet = try #require(try ColorSet(
+            at: ColorSet.palette,
+            named: ColorToken.inkPrimary.rawValue
+        ))
+
+        for appearance in Appearance.allCases {
+            let foreground = try #require(inkSet[appearance]?.color)
+            let wash = try #require(accentSet[appearance]?.color)
+            let ground = try #require(groundSet[appearance]?.color)
+            let background = try #require(wash.blended(over: ground, alpha: Theme.Wash.strongest))
+
+            try expectAA(
+                foreground,
+                on: background,
+                "Ink/Primary on \(accent.rawValue) at \(Theme.Wash.strongest)",
+                appearance
+            )
+        }
+    }
+
     /// AA's 4.5:1 for normal text. Reported with the measured figure, because a
     /// bare "below 4.5" leaves whoever retunes the colour guessing how far.
     private func expectAA(
@@ -123,7 +161,7 @@ struct ThemeColorTests {
             ratio >= 4.5,
             """
             \(pair) is \(ratio.formatted(.number.precision(.fractionLength(2)))):1 \
-            in the \(appearance.rawValue) appearance, below AA's 4.5:1
+            in \(appearance.rawValue), below AA's 4.5:1
             """
         )
     }
@@ -166,11 +204,18 @@ private let accents = ColorToken.allCases.filter { $0.rawValue.hasPrefix("Accent
 /// are named rather than derived from the prefix.
 private let grounds: [ColorToken] = [.surfaceGround, .surfaceRaised]
 
-/// The two the palette is drawn for. Every colourset carries a value for each,
-/// and every contrast question has to be asked twice because of it.
+/// The three surfaces the palette is drawn for, so every contrast question here
+/// is asked three times.
+///
+/// The watch is one of them rather than a copy of `dark` taken on trust:
+/// `watchMirrorsTheDarkAppearance` is what makes the two agree today, and the
+/// day a wrist entry is given a value of its own — the always-black screen is a
+/// different rendering problem from a dark phone — the measurements have to
+/// follow it there rather than keep reporting on the phone.
 private enum Appearance: String, CaseIterable {
     case light
     case dark
+    case watch
 }
 
 /// One `.colorset` as a catalogue stores it: an entry for every appearance it
@@ -193,11 +238,12 @@ private struct ColorSet: Decodable {
         colors.first { $0.idiom == "watch" }
     }
 
-    /// Whichever entry the platform would resolve for that appearance.
+    /// Whichever entry the platform would resolve for that surface.
     subscript(appearance: Appearance) -> ColorEntry? {
         switch appearance {
         case .light: light
         case .dark: dark
+        case .watch: watch
         }
     }
 

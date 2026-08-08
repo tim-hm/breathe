@@ -28,8 +28,6 @@ struct SessionView: View {
 
     var body: some View {
         ZStack {
-            backdrop.ignoresSafeArea()
-
             if model.status == .finished, let record = model.record, !model.wasDiscarded {
                 SessionSummaryView(record: record, technique: model.technique) { dismiss() }
             } else if let countdown {
@@ -38,6 +36,7 @@ struct SessionView: View {
                 player
             }
         }
+        .accentGround(model.technique.goal.accent)
         .statusBarHidden()
         .onAppear {
             // A guided breath is watched, not touched, so the screen would dim
@@ -94,23 +93,6 @@ struct SessionView: View {
         model.start()
     }
 
-    /// The accent, washed over the palette's own ground rather than over
-    /// whatever the presentation put behind it — a translucent gradient alone
-    /// would sit on the system's background, which is pure black at night and
-    /// paper white by day, and neither is this palette.
-    private var backdrop: some View {
-        Theme.Surface.ground.overlay(
-            LinearGradient(
-                colors: [
-                    model.technique.goal.accent.opacity(0.35),
-                    model.technique.goal.accent.opacity(0.05),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
-    }
-
     private var player: some View {
         VStack(spacing: Theme.Spacing.loose) {
             header
@@ -130,8 +112,9 @@ struct SessionView: View {
             controls
         }
         .padding(Theme.Spacing.loose)
-        // Set once for the screen: everything under here is text on the app's
-        // own backdrop, and the buttons carry their own tint over it.
+        // Set once for the screen: everything under here is text on the accent
+        // ground, where primary is the only ink that clears AA, and the buttons
+        // carry their own tint over it.
         .foregroundStyle(Theme.Ink.primary)
     }
 
@@ -142,9 +125,11 @@ struct SessionView: View {
         VStack(spacing: Theme.Spacing.tight) {
             Text(model.technique.name)
                 .font(.headline)
+            // Primary ink, quieter only by size: on the accent ground the
+            // secondary step measures 3.26:1 and this line is `.subheadline`,
+            // so there is no tone left to spend on hierarchy here.
             Text(position)
                 .font(.subheadline)
-                .foregroundStyle(Theme.Ink.secondary)
         }
     }
 
@@ -186,10 +171,14 @@ struct SessionView: View {
                     VStack(spacing: Theme.Spacing.close) {
                         Text(beat?.kind.instruction ?? "")
                             .font(.title2.weight(.medium))
+                        // Which nostril, and alternate-nostril breathing cannot
+                        // be done without it — so it takes the one ink the
+                        // accent ground leaves readable. Drawn in the accent it
+                        // sits on it measured 2.93:1; the weight is what marks
+                        // it out now that the colour cannot.
                         if let hint = PhaseHints.hint(for: beat, in: hints) {
                             Text(hint)
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(model.technique.goal.accent)
+                                .font(.subheadline.weight(.semibold))
                         }
                         Text(secondsRemaining(in: beat, at: elapsed))
                             .font(.system(.largeTitle, design: .rounded).weight(.light))
