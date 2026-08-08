@@ -31,6 +31,36 @@ private func draft(name: String = "Mine") -> TechniqueDraft {
     )
 }
 
+/// Two differently-shaped stages, twice over — the user-built equivalent of a
+/// staged protocol, and the smallest draft that can have a seam in it.
+///
+/// One second in and one out, twice; then two in and three out, once; the whole
+/// thing twice. Every number is distinct so a beat landing in the wrong stage
+/// shows up as a wrong duration rather than as a coincidence.
+private func sequence() -> TechniqueDraft {
+    TechniqueDraft(
+        name: "Wake, then settle",
+        goal: .energy,
+        stages: [
+            DraftStage(
+                phases: [
+                    DraftPhase(kind: .inhale, duration: .milliseconds(1000)),
+                    DraftPhase(kind: .exhale, duration: .milliseconds(1000)),
+                ],
+                cycles: 2
+            ),
+            DraftStage(
+                phases: [
+                    DraftPhase(kind: .inhale, duration: .milliseconds(2000)),
+                    DraftPhase(kind: .exhale, duration: .milliseconds(3000)),
+                ],
+                cycles: 1
+            ),
+        ],
+        rounds: 2
+    )
+}
+
 /// Turns a draft into what the server would return for it: the same `Technique`
 /// message the catalogue serves, with the ranges stamped on.
 private func stored(_ draft: TechniqueDraft, id: String) -> Technique {
@@ -120,6 +150,45 @@ struct AuthoredPlaybackTests {
         #expect(later.kind == .exhale)
     }
 
+    /// "The timeline plays them without a seam", stated as arithmetic: every
+    /// beat begins exactly where the one before it ended, across a stage change
+    /// and across the wrap from the last stage back to the first.
+    ///
+    /// A seam would be a gap or an overlap at one of those two joins, and both
+    /// are invisible on a screen — the orb would simply pause or jump, and the
+    /// cue loop would fire against a boundary the animation disagrees with.
+    @Test("A sequence of stages plays as one continuous timeline")
+    func playsASequenceWithoutASeam() throws {
+        let mine = stored(sequence(), id: "id-0")
+        let timeline = SessionTimeline(technique: mine)
+
+        // Two rounds of (two cycles of two beats, then one cycle of two beats).
+        #expect(timeline.beats.count == 12)
+        #expect(timeline.totalDuration == .milliseconds(18000))
+        #expect(timeline.rounds == 2)
+
+        #expect(timeline.beats.first?.start == .zero)
+        for (earlier, later) in zip(timeline.beats, timeline.beats.dropFirst()) {
+            #expect(
+                earlier.end == later.start,
+                "beat \(later.id) does not begin where beat \(earlier.id) ended"
+            )
+        }
+
+        #expect(
+            timeline.beats.map(\.stage) == [0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1],
+            "each round runs the stage list in order"
+        )
+        #expect(timeline.beats.map(\.round) == [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1])
+
+        // The instant the first stage ends is already the second stage's, which
+        // is the half-open interval doing the work a seam would otherwise leave
+        // to rounding.
+        let crossing = try #require(timeline.beat(at: .milliseconds(4000)))
+        #expect(crossing.stage == 1)
+        #expect(crossing.duration == .milliseconds(2000))
+    }
+
     @Test("A dialled copy of an authored exercise is still theirs")
     func dialledCopiesKeepTheirOrigin() {
         let mine = stored(draft(), id: "id-0")
@@ -183,6 +252,10 @@ struct AuthoringLimitsTests {
     @Test("A draft's planned length is what a session of it would take")
     func reportsThePlannedLength() {
         #expect(draft().plannedDuration == .milliseconds(120_000))
+        #expect(
+            sequence().plannedDuration == .milliseconds(18000),
+            "a sequence counts every stage, then every round of them"
+        )
     }
 
     @Test("Editing opens on exactly what is stored")
@@ -199,6 +272,25 @@ struct AuthoringLimitsTests {
             .milliseconds(4000),
             .milliseconds(8000),
         ])
+    }
+
+    /// Editing a sequence has to open on the sequence. Stage order is the whole
+    /// of what somebody composed, so a round trip that preserved the stages but
+    /// not their order would silently rewrite the exercise on the next save.
+    @Test("Editing a sequence opens on its stages, in order")
+    func roundTripsASequence() {
+        let editing = TechniqueDraft(editing: stored(sequence(), id: "id-0"))
+
+        #expect(editing.rounds == 2)
+        #expect(editing.stages.map(\.cycles) == [2, 1])
+        #expect(editing.stages.map { $0.phases.map(\.duration) } == [
+            [.milliseconds(1000), .milliseconds(1000)],
+            [.milliseconds(2000), .milliseconds(3000)],
+        ])
+        #expect(
+            Set(editing.stages.map(\.id)).count == editing.stages.count,
+            "each stage is its own row, so a composer can reorder them"
+        )
     }
 }
 
