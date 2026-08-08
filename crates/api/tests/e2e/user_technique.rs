@@ -82,6 +82,76 @@ async fn an_authored_exercise_syncs_to_a_second_device() {
     }
 }
 
+/// A sequence comes back in the order it was composed in, and reordering it
+/// reorders it.
+///
+/// The one thing three parallel tables can get wrong that a single row could
+/// not. Stages and phases are stored as ordinals across two child tables and
+/// reassembled by a grouping on the way out, so a sequence whose stages arrive
+/// shuffled is an exercise that plays a different exercise — silently, because
+/// every stage is individually valid.
+///
+/// The edit reverses the stages rather than changing them, which is what pins
+/// the rewrite: `replace` deletes and re-inserts every ordinal, so a path that
+/// merged instead of replacing would answer with the old order.
+#[tokio::test]
+async fn a_sequence_keeps_the_order_it_was_composed_in() {
+    let db = TestDatabase::create("user_technique_sequence").await;
+
+    let created = create(&db, USER, Some(sequence()))
+        .await
+        .into_ok()
+        .technique
+        .expect("a sequence is stored whole");
+
+    assert_eq!(created.recommended_rounds, 3);
+    assert_eq!(shape(&created), vec![(6, 2), (1, 3), (4, 2)]);
+    assert_eq!(
+        created.stages[1]
+            .phases
+            .iter()
+            .map(|phase| (phase.kind, phase.duration_ms))
+            .collect::<Vec<_>>(),
+        vec![
+            (pb::PhaseKind::Inhale as i32, 4000),
+            (pb::PhaseKind::HoldIn as i32, 8000),
+            (pb::PhaseKind::Exhale as i32, 8000),
+        ],
+        "the middle stage keeps its own pattern, in its own order"
+    );
+
+    let listed = list(&db, USER).await.into_ok();
+    assert_eq!(
+        listed.techniques,
+        vec![created.clone()],
+        "listing and creating describe a sequence alike"
+    );
+
+    let mut reordered = sequence();
+    reordered.stages.reverse();
+
+    let updated = call_grpc_web_with::<_, pb::UpdateUserTechniqueResponse>(
+        db.app(),
+        UPDATE,
+        &pb::UpdateUserTechniqueRequest {
+            id: created.id.clone(),
+            draft: Some(reordered),
+        },
+        &[(USER_ID_HEADER, USER)],
+    )
+    .await
+    .into_ok()
+    .technique
+    .expect("the update answers with the technique it stored");
+
+    assert_eq!(shape(&updated), vec![(4, 2), (1, 3), (6, 2)]);
+    assert_eq!(
+        list(&db, USER).await.into_ok().techniques,
+        vec![updated],
+        "and the stored order is the reordered one"
+    );
+}
+
 /// The seeded ranges bound an authored exercise, and they do it here rather than
 /// only in the composer.
 ///
@@ -335,6 +405,53 @@ fn draft() -> pb::TechniqueDraft {
         }],
         rounds: 1,
     }
+}
+
+/// Three differently-shaped stages, three times over — the user-built equivalent
+/// of a staged protocol. Every stage has a distinct cycle count and phase count
+/// so that a stage arriving in the wrong slot reads as a wrong number rather
+/// than as a coincidence.
+fn sequence() -> pb::TechniqueDraft {
+    pb::TechniqueDraft {
+        name: "Wake, hold, settle".to_owned(),
+        goal: pb::TechniqueGoal::Energy as i32,
+        stages: vec![
+            stage(6, &[(pb::PhaseKind::Inhale, 2000), (pb::PhaseKind::Exhale, 2000)]),
+            stage(
+                1,
+                &[
+                    (pb::PhaseKind::Inhale, 4000),
+                    (pb::PhaseKind::HoldIn, 8000),
+                    (pb::PhaseKind::Exhale, 8000),
+                ],
+            ),
+            stage(4, &[(pb::PhaseKind::Inhale, 3000), (pb::PhaseKind::Exhale, 6000)]),
+        ],
+        rounds: 3,
+    }
+}
+
+fn stage(cycles: u32, phases: &[(pb::PhaseKind, u32)]) -> pb::DraftStage {
+    pb::DraftStage {
+        phases: phases
+            .iter()
+            .map(|(kind, duration_ms)| pb::DraftPhase {
+                kind: *kind as i32,
+                duration_ms: *duration_ms,
+            })
+            .collect(),
+        cycles,
+    }
+}
+
+/// Each stage as its cycle count and how many phases it holds — enough to tell
+/// three stages apart without restating every duration.
+fn shape(technique: &pb::Technique) -> Vec<(u32, usize)> {
+    technique
+        .stages
+        .iter()
+        .map(|stage| (stage.cycles, stage.phases.len()))
+        .collect()
 }
 
 const fn request() -> pb::ListUserTechniquesRequest {
