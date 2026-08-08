@@ -4,6 +4,8 @@
 //! Receives explicit dependencies (`&PgPool`), never `Arc<AppState>`, and
 //! contains zero raw queries: SQL lives in `super::repository`.
 
+use std::time::Duration;
+
 use sqlx::PgPool;
 
 use super::super::errors::JourneyError;
@@ -17,6 +19,29 @@ use crate::proto::ond::v1 as pb;
 /// How many named entries a board returns.
 const LEADERBOARD_LIMIT: i64 = 20;
 
+/// How long a board may be served from the snapshot before the next request
+/// re-folds it.
+///
+/// A minute, not the several the boards would tolerate if they only showed
+/// other people. The same query answers "where do I stand", and somebody who
+/// has just finished a session and opened the tab is the one reader who can
+/// tell a stale board from a live one — their own number is the one they know.
+///
+/// What this replaces is a fold per request. `crate::throttle` bounds the rate
+/// one caller may ask at — six hundred a minute — and says nothing about how
+/// many callers there are; this makes the fold rate a property of the clock
+/// instead, at most once a minute per board per day boundary however hard
+/// anybody pulls.
+const SNAPSHOT_TTL: Duration = Duration::from_mins(1);
+
+/// The day boundary the boards without a local-day question are folded at.
+///
+/// A rolling thirty days and a personal best are the same number at every
+/// offset, so those two boards are materialised once rather than once per
+/// offset somebody happens to be standing in. Zero is a real offset and their
+/// answer there is their answer everywhere, so this narrows nothing.
+const NO_DAY_BOUNDARY: i32 = 0;
+
 /// A board's leading entries, plus where the caller stands on it.
 ///
 /// The opt-in runs one way: only people who have chosen a display name appear in
@@ -28,6 +53,13 @@ const LEADERBOARD_LIMIT: i64 = 20;
 /// The age-band scope needs a birth-year band the caller may never have given.
 /// That is a `FAILED_PRECONDITION` rather than a malformed request: the client's
 /// answer is to offer the decade question, not to correct a field.
+///
+/// A board is never served unfolded. The snapshot is checked before it is read,
+/// and a key that is stale or has never existed is refreshed first — so an
+/// empty `entries` still means what `journey_service.proto` says it means,
+/// nobody has opted in yet, rather than "the fold has not happened". The cost
+/// of that guarantee lands on the first caller after each expiry and on nobody
+/// else.
 pub async fn get_leaderboard(
     pool: &PgPool,
     user_id: UserId,
@@ -45,18 +77,25 @@ pub async fn get_leaderboard(
         ),
     };
 
-    let rows = match board {
-        LeaderboardBoard::Streak => {
-            let offset = validated_offset(request.utc_offset_minutes)?;
-            repository::streak_board(pool, user_id, band, LEADERBOARD_LIMIT, offset).await?
-        }
-        LeaderboardBoard::Minutes30d => {
-            repository::minutes_board(pool, user_id, band, LEADERBOARD_LIMIT).await?
-        }
-        LeaderboardBoard::Bolt => {
-            repository::bolt_board(pool, user_id, band, LEADERBOARD_LIMIT).await?
-        }
+    let utc_offset_minutes = match board {
+        LeaderboardBoard::Streak => validated_offset(request.utc_offset_minutes)?,
+        LeaderboardBoard::Minutes30d | LeaderboardBoard::Bolt => NO_DAY_BOUNDARY,
     };
+
+    let ttl_seconds = SNAPSHOT_TTL.as_secs_f64();
+    if !repository::is_fresh(pool, board, utc_offset_minutes, ttl_seconds).await? {
+        repository::refresh(pool, board, utc_offset_minutes, ttl_seconds).await?;
+    }
+
+    let rows = repository::board(
+        pool,
+        user_id,
+        board,
+        utc_offset_minutes,
+        band,
+        LEADERBOARD_LIMIT,
+    )
+    .await?;
 
     to_leaderboard_response(user_id, rows)
 }

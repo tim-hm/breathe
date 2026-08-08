@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (\n            SELECT 1 FROM leaderboard_refresh\n            WHERE board = $1 AND utc_offset_minutes = $2\n              AND refreshed_at > now() - make_interval(secs => $3)\n        ) AS \"fresh!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "fresh!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "leaderboard_board",
+            "kind": {
+              "Enum": [
+                "STREAK",
+                "MINUTES_30D",
+                "BOLT"
+              ]
+            }
+          }
+        },
+        "Int4",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a0bcab18a1671741e2e38998d659b6ec532abb3dd51b6e80067d850e3740737a"
+}

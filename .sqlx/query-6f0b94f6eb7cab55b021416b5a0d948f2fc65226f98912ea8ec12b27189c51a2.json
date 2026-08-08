@@ -1,0 +1,96 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH ranked AS (\n            SELECT u.id, u.display_name, s.value,\n                   rank() OVER (ORDER BY s.value DESC) AS rank\n            FROM leaderboard_snapshot s\n            JOIN users u ON u.id = s.user_id\n            WHERE s.board = $2 AND s.utc_offset_minutes = $3\n              AND ($4::birth_year_band IS NULL OR u.birth_year_band = $4)\n        ),\n        placed AS (\n            SELECT id, display_name, value, rank,\n                   row_number() OVER (\n                       PARTITION BY display_name IS NOT NULL ORDER BY rank, display_name\n                   ) AS listed\n            FROM ranked\n        )\n        SELECT id AS \"user_id!\", display_name, value AS \"value!\", rank AS \"rank!\",\n               (display_name IS NOT NULL AND listed <= $5) AS \"on_board!\"\n        FROM placed\n        WHERE id = $1 OR (display_name IS NOT NULL AND listed <= $5)\n        ORDER BY rank, display_name",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id!",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "display_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "display_name"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "value!",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "leaderboard_snapshot",
+            "name": "value"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "rank!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "on_board!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "leaderboard_board",
+            "kind": {
+              "Enum": [
+                "STREAK",
+                "MINUTES_30D",
+                "BOLT"
+              ]
+            }
+          }
+        },
+        "Int4",
+        {
+          "Custom": {
+            "name": "birth_year_band",
+            "kind": {
+              "Enum": [
+                "BORN_BEFORE_1960",
+                "BORN_1960S",
+                "BORN_1970S",
+                "BORN_1980S",
+                "BORN_1990S",
+                "BORN_2000S",
+                "BORN_2010_OR_LATER"
+              ]
+            }
+          }
+        },
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "6f0b94f6eb7cab55b021416b5a0d948f2fc65226f98912ea8ec12b27189c51a2"
+}
