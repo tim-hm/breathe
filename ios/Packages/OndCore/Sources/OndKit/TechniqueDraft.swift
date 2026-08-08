@@ -21,11 +21,19 @@ public struct DraftPhase: Sendable, Equatable, Identifiable {
 /// One stage somebody is composing. No `openEnded`: a hold the person ends
 /// belongs to the curated protocols that carry the copy explaining it, and the
 /// contract has no way to author one.
-public struct DraftStage: Sendable, Equatable {
+///
+/// `Identifiable` for the reason `DraftPhase` is, and a sharper one: a composer
+/// that removes the middle stage of three renumbers the stages after it, so a
+/// `ForEach` keyed on position would go on rendering bindings into a slot that
+/// is now somebody else's. The id is never sent — the server numbers stages by
+/// their position in the draft it receives.
+public struct DraftStage: Sendable, Equatable, Identifiable {
+    public let id: UUID
     public var phases: [DraftPhase]
     public var cycles: Int
 
-    public init(phases: [DraftPhase], cycles: Int) {
+    public init(id: UUID = UUID(), phases: [DraftPhase], cycles: Int) {
+        self.id = id
         self.phases = phases
         self.cycles = cycles
     }
@@ -40,10 +48,12 @@ public struct DraftStage: Sendable, Equatable {
 public struct TechniqueDraft: Sendable, Equatable {
     public var name: String
     public var goal: TechniqueGoal
+    /// The session, in play order.
     public var stages: [DraftStage]
-    /// How many times the whole stage list repeats. One while the composer
-    /// authors a single stage, where a round and a cycle would be the same
-    /// number said twice.
+    /// How many times the whole stage list repeats. One for a lone stage, where
+    /// a round and a cycle would be the same number said twice — it is a
+    /// sequence of differently-shaped stages that gives rounds something to say
+    /// that cycles cannot.
     public var rounds: Int
 
     public init(name: String, goal: TechniqueGoal, stages: [DraftStage], rounds: Int = 1) {
