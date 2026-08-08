@@ -5,6 +5,11 @@ edition.workspace = true
 rust-version.workspace = true
 # Proprietary — never meant for crates.io, so fence off `cargo publish`.
 publish = false
+# `src/bin/export-catalogue.rs` makes this crate ambiguous to a bare
+# `cargo run -p migrate`, which is what `mise run migrate` is. Named here rather
+# than as `--bin migrate` in the task, so every caller gets the migrator and
+# only the export — which asks for itself by name — gets the other one.
+default-run = "migrate"
 
 [dependencies]
 anyhow.workspace = true
