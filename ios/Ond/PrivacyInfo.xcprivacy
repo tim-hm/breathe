@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  The phone app's privacy manifest, and the source the App Store Connect
+  nutrition label is answered from.
+
+  Every entry below names the fields it covers and the section of
+  web/privacy.html that describes them, because the label and the published
+  policy disagreeing is a rejection that says the developer does not know what
+  their own app does. Sections rather than line numbers: the page is edited far
+  more often than this file.
+
+  What is deliberately absent is as load-bearing as what is here. Apple counts
+  data as collected only when it is transmitted off the device and held longer
+  than servicing the request in real time, so three things the app sends are
+  not declared:
+
+  - Coach prompts, replies and conversation history. crates/migrate holds no
+    column for them (0006_assistant_quota.sql stores a per-day call count and
+    nothing else), and Bedrock account retention and model-invocation logging
+    are both `none`.
+  - The heart summary a coach request may carry — whole-number seven-day means
+    and trends folded from HealthKit by HealthSummaryBuilder. It rides the same
+    request and is retained by nobody. HealthKit is otherwise read-only on this
+    side, and Mindful Minutes are written back to the device.
+  - `utc_offset_minutes`, sent per request so a streak can be counted in the
+    caller's day and never stored.
+
+  Persisting coach conversations would move the first two into
+  NSPrivacyCollectedDataTypes and change the nutrition label with them.
+-->
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<!-- No advertising, attribution, analytics or crash-reporting SDK ships in
+	     the app; the only two dependencies are networking libraries for talking
+	     to our own server. Policy: "What we never do". -->
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array>
+		<dict>
+			<!-- The random identifier the app mints into the Keychain, the
+			     display name a leaderboard shows, and the Apple account the
+			     optional sign-in binds the row to. Policy: "There is no
+			     account", "Leaderboards are opt-in". -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeUserID</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<!-- Breath-hold measurements: the number of seconds and when it was
+			     measured, kept until erased. A self-reported physiological
+			     measurement rather than anything read from Health. Policy:
+			     "What we store" → "What you breathe". -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeHealth</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<!-- One record per completed session: technique, start, duration,
+			     cycles, breaths, and whether it ran to the end. Policy: "What
+			     we store" → "What you breathe". -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeFitness</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<!-- The free-text note written during onboarding, and the names
+			     given to self-authored techniques. Both are stored verbatim.
+			     Policy: "What we store" → "What you tell us during
+			     onboarding". -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeOtherUserContent</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<!-- The App Store transaction the server verifies, and the date the
+			     subscription runs until. Apple takes the payment; no card,
+			     billing address or Apple ID reaches us. Policy: "What we store"
+			     → "Your subscription, if you have one". -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePurchaseHistory</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<!-- One number per day: how many coach calls were made, which caps
+			     what the model costs. Policy: "What we store" → "A daily
+			     counter, if you use the coach". -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeProductInteraction</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<dict>
+			<!-- The onboarding answers Apple has no category for: goals,
+			     experience level, reminder frequency, and — each optional and
+			     blank by default — a decade-wide birth-year band and gender.
+			     Not NSPrivacyCollectedDataTypeSensitiveInfo, whose definition
+			     covers sexual orientation rather than gender. Policy: "What we
+			     store" → "What you tell us during onboarding". -->
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeOtherDataTypes</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<!-- OndKit keeps preferences, the cached onboarding answers and the
+			     sync ledger in UserDefaults.standard. CA92.1 is the reason for
+			     a container only the app itself reads and writes: there is no
+			     App Group, and nothing here is read back from another app.
+			     The only other dependency without a manifest of its own,
+			     connect-swift, touches no required-reason API. -->
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>
