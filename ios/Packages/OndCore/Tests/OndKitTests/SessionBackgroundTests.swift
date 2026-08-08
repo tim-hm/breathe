@@ -6,9 +6,10 @@ import Testing
 ///
 /// Eyes closed with the screen off is the posture these techniques are done in,
 /// so on the phone the departure is only an interruption when the cues cannot
-/// follow the person into it. The session asks the cue channel which it is; these
-/// pin both answers, and the third pins the one thing that must not change with
-/// either — a pause somebody reached for stays a pause.
+/// follow the person into it. The session asks the cue channel which it is, and
+/// these pin both answers: the departure it survives, the departure it does not
+/// and reports so it can be spoken of, and the one thing true of either — a pause
+/// somebody reached for stays a pause.
 @MainActor
 @Suite("Backgrounding a session")
 struct SessionBackgroundTests {
@@ -77,6 +78,45 @@ struct SessionBackgroundTests {
         model.resumeIfSceneDriven()
 
         #expect(model.status == .paused)
+    }
+
+    /// The clause about being told, pinned at the only seam a host test can
+    /// reach. Nothing here can post a notification, but the view posts one
+    /// exactly when this says a departure stopped something — so the three
+    /// answers are what decide whether somebody is buzzed, and all three are
+    /// wrong in a different way. Silent and running is the whole point; sounding
+    /// is a session that never stopped; hand-paused is a stop the person already
+    /// knows about, and telling them again would be the app narrating their own
+    /// tap back at them.
+    @Test("Only a departure that stopped a running session is worth saying so")
+    func reportsWhetherTheDepartureStoppedAnything() async throws {
+        let silent = SessionModel(
+            technique: briefBreathing(cycles: 1000),
+            cues: RecordingCues(playsInBackground: false),
+            recorder: DiscardingRecorder()
+        )
+        silent.start()
+        try await waitFor("the silent session to be running") { silent.status == .running }
+        #expect(silent.pauseForScene(), "a silent session stopped, and nothing else said so")
+
+        let sounding = SessionModel(
+            technique: briefBreathing(cycles: 1000),
+            cues: RecordingCues(playsInBackground: true),
+            recorder: DiscardingRecorder()
+        )
+        sounding.start()
+        try await waitFor("the sounding session to be running") { sounding.status == .running }
+        #expect(!sounding.pauseForScene(), "the cues followed them out; there is nothing to report")
+
+        let handPaused = SessionModel(
+            technique: briefBreathing(cycles: 1000),
+            cues: RecordingCues(playsInBackground: false),
+            recorder: DiscardingRecorder()
+        )
+        handPaused.start()
+        try await waitFor("the paused session to be running") { handPaused.status == .running }
+        handPaused.pause()
+        #expect(!handPaused.pauseForScene(), "they paused it themselves and know that they did")
     }
 
     /// The other half of holding the app open: a pause has to give the runtime

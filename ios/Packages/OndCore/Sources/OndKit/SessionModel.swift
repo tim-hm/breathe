@@ -237,11 +237,18 @@ public final class SessionModel {
     /// Cues that outlive the departure make the whole question moot: putting the
     /// phone down is what the technique asks for, and a session that stopped for
     /// it would be broken at the one moment it matters most.
-    public func pauseForScene() {
-        guard !cues.playsInBackground else { return }
-        guard status == .running || status == .holding else { return }
+    ///
+    /// - Returns: whether the departure actually stopped a running session. The
+    ///   caller owes the person a word only when it did — a session whose cues
+    ///   followed them out is still going, and one they had already paused by
+    ///   hand is stopped for a reason they chose.
+    @discardableResult
+    public func pauseForScene() -> Bool {
+        guard !cues.playsInBackground else { return false }
+        guard status == .running || status == .holding else { return false }
         pausedByScene = true
         pause()
+        return true
     }
 
     /// Resumes only a pause `pauseForScene()` caused.

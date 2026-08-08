@@ -51,15 +51,32 @@ struct SessionView: View {
             UIApplication.shared.isIdleTimerDisabled = false
             model.dismiss()
         }
+        // A session follows the person out of the app as far as its cues can
+        // reach them, and no further: sound reaches a pocket, so a session with
+        // it keeps running; nothing else does, so a session without it stops and
+        // says that it stopped. One rule, and the half of it about which cues
+        // reach a pocket is written on `SessionCues.playsInBackground`.
+        //
+        // The notice is what makes the stop honest rather than merely quiet, and
+        // only a departure that changed something is worth one — which is what
+        // `pauseForScene()` answers. The return withdraws it either way, because
+        // a departure the notice was never posted for is also one nothing here
+        // remembers.
+        //
         // `.background` and not `.inactive`, which iOS also sends for a
-        // notification banner and a Control Centre pull. The model owns both
-        // halves of the decision from here: which pauses undo themselves, and
-        // whether the departure is worth pausing for at all — a session still
-        // cueing into a dark screen is the app working, not leaving.
+        // notification banner and a Control Centre pull — neither is a departure
+        // and neither should cost the person a phase.
         .onChange(of: scenePhase) { _, phase in
             switch phase {
-            case .background: model.pauseForScene()
-            case .active: model.resumeIfSceneDriven()
+            case .background:
+                if model.pauseForScene() {
+                    SessionPausedNotice.post()
+                }
+
+            case .active:
+                SessionPausedNotice.withdraw()
+                model.resumeIfSceneDriven()
+
             default: break
             }
         }
