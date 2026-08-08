@@ -7,14 +7,24 @@ import SwiftUI
 /// and the way in.
 struct TechniqueDetailView: View {
     let technique: Technique
+
+    /// The list an exercise somebody wrote is edited and deleted through. Held
+    /// even for a curated technique, because the screen is one screen: which
+    /// controls it shows is `technique.origin`'s answer, not the caller's.
+    let own: UserTechniqueModel
+
     let sessions: any SessionRecording
 
     @Environment(SessionSettings.self) private var settings
+    @Environment(\.dismiss) private var dismiss
     @State private var started: StartedSession?
 
     @Environment(SubscriptionStore.self) private var plus
 
     @State private var isShowingPaywall = false
+    @State private var isEditing = false
+    @State private var isConfirmingDelete = false
+    @State private var deletionFailure: String?
 
     var body: some View {
         @Bindable var settings = settings
@@ -28,8 +38,17 @@ struct TechniqueDetailView: View {
                 header
                 BreathRhythmChart(technique: dialled)
                 stageTitles(of: dialled)
-                lengthControl(of: dialled)
-                advanced(of: dialled)
+
+                // An exercise somebody wrote is edited, not dialled. The two
+                // are the same gesture with different durability — one syncs
+                // and one does not — and offering both would leave a person
+                // wondering which of their two numbers is the real one.
+                if technique.origin == .personal {
+                    ownControls(of: dialled)
+                } else {
+                    lengthControl(of: dialled)
+                    advanced(of: dialled)
+                }
             }
             .padding(Theme.Spacing.standard)
         }
@@ -44,12 +63,40 @@ struct TechniqueDetailView: View {
         .fullScreenCover(item: $started) { session in
             SessionView(model: session.model)
         }
+        .sheet(isPresented: $isEditing) {
+            if let limits = own.limits {
+                TechniqueComposerView(model: own, limits: limits, editing: technique)
+            }
+        }
+        .confirmationDialog(
+            "Delete \(technique.name)?",
+            isPresented: $isConfirmingDelete,
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) { Task { await delete() } }
+        } message: {
+            Text("It goes from every device. The sessions you have already done stay.")
+        }
+        .alert(
+            "Couldn't delete it",
+            isPresented: Binding(get: { deletionFailure != nil }, set: { _ in
+                deletionFailure = nil
+            })
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(deletionFailure ?? "")
+        }
     }
 
     /// What this exercise is, and — once it arrives — why it works, as one
     /// passage. The explanation is set in the summary's own type and ink so the
     /// two read as one voice rather than as a screen with a second section on
     /// it.
+    ///
+    /// Both halves are the catalogue's. An exercise somebody wrote carries no
+    /// summary, and the coach explains the curated techniques it was given —
+    /// asking it about one of yours would be asking it to invent something.
     private var header: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.close) {
             // What the exercise is for, in the person's own words rather than as
@@ -59,10 +106,43 @@ struct TechniqueDetailView: View {
             Text("For when you want to \(technique.goal.intentObject)")
                 .font(.subheadline)
                 .foregroundStyle(Theme.Ink.tertiary)
-            Text(technique.summary)
-                .font(.body)
+
+            if technique.origin == .catalogue {
+                Text(technique.summary)
+                    .font(.body)
+                    .foregroundStyle(Theme.Ink.secondary)
+                WhyThisWorksView(techniqueSlug: technique.slug)
+            }
+        }
+    }
+
+    /// Edit and delete, for an exercise this person wrote.
+    private func ownControls(of dialled: Technique) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.close) {
+            Text(lengthDescription(of: dialled))
+                .font(.footnote)
                 .foregroundStyle(Theme.Ink.secondary)
-            WhyThisWorksView(techniqueSlug: technique.slug)
+
+            Button("Edit") { isEditing = true }
+                .buttonStyle(.bordered)
+                .tint(technique.goal.accent)
+                // Absent limits means the list has not loaded, and the composer
+                // has nothing to bound its dials with.
+                .disabled(own.limits == nil)
+
+            Button("Delete", role: .destructive) { isConfirmingDelete = true }
+                .font(.footnote)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+    }
+
+    private func delete() async {
+        do {
+            try await own.delete(technique)
+            dismiss()
+        } catch {
+            deletionFailure = error.localizedDescription
         }
     }
 

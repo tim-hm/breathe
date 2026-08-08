@@ -13,6 +13,9 @@ import SwiftUI
 @MainActor
 struct AppRoots {
     let catalogue: TechniqueListModel
+    /// The exercises this person wrote. Beside the catalogue rather than folded
+    /// into it: two services, two loads, and only one of them needs an identity.
+    let own: UserTechniqueModel
     let sessions: any SessionRecording
     let journey: JourneyModel
     let profiles: ProfileStore
@@ -26,7 +29,7 @@ struct AppRoots {
     }
 
     var exercisesRoot: some View {
-        TechniqueListView(model: catalogue, sessions: sessions)
+        TechniqueListView(model: catalogue, own: own, sessions: sessions)
     }
 
     var coachRoot: some View {

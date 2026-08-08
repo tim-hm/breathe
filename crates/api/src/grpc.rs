@@ -11,6 +11,7 @@ use crate::features::entitlement::handlers::grpc::EntitlementServiceImpl;
 use crate::features::journey::handlers::grpc::JourneyServiceImpl;
 use crate::features::profile::handlers::grpc::ProfileServiceImpl;
 use crate::features::technique::handlers::grpc::TechniqueServiceImpl;
+use crate::features::user_technique::handlers::grpc::UserTechniqueServiceImpl;
 use crate::proto::ond::v1::FILE_DESCRIPTOR_SET;
 use crate::proto::ond::v1::account_service_server::AccountServiceServer;
 use crate::proto::ond::v1::assistant_service_server::AssistantServiceServer;
@@ -18,6 +19,7 @@ use crate::proto::ond::v1::entitlement_service_server::EntitlementServiceServer;
 use crate::proto::ond::v1::journey_service_server::JourneyServiceServer;
 use crate::proto::ond::v1::profile_service_server::ProfileServiceServer;
 use crate::proto::ond::v1::technique_service_server::TechniqueServiceServer;
+use crate::proto::ond::v1::user_technique_service_server::UserTechniqueServiceServer;
 use crate::state::AppState;
 
 /// The largest request body any service will decode.
@@ -51,6 +53,10 @@ pub fn build_services(state: &Arc<AppState>) -> Result<Routes> {
     let mut routes = Routes::default()
         .add_service(
             TechniqueServiceServer::new(TechniqueServiceImpl::new(Arc::clone(state)))
+                .max_decoding_message_size(MAX_REQUEST_BYTES),
+        )
+        .add_service(
+            UserTechniqueServiceServer::new(UserTechniqueServiceImpl::new(Arc::clone(state)))
                 .max_decoding_message_size(MAX_REQUEST_BYTES),
         )
         .add_service(

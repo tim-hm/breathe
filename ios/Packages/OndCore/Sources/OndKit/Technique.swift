@@ -30,6 +30,22 @@ public enum PhaseKind: String, Sendable, Hashable, Codable {
     case holdOut
 }
 
+/// Who wrote a technique, and therefore who may change it.
+///
+/// Not carried on the wire: a technique's origin is which service answered for
+/// it, and `UserTechniqueRepository` is the only thing that ever stamps
+/// `.personal`. It lives on the domain type so that everything above the
+/// repositories — a list section, a detail screen deciding between Customise and
+/// Edit — asks one question instead of tracking which array a value came out of.
+public enum TechniqueOrigin: String, Sendable, Hashable, Codable {
+    /// Curated, seeded, and the same for everybody.
+    case catalogue
+
+    /// Composed by the person holding the phone, and stored server-side against
+    /// their identity so it is the same exercise on every device they use.
+    case personal
+}
+
 public struct Phase: Sendable, Hashable, Codable {
     public let kind: PhaseKind
     /// The curated default, and what a session plays unless a dial moved it.
@@ -147,6 +163,11 @@ public struct Technique: Sendable, Identifiable, Hashable, Codable {
     /// outcome.
     public let requires: SubscriptionTier
 
+    /// Where this one came from. Defaulted to `.catalogue`, which is what every
+    /// hand-built `Technique` in a test or a preview means, and what the two
+    /// decoding paths onto this type both produce.
+    public let origin: TechniqueOrigin
+
     public init(
         id: String,
         slug: String,
@@ -156,7 +177,8 @@ public struct Technique: Sendable, Identifiable, Hashable, Codable {
         stages: [Stage],
         recommendedRounds: Int,
         safetyNote: String? = nil,
-        requires: SubscriptionTier = .free
+        requires: SubscriptionTier = .free,
+        origin: TechniqueOrigin = .catalogue
     ) {
         self.id = id
         self.slug = slug
@@ -167,6 +189,7 @@ public struct Technique: Sendable, Identifiable, Hashable, Codable {
         self.recommendedRounds = recommendedRounds
         self.safetyNote = safetyNote
         self.requires = requires
+        self.origin = origin
     }
 
     /// Whether `tier` opens this technique.

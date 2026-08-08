@@ -12,8 +12,7 @@ use super::types::{
     BirthYearBand, ExperienceLevel, Gender, MAX_DISPLAY_NAME_CHARS, ProfileSnapshot,
     ReminderIntensity,
 };
-use crate::features::technique::service::goal_to_proto;
-use crate::features::technique::types::TechniqueGoal;
+use crate::features::technique::service::{goal_from_proto, goal_to_proto};
 use crate::identity::UserId;
 use crate::proto::ond::v1 as pb;
 
@@ -172,7 +171,9 @@ fn to_proto(row: ProfileRow) -> pb::Profile {
 fn from_proto(profile: pb::Profile) -> Result<ProfileRow, ProfileError> {
     let mut goals = Vec::with_capacity(profile.goals.len());
     for raw in profile.goals {
-        let goal = goal_from_proto(raw)?;
+        let goal = goal_from_proto(raw).ok_or_else(|| {
+            ProfileError::Invalid(format!("`{raw}` is not a goal this server knows"))
+        })?;
         // Deduplicated rather than rejected: a client sending a goal twice has
         // sent a set with a redundancy, not a contradiction. Insertion order is
         // kept, so the person sees back the order they picked.
@@ -296,21 +297,6 @@ fn gender_from_proto(raw: i32) -> Result<Option<Gender>, ProfileError> {
     }
 }
 
-/// The inbound direction has no counterpart in `technique`, which only ever
-/// serves goals: this is the one place a client sends one back.
-fn goal_from_proto(raw: i32) -> Result<TechniqueGoal, ProfileError> {
-    match pb::TechniqueGoal::try_from(raw) {
-        Ok(pb::TechniqueGoal::Calm) => Ok(TechniqueGoal::Calm),
-        Ok(pb::TechniqueGoal::Sleep) => Ok(TechniqueGoal::Sleep),
-        Ok(pb::TechniqueGoal::Energy) => Ok(TechniqueGoal::Energy),
-        Ok(pb::TechniqueGoal::Reset) => Ok(TechniqueGoal::Reset),
-        Ok(pb::TechniqueGoal::Focus) => Ok(TechniqueGoal::Focus),
-        Ok(pb::TechniqueGoal::Unspecified) | Err(_) => Err(ProfileError::Invalid(format!(
-            "`{raw}` is not a goal this server knows"
-        ))),
-    }
-}
-
 const fn experience_level_to_proto(level: ExperienceLevel) -> pb::ExperienceLevel {
     match level {
         ExperienceLevel::New => pb::ExperienceLevel::New,
@@ -356,6 +342,7 @@ fn reminder_intensity_from_proto(raw: i32) -> Result<ReminderIntensity, ProfileE
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::features::technique::types::TechniqueGoal;
 
     fn profile(reminder_intensity: i32) -> pb::Profile {
         pb::Profile {

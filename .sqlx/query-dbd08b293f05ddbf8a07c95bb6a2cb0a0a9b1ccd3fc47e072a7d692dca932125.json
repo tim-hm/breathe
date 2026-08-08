@@ -1,0 +1,45 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE user_techniques\n         SET name = $3, goal = $4, rounds = $5, updated_at = now()\n         WHERE id = $1 AND user_id = $2\n         RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "user_techniques",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        {
+          "Custom": {
+            "name": "technique_goal",
+            "kind": {
+              "Enum": [
+                "CALM",
+                "SLEEP",
+                "ENERGY",
+                "RESET",
+                "FOCUS"
+              ]
+            }
+          }
+        },
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "dbd08b293f05ddbf8a07c95bb6a2cb0a0a9b1ccd3fc47e072a7d692dca932125"
+}

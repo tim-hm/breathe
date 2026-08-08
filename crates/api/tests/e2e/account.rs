@@ -114,6 +114,30 @@ async fn given_bolt_score(pool: &PgPool, user: &str, client_score_id: &str, seco
     .expect("the score is written");
 }
 
+/// One exercise this person composed, written directly for the same reason the
+/// sessions above are.
+async fn given_own_technique(pool: &PgPool, user: &str, name: &str) {
+    sqlx::query!(
+        "INSERT INTO user_techniques (user_id, name, goal, rounds)
+         VALUES ($1, $2, 'CALM', 1)",
+        uuid(user),
+        name
+    )
+    .execute(pool)
+    .await
+    .expect("the exercise is written");
+}
+
+async fn own_techniques_of(pool: &PgPool, user: &str) -> Vec<String> {
+    sqlx::query_scalar!(
+        "SELECT name FROM user_techniques WHERE user_id = $1 ORDER BY name",
+        uuid(user)
+    )
+    .fetch_all(pool)
+    .await
+    .expect("the exercises are readable")
+}
+
 /// A day's worth of spent allowance, `days_ago` before today's UTC date.
 async fn given_quota(pool: &PgPool, user: &str, days_ago: i32, calls: i32) {
     sqlx::query!(
@@ -266,10 +290,12 @@ async fn a_returning_sign_in_hands_back_the_identity_the_account_already_had() {
 /// Three rules in one test because they are one transaction: a session and a
 /// score held by only one side survive on the older identity; a
 /// client-generated id held by *both* is one record that reached the server
-/// twice, so the older identity's copy stays and the newcomer's is dropped; and a
+/// twice, so the older identity's copy stays and the newcomer's is dropped; a
 /// day's assistant allowance spent on both is summed rather than replaced —
 /// keeping the older count would let signing in launder whatever the new device
-/// had already spent.
+/// had already spent; and an exercise somebody composed moves with no collision
+/// guard at all, because its id is the server's rather than the client's and it
+/// exists nowhere else to be reconstructed from.
 #[tokio::test]
 async fn a_merge_keeps_both_histories_and_sums_a_shared_days_allowance() {
     let db = TestDatabase::create("account_merge").await;
@@ -296,8 +322,10 @@ async fn a_merge_keeps_both_histories_and_sums_a_shared_days_allowance() {
     )
     .await;
     given_quota(&db.pool, OLD_DEVICE, 0, 3).await;
+    given_own_technique(&db.pool, OLD_DEVICE, "Written before").await;
 
     given_user(&db.pool, NEW_DEVICE, "Newer").await;
+    given_own_technique(&db.pool, NEW_DEVICE, "Written on the new phone").await;
     given_session(&db.pool, NEW_DEVICE, shared_session, "dropped-on-collision").await;
     given_session(
         &db.pool,
@@ -348,6 +376,15 @@ async fn a_merge_keeps_both_histories_and_sums_a_shared_days_allowance() {
         bolt_seconds_of(&db.pool, OLD_DEVICE).await,
         vec![22, 30, 41],
         "55 was the newcomer's copy of a score the old device already had"
+    );
+
+    assert_eq!(
+        own_techniques_of(&db.pool, OLD_DEVICE).await,
+        vec![
+            "Written before".to_owned(),
+            "Written on the new phone".to_owned()
+        ],
+        "an exercise somebody wrote exists nowhere else, so both sides' survive"
     );
 
     let today = quota_of(&db.pool, OLD_DEVICE).await;

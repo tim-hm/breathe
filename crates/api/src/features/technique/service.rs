@@ -167,6 +167,38 @@ pub(crate) const fn goal_to_proto(goal: TechniqueGoal) -> pb::TechniqueGoal {
     }
 }
 
+/// The inbound direction, for the two features a client sends a goal to — the
+/// profile it picked at onboarding, and the technique it authored.
+///
+/// `None` covers both the proto zero value and anything a newer client invents,
+/// which mean the same thing here. Returned rather than reported so each caller
+/// words the refusal in its own error type; what must not differ between them is
+/// *which* values are goals, which is why the decision lives beside
+/// [`goal_to_proto`] rather than in either caller.
+pub(crate) fn goal_from_proto(raw: i32) -> Option<TechniqueGoal> {
+    match pb::TechniqueGoal::try_from(raw) {
+        Ok(pb::TechniqueGoal::Calm) => Some(TechniqueGoal::Calm),
+        Ok(pb::TechniqueGoal::Sleep) => Some(TechniqueGoal::Sleep),
+        Ok(pb::TechniqueGoal::Energy) => Some(TechniqueGoal::Energy),
+        Ok(pb::TechniqueGoal::Reset) => Some(TechniqueGoal::Reset),
+        Ok(pb::TechniqueGoal::Focus) => Some(TechniqueGoal::Focus),
+        Ok(pb::TechniqueGoal::Unspecified) | Err(_) => None,
+    }
+}
+
+/// The inbound direction for phase kinds, on the same terms as
+/// [`goal_from_proto`]: `features::user_technique` is the one place a client
+/// sends one, and the vocabulary belongs here.
+pub(crate) fn phase_kind_from_proto(raw: i32) -> Option<PhaseKind> {
+    match pb::PhaseKind::try_from(raw) {
+        Ok(pb::PhaseKind::Inhale) => Some(PhaseKind::Inhale),
+        Ok(pb::PhaseKind::HoldIn) => Some(PhaseKind::HoldIn),
+        Ok(pb::PhaseKind::Exhale) => Some(PhaseKind::Exhale),
+        Ok(pb::PhaseKind::HoldOut) => Some(PhaseKind::HoldOut),
+        Ok(pb::PhaseKind::Unspecified) | Err(_) => None,
+    }
+}
+
 /// Narrows a column the schema already constrains to be positive.
 ///
 /// Every `CHECK (… > 0)` makes a negative value unreachable, so one arriving
@@ -177,7 +209,7 @@ fn positive_count(field: &str, value: i32) -> Result<u32, TechniqueError> {
         .map_err(|_| TechniqueError::Inconsistent(format!("{field} `{value}` is negative")))
 }
 
-const fn phase_kind_to_proto(kind: PhaseKind) -> pb::PhaseKind {
+pub(crate) const fn phase_kind_to_proto(kind: PhaseKind) -> pb::PhaseKind {
     match kind {
         PhaseKind::Inhale => pb::PhaseKind::Inhale,
         PhaseKind::HoldIn => pb::PhaseKind::HoldIn,

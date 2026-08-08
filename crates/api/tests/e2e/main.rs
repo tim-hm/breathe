@@ -20,3 +20,4 @@ mod health;
 mod journey;
 mod profile;
 mod technique;
+mod user_technique;

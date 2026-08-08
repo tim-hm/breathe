@@ -78,6 +78,11 @@ struct OndApp: App {
     /// The basics, shared the same way — reference data loaded once.
     @State private var foundations: FoundationsModel
 
+    /// The exercises this person wrote for themselves. Its own model rather
+    /// than part of the catalogue's: they come from a different service, they
+    /// need the identity, and they are written as well as read.
+    @State private var own: UserTechniqueModel
+
     /// The standing appointments, backed by local notifications. Composed in
     /// `init` rather than inline so the deletion below can reach it — the
     /// pending requests are iOS's rather than this app's, and nothing else can
@@ -113,6 +118,11 @@ struct OndApp: App {
         _catalogue = State(wrappedValue: TechniqueListModel(techniques: techniques))
         _foundations = State(wrappedValue: FoundationsModel(topics: techniques))
 
+        let own = UserTechniqueModel(
+            store: UserTechniqueRepository(baseURL: baseURL, identity: identity)
+        )
+        _own = State(wrappedValue: own)
+
         let profiles = ProfileStore(
             profiles: ProfileRepository(baseURL: baseURL, identity: identity)
         )
@@ -128,18 +138,11 @@ struct OndApp: App {
         )
         _plus = State(wrappedValue: plus)
 
-        let journeys = JourneyRepository(baseURL: baseURL, identity: identity)
-        let queue = SessionSyncQueue(
+        let (journey, queue) = Self.journey(
+            baseURL: baseURL,
+            identity: identity,
             sessions: sessions,
-            scores: scores,
-            journeys: journeys,
-            tombstones: sessions
-        )
-        let journey = JourneyModel(
-            sessions: sessions,
-            scores: scores,
-            journeys: journeys,
-            queue: queue
+            scores: scores
         )
         _journey = State(wrappedValue: journey)
 
@@ -156,8 +159,36 @@ struct OndApp: App {
                     sessions, scores, queue, profiles, consent, schedules, plus, LiveHealth.model,
                     outbox,
                 ],
-                onIdentityChange: Self.identityChange(telling: watch, and: journey)
+                onIdentityChange: Self.identityChange(
+                    telling: watch, and: journey, reloading: own
+                )
             )
+        )
+    }
+
+    /// The journey tab's model and the queue that drains into it.
+    ///
+    /// Built together and returned together because they are one thing built
+    /// twice over: the queue is the model's sync, and it is also one of the
+    /// stores a deletion has to empty — so the composition root needs both, and
+    /// nothing else needs either.
+    private static func journey(
+        baseURL: URL,
+        identity: any UserIdentityStore,
+        sessions: FileSessionStore,
+        scores: FileBoltScoreStore
+    ) -> (JourneyModel, SessionSyncQueue) {
+        let journeys = JourneyRepository(baseURL: baseURL, identity: identity)
+        let queue = SessionSyncQueue(
+            sessions: sessions,
+            scores: scores,
+            journeys: journeys,
+            tombstones: sessions
+        )
+
+        return (
+            JourneyModel(sessions: sessions, scores: scores, journeys: journeys, queue: queue),
+            queue
         )
     }
 
@@ -168,7 +199,8 @@ struct OndApp: App {
     /// reason each of them is there outgrew the argument list it was sitting in.
     private static func identityChange(
         telling watch: WatchLink,
-        and journey: JourneyModel
+        and journey: JourneyModel,
+        reloading own: UserTechniqueModel
     ) -> @MainActor () async -> Void {
         {
             // The two things that hold their own copy of the identity: the
@@ -183,6 +215,10 @@ struct OndApp: App {
             // a *restore* changed something, which is a case a freshly minted
             // identity never has.
             await journey.refresh()
+            // Server-side and scoped to the id, so a changed identity is a
+            // different list — and unlike the journey's stores, there is nothing
+            // local to reconcile, only a fetch to redo.
+            await own.load()
         }
     }
 
@@ -193,6 +229,7 @@ struct OndApp: App {
             // opening from whatever was locked.
             AppChrome(
                 catalogue: catalogue,
+                own: own,
                 sessions: recorder,
                 journey: journey,
                 profiles: profiles,

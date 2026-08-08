@@ -1,0 +1,37 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO user_technique_phases\n            (technique_id, stage_ordinal, ordinal, kind, duration_ms)\n         SELECT $1, p.stage_ordinal, p.ordinal, p.kind, p.duration_ms\n         FROM UNNEST($2::integer[], $3::integer[], $4::phase_kind[], $5::integer[])\n              AS p(stage_ordinal, ordinal, kind, duration_ms)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4Array",
+        "Int4Array",
+        {
+          "Custom": {
+            "name": "phase_kind[]",
+            "kind": {
+              "Array": {
+                "Custom": {
+                  "name": "phase_kind",
+                  "kind": {
+                    "Enum": [
+                      "INHALE",
+                      "HOLD_IN",
+                      "EXHALE",
+                      "HOLD_OUT"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "Int4Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "227385d20e5d935d12bbd09fc7e2c9888b4afb03d7d4ebe8b854565a4243ae88"
+}
