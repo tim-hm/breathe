@@ -133,6 +133,23 @@ impl Config {
 /// for why the range starts here.
 const DEFAULT_PORT: u16 = 18100;
 
+/// The app, as Apple names it.
+///
+/// Two surfaces check it and both have to mean the same app: the `bundleId` on
+/// an App Store signed transaction (`entitlement::verifier::appstore`) and the
+/// `aud` of a Sign in with Apple identity token
+/// (`account::verifier::apple`). A signature that verifies against Apple and
+/// names another app is a genuine token for somebody else's product, which is
+/// exactly what a determined caller would reach for — so the value is the check
+/// rather than a label.
+///
+/// A constant here rather than a variable, for the reason the whole module
+/// exists, and in one place rather than one per verifier because a build that
+/// honoured App Store receipts for one app and sign-ins for another is a state
+/// no test would think to look for. It has to match `PRODUCT_BUNDLE_IDENTIFIER`
+/// in `ios/project.yml`.
+pub const BUNDLE_ID: &str = "xyz.holmie.ond";
+
 /// Where the assistant's model calls go.
 ///
 /// `OpenRouter` rather than a provider directly: it fronts every model behind one

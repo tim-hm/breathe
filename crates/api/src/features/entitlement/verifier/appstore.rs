@@ -37,7 +37,9 @@
 //!
 //! Everything after `alg` is `super::chain`'s, which knows nothing about
 //! subscriptions. What is left here is the App Store's own format — the
-//! segments, the payload schema, the bundle id and the price list.
+//! segments, the payload schema, and the price list. The bundle id it is
+//! checked against is `config::BUNDLE_ID`, shared with the Sign in with Apple
+//! verifier so the two cannot come to mean different apps.
 //!
 //! ## What this cannot see
 //!
@@ -65,15 +67,8 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 
 use super::{TransactionVerifier, VerificationError, VerifiedTransaction, chain};
+use crate::config::BUNDLE_ID;
 use crate::features::entitlement::types::SubscriptionTier;
-
-/// The app the App Store signs transactions for.
-///
-/// Checked against every submitted transaction: a signature that verifies
-/// against Apple's root but names another app is a genuine receipt for somebody
-/// else's product, which is exactly the token a determined caller would reach
-/// for. It has to match `PRODUCT_BUNDLE_IDENTIFIER` in `ios/project.yml`.
-const BUNDLE_ID: &str = "xyz.holmie.ond";
 
 /// Everything this app sells, and what each one buys.
 ///
