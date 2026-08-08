@@ -158,13 +158,47 @@ run = "cargo build --release -p api"
 # generate: everything derived from a source of truth elsewhere
 
 [tasks.generate]
-description = "Regenerate protobuf types and the SQLx offline cache"
-run = ["mise run generate:proto", "mise run generate:sqlx"]
+description = "Regenerate protobuf types, the catalogue export, the site's figures, and the SQLx offline cache"
+# generate:diagrams reads what generate:catalogue writes, so the two are ordered
+# rather than fanned out.
+run = ["mise run generate:proto", "mise run generate:catalogue", "mise run generate:diagrams", "mise run generate:sqlx"]
 
 [tasks."generate:proto"]
 description = "Generate Swift client code from proto/ (Rust generates in build.rs)"
 dir = "{{config_root}}/proto"
 run = "buf generate"
+
+[tasks."generate:catalogue"]
+description = "Export the seeded technique catalogue for the drawings to derive from"
+# No `depends = ["dev:db"]`, unlike generate:sqlx: the catalogue is a `const`
+# array in seed.rs, so the export never opens a connection. That is what keeps
+# `mise run check` from needing Postgres to verify the drawings.
+env = { CARGO_TARGET_DIR = "{{env.CHECK_TARGET_DIR}}" }
+# Through a temporary file rather than redirecting straight onto the artefact.
+# A shell truncates the target before cargo runs, so a compile error in
+# crates/migrate would leave an empty catalogue.json behind — and the next thing
+# to fail would be test:swift or OndDiagrams, pointing at a decoder rather than
+# at the build that actually broke. Beside the target rather than in $TMPDIR, so
+# the move is a rename and the file lands with the usual permissions.
+run = """
+tmp={{config_root}}/catalogue.json.tmp
+trap 'rm -f "$tmp"' EXIT
+cargo run --quiet -p migrate --bin export-catalogue > "$tmp"
+mv "$tmp" {{config_root}}/catalogue.json
+"""
+
+[tasks."generate:diagrams"]
+description = "Redraw the marketing site's figures from the shared breathing geometry"
+# The app and the page must draw a technique the same way, and the only way to
+# guarantee that is for both to come out of OndKit's TechniqueFigure. The site
+# has no build step, so this writes the <svg> elements into the committed HTML
+# rather than running at page load.
+dir = "{{config_root}}/ios/Packages/OndCore"
+# Formatted after writing, because `check:text` holds web/index.html to oxfmt's
+# output like every other committed file. Emitting already-formatted HTML from
+# Swift would mean reimplementing someone else's line-breaking and re-guessing
+# it on every version bump.
+run = ["swift run --quiet OndDiagrams {{config_root}}/catalogue.json {{config_root}}/web/index.html", "vp fmt {{config_root}}/web/index.html"]
 
 [tasks."generate:sqlx"]
 description = "Refresh the committed .sqlx offline query cache"
@@ -288,7 +322,7 @@ description = "Resolve every link in the docs without hitting the network"
 run = "lychee --offline --root-dir {{config_root}} 'docs/**/*.md' CLAUDE.md README.md"
 
 [tasks."check:generated"]
-description = "Assert the committed Swift protobuf matches proto/"
+description = "Assert the committed Swift protobuf and catalogue export match their sources"
 # The same contract check:sqlx applies to the other committed generated artifact:
 # regenerate, compare, fail on drift. Needed because the Xcode build never runs
 # buf, so a .proto edit committed without `mise run generate:proto` surfaces much
@@ -299,7 +333,29 @@ description = "Assert the committed Swift protobuf matches proto/"
 # happens to be staged — and in a GitButler workspace, where the index is not
 # kept in step with the virtual branches, fails on generated files that are
 # already committed.
-run = ["mise run generate:proto", "git diff --exit-code HEAD -- ios/Packages/OndCore/Sources/OndAPI/Generated"]
+#
+# The catalogue export rides the same contract and is checked here because it is
+# a pure cargo run over a `const` — no database, no Xcode. The site's figures are
+# drawn from that export but need a Swift toolchain to redraw, so they are
+# `check:diagrams` instead: this task, and the gate that depends on it, must stay
+# runnable on a headless box.
+run = ["mise run generate:proto", "mise run generate:catalogue", "git diff --exit-code HEAD -- ios/Packages/OndCore/Sources/OndAPI/Generated catalogue.json"]
+
+[tasks."check:diagrams"]
+description = "Assert the site's committed figures match the app's geometry"
+# Outside `check`, beside check:swift and test:swift and for the same reason: it
+# builds Swift, which a headless environment may not have. Run it when touching
+# ios/ or web/ — and CI's macOS job runs it too, because "the page and the app
+# draw a technique the same way" is the invariant this whole arrangement exists
+# to create, and leaving its only enforcement to a human habit would put web/ a
+# catalogue behind on the first geometry change somebody forgot to regenerate
+# from.
+#
+# No generate:catalogue ahead of it, deliberately. That would drag the Rust
+# toolchain onto a 10x-billed macOS runner to re-derive a file check:generated
+# already pins on the Linux job — so a reseeded duration fails there, and this
+# task only has to answer whether the figures match the export as committed.
+run = ["mise run generate:diagrams", "git diff --exit-code HEAD -- web/index.html"]
 
 [tasks."check:audit"]
 description = "Match Cargo.lock against the RustSec advisory database"

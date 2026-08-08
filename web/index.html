@@ -96,19 +96,37 @@
 
         <div class="panel" role="tabpanel" id="panel-anxious" aria-labelledby="tab-anxious">
           <figure class="diagram">
+            <!-- generated:figure box-breathing -->
             <svg
-              viewBox="0 0 200 170"
-              width="200"
+              viewBox="0 0 220 170"
+              width="220"
               height="170"
-              aria-label="Box breathing drawn as a square: four seconds up the inhale side, four across the hold, four down the exhale side, four across the bottom hold."
+              aria-label="One cycle: Breathe in for 4 seconds, Hold, lungs full for 4 seconds, Breathe out for 4 seconds, Hold, lungs empty for 4 seconds. Repeated 8 times."
             >
-              <rect x="45" y="30" width="110" height="110" rx="10" fill="none" stroke="currentColor" stroke-width="1.5" />
-              <circle cx="45" cy="140" r="3.5" fill="none" stroke-width="1.5" class="stroke-accent" />
-              <text x="34" y="89" text-anchor="end">in · 4</text>
-              <text x="100" y="20" text-anchor="middle">hold · 4</text>
-              <text x="166" y="89" text-anchor="start">out · 4</text>
-              <text x="100" y="160" text-anchor="middle">hold · 4</text>
+              <path d="M65.01 129.99 Q61.84 126.83 61.84 120.5 L61.84 46.4 Q61.84 40.08 65.01 36.91" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="stroke-in" />
+              <path
+                d="M65.01 36.91 Q68.17 33.75 74.5 33.75 L148.6 33.75 Q154.92 33.75 158.09 36.91 M158.09 129.99 Q154.92 133.16 148.6 133.16 L74.5 133.16 Q68.17 133.16 65.01 129.99"
+                fill="none"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="stroke-hold"
+              />
+              <path
+                d="M158.09 36.91 Q161.25 40.08 161.25 46.4 L161.25 120.5 Q161.25 126.83 158.09 129.99"
+                fill="none"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="stroke-out"
+              />
+              <path d="M58.75 133.16 a3.09 3.09 0 1 0 6.19 0 a3.09 3.09 0 1 0 -6.19 0" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="stroke-in" />
+              <text x="47.84" y="83.45" text-anchor="end" dominant-baseline="middle">in · 4</text>
+              <text x="111.55" y="19.75" text-anchor="middle" dominant-baseline="middle">hold · 4</text>
+              <text x="175.25" y="83.45" text-anchor="start" dominant-baseline="middle">out · 4</text>
+              <text x="111.55" y="147.16" text-anchor="middle" dominant-baseline="middle">hold · 4</text>
             </svg>
+            <!-- /generated:figure -->
             <figcaption>Box breathing</figcaption>
           </figure>
           <div class="panel-copy">
@@ -122,14 +140,24 @@
 
         <div class="panel" role="tabpanel" id="panel-sleep" aria-labelledby="tab-sleep" hidden>
           <figure class="diagram">
-            <svg viewBox="0 0 220 170" width="220" height="170" aria-label="4-7-8 breathing drawn as a timeline: a four-second rise, a seven-second flat hold, then a slow eight-second descent.">
-              <line x1="20" y1="130" x2="200" y2="130" stroke="currentColor" stroke-width="1" opacity="0.4" />
-              <path d="M20 130 L56 55 L119 55 C150 55 175 105 191 130" fill="none" stroke-width="1.5" stroke-linejoin="round" class="stroke-accent" />
-              <circle cx="20" cy="130" r="3.5" fill="none" stroke-width="1.5" class="stroke-accent" />
-              <text x="26" y="88" text-anchor="middle">in · 4</text>
-              <text x="88" y="45" text-anchor="middle">hold · 7</text>
-              <text x="168" y="80" text-anchor="middle">out · 8</text>
+            <!-- generated:figure four-seven-eight -->
+            <svg viewBox="0 0 220 170" width="220" height="170" aria-label="One cycle: Breathe in for 4 seconds, Hold, lungs full for 7 seconds, Breathe out for 8 seconds. Repeated 4 times.">
+              <path d="M69.06 115.49 Q66.44 114.2 65.78 108.91 L59.41 57.82 Q58.75 52.53 61.07 50.21" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="stroke-in" />
+              <path d="M61.07 50.21 Q63.38 47.89 68.68 48.55 L155.24 59.34 Q160.54 60 160.89 61.7" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="stroke-hold" />
+              <path
+                d="M160.89 61.7 Q161.25 63.4 156.67 66.13 L76.26 114.04 Q71.68 116.77 69.06 115.49"
+                fill="none"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="stroke-out"
+              />
+              <path d="M64.49 119.5 a2.61 2.61 0 1 0 5.22 0 a2.61 2.61 0 1 0 -5.22 0" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="stroke-in" />
+              <text x="48.7" y="85.1" text-anchor="end" dominant-baseline="middle">in · 4</text>
+              <text x="113.69" y="40.06" text-anchor="middle" dominant-baseline="middle">hold · 7</text>
+              <text x="123.63" y="102.11" text-anchor="start" dominant-baseline="middle">out · 8</text>
             </svg>
+            <!-- /generated:figure -->
             <figcaption>4-7-8 breathing</figcaption>
           </figure>
           <div class="panel-copy">
@@ -143,13 +171,30 @@
 
         <div class="panel" role="tabpanel" id="panel-reset" aria-labelledby="tab-reset" hidden>
           <figure class="diagram">
-            <svg viewBox="0 0 220 170" width="220" height="170" aria-label="The physiological sigh drawn as a line: two quick rises for the double inhale, then one long slow descent for the exhale.">
-              <line x1="20" y1="140" x2="200" y2="140" stroke="currentColor" stroke-width="1" opacity="0.4" />
-              <path d="M20 140 L52 78 L60 88 L76 52 C110 66 160 116 196 140" fill="none" stroke-width="1.5" stroke-linejoin="round" class="stroke-accent" />
-              <circle cx="20" cy="140" r="3.5" fill="none" stroke-width="1.5" class="stroke-accent" />
-              <text x="48" y="38" text-anchor="middle">two inhales</text>
-              <text x="150" y="96" text-anchor="start">one long exhale</text>
+            <!-- generated:figure physiological-sigh -->
+            <svg viewBox="0 0 220 170" width="220" height="170" aria-label="One cycle: Breathe in for 1.5 seconds, Breathe in for 0.7 seconds, Breathe out for 5 seconds. Repeated 3 times.">
+              <path d="M60.96 134.04 L161.25 134.04" fill="none" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="stroke-baseline" />
+              <path
+                d="M60.96 134.04 C64.44 134.04 64.44 65.66 67.92 65.66 M67.92 65.66 C69.55 65.66 69.55 33.75 71.17 33.75 M94.39 134.04 C97.87 134.04 97.87 65.66 101.35 65.66 M101.35 65.66 C102.98 65.66 102.98 33.75 104.6 33.75 M127.82 134.04 C131.3 134.04 131.3 65.66 134.78 65.66 M134.78 65.66 C136.41 65.66 136.41 33.75 138.03 33.75"
+                fill="none"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="stroke-in"
+              />
+              <path
+                d="M71.17 33.75 C82.78 33.75 82.78 134.04 94.39 134.04 M104.6 33.75 C116.21 33.75 116.21 134.04 127.82 134.04 M138.03 33.75 C149.64 33.75 149.64 134.04 161.25 134.04"
+                fill="none"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="stroke-out"
+              />
+              <path d="M58.75 134.04 a2.21 2.21 0 1 0 4.41 0 a2.21 2.21 0 1 0 -4.41 0" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="stroke-in" />
+              <text x="66.06" y="19.75" text-anchor="middle" dominant-baseline="middle">in · 1.5 + 0.7</text>
+              <text x="82.78" y="148.04" text-anchor="middle" dominant-baseline="middle">out · 5</text>
             </svg>
+            <!-- /generated:figure -->
             <figcaption>Physiological sigh</figcaption>
           </figure>
           <div class="panel-copy">
@@ -163,18 +208,29 @@
 
         <div class="panel" role="tabpanel" id="panel-energy" aria-labelledby="tab-energy" hidden>
           <figure class="diagram">
-            <svg viewBox="0 0 220 170" width="220" height="170" aria-label="Bellows breath drawn as a rapid even zigzag: quick one-second breaths in and out.">
-              <line x1="20" y1="120" x2="200" y2="120" stroke="currentColor" stroke-width="1" opacity="0.4" />
+            <!-- generated:figure bellows-breath -->
+            <svg viewBox="0 0 220 170" width="220" height="170" aria-label="One cycle: Breathe in for 1 second, Breathe out for 1 second. Repeated 20 times.">
+              <path d="M60.96 134.04 L161.25 134.04" fill="none" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="stroke-baseline" />
               <path
-                d="M20 120 L34 70 L48 120 L62 70 L76 120 L90 70 L104 120 L118 70 L132 120 L146 70 L160 120 L174 70 L188 120"
+                d="M60.96 134.04 C63.24 134.04 63.24 33.75 65.52 33.75 M70.07 134.04 C72.35 134.04 72.35 33.75 74.63 33.75 M79.19 134.04 C81.47 134.04 81.47 33.75 83.75 33.75 M88.31 134.04 C90.59 134.04 90.59 33.75 92.87 33.75 M97.43 134.04 C99.71 134.04 99.71 33.75 101.99 33.75 M106.54 134.04 C108.82 134.04 108.82 33.75 111.1 33.75 M115.66 134.04 C117.94 134.04 117.94 33.75 120.22 33.75 M124.78 134.04 C127.06 134.04 127.06 33.75 129.34 33.75 M133.9 134.04 C136.18 134.04 136.18 33.75 138.46 33.75 M143.01 134.04 C145.29 134.04 145.29 33.75 147.57 33.75 M152.13 134.04 C154.41 134.04 154.41 33.75 156.69 33.75"
                 fill="none"
                 stroke-width="1.5"
+                stroke-linecap="round"
                 stroke-linejoin="round"
-                class="stroke-accent"
+                class="stroke-in"
               />
-              <circle cx="20" cy="120" r="3.5" fill="none" stroke-width="1.5" class="stroke-accent" />
-              <text x="104" y="150" text-anchor="middle">in 1 · out 1 — quick and even</text>
+              <path
+                d="M65.52 33.75 C67.79 33.75 67.79 134.04 70.07 134.04 M74.63 33.75 C76.91 33.75 76.91 134.04 79.19 134.04 M83.75 33.75 C86.03 33.75 86.03 134.04 88.31 134.04 M92.87 33.75 C95.15 33.75 95.15 134.04 97.43 134.04 M101.99 33.75 C104.27 33.75 104.27 134.04 106.54 134.04 M111.1 33.75 C113.38 33.75 113.38 134.04 115.66 134.04 M120.22 33.75 C122.5 33.75 122.5 134.04 124.78 134.04 M129.34 33.75 C131.62 33.75 131.62 134.04 133.9 134.04 M138.46 33.75 C140.74 33.75 140.74 134.04 143.01 134.04 M147.57 33.75 C149.85 33.75 149.85 134.04 152.13 134.04 M156.69 33.75 C158.97 33.75 158.97 134.04 161.25 134.04"
+                fill="none"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="stroke-out"
+              />
+              <path d="M58.75 134.04 a2.21 2.21 0 1 0 4.41 0 a2.21 2.21 0 1 0 -4.41 0" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="stroke-in" />
+              <text x="111.1" y="148.04" text-anchor="middle" dominant-baseline="middle">in · 1, out · 1</text>
             </svg>
+            <!-- /generated:figure -->
             <figcaption>Bellows breath</figcaption>
           </figure>
           <div class="panel-copy">
@@ -188,12 +244,30 @@
 
         <div class="panel" role="tabpanel" id="panel-focus" aria-labelledby="tab-focus" hidden>
           <figure class="diagram">
-            <svg viewBox="0 0 220 170" width="220" height="170" aria-label="Coherent breathing drawn as a smooth even wave: about five and a half slow breaths per minute.">
-              <line x1="20" y1="95" x2="200" y2="95" stroke="currentColor" stroke-width="1" opacity="0.4" />
-              <path d="M20 95 C32 52 52 52 65 95 C78 138 98 138 110 95 C122 52 142 52 155 95 C168 138 188 138 200 95" fill="none" stroke-width="1.5" class="stroke-accent" />
-              <circle cx="20" cy="95" r="3.5" fill="none" stroke-width="1.5" class="stroke-accent" />
-              <text x="110" y="160" text-anchor="middle">~5½ breaths a minute</text>
+            <!-- generated:figure coherent-breathing -->
+            <svg viewBox="0 0 220 170" width="220" height="170" aria-label="One cycle: Breathe in for 5.5 seconds, Breathe out for 5.5 seconds. Repeated 27 times.">
+              <path d="M60.96 134.04 L161.25 134.04" fill="none" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="stroke-baseline" />
+              <path
+                d="M60.96 134.04 C73.49 134.04 73.49 33.75 86.03 33.75 M111.1 134.04 C123.64 134.04 123.64 33.75 136.18 33.75"
+                fill="none"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="stroke-in"
+              />
+              <path
+                d="M86.03 33.75 C98.57 33.75 98.57 134.04 111.1 134.04 M136.18 33.75 C148.71 33.75 148.71 134.04 161.25 134.04"
+                fill="none"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="stroke-out"
+              />
+              <path d="M58.75 134.04 a2.21 2.21 0 1 0 4.41 0 a2.21 2.21 0 1 0 -4.41 0" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="stroke-in" />
+              <text x="73.49" y="19.75" text-anchor="middle" dominant-baseline="middle">in · 5.5</text>
+              <text x="98.57" y="148.04" text-anchor="middle" dominant-baseline="middle">out · 5.5</text>
             </svg>
+            <!-- /generated:figure -->
             <figcaption>Coherent breathing</figcaption>
           </figure>
           <div class="panel-copy">

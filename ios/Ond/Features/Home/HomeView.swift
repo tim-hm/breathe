@@ -17,12 +17,14 @@ struct HomeView: View {
     let model: TechniqueListModel
     let sessions: any SessionRecording
 
+    /// The chosen aim, lent by the chrome — see `AppChrome` for why it holds it.
+    /// Set once the catalogue lands: before then there is no goal known to have
+    /// an exercise behind it.
+    @Binding var goal: TechniqueGoal?
+
     @Environment(SessionSettings.self) private var settings
     @Environment(SubscriptionStore.self) private var plus
 
-    /// The chosen aim. Set once the catalogue lands — before then there is no
-    /// goal known to have an exercise behind it.
-    @State private var goal: TechniqueGoal?
     /// Whether the aim word is fanned out into the full set.
     @State private var isChoosingAim = false
     /// Recorded history, oldest first. Re-read after every session, because one
@@ -217,12 +219,20 @@ struct HomeView: View {
     /// Settles the aim where it was last left, falling back to the hour's goal
     /// on a first launch — and to whatever the catalogue has if it serves
     /// neither.
+    ///
+    /// Writes only on a change. This runs again on every return to Breathe and
+    /// the aim is the chrome's state now, so an idempotent assignment here is a
+    /// write across a view boundary that invalidates the whole tab view — and
+    /// re-tints its bar — for a value that did not move.
     private func settleGoal() {
         guard case let .loaded(techniques) = model.state else { return }
         let available = TechniqueGoal.present(in: techniques)
         let hour = Calendar.current.component(.hour, from: .now)
         let wanted = settings.lastGoal ?? HomeSuggestion.goal(forHour: hour)
+        let settled = available.contains(wanted) ? wanted : available.first
 
-        goal = available.contains(wanted) ? wanted : available.first
+        if settled != goal {
+            goal = settled
+        }
     }
 }

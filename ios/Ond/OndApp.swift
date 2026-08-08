@@ -65,8 +65,8 @@ struct OndApp: App {
     @State private var foundations: FoundationsModel
 
     /// The standing appointments, backed by local notifications. Composed here
-    /// so the store outlives the Settings tab that edits it — the notifications
-    /// have to stay honest whether or not the screen is ever opened.
+    /// so the store outlives the Settings screen that edits it — the
+    /// notifications have to stay honest whether or not it is ever opened.
     @State private var schedules = ScheduleStore(notifier: NotificationScheduler())
 
     /// Totals, streaks, and the boards. Local-first: everything it shows about
@@ -132,8 +132,7 @@ struct OndApp: App {
                 sessions: recorder,
                 journey: journey,
                 profiles: profiles,
-                foundations: foundations,
-                schedules: schedules
+                foundations: foundations
             )
             .tint(Theme.Accent.brand)
             // The palette resolves per appearance through the asset catalogue,
@@ -143,6 +142,7 @@ struct OndApp: App {
             .environment(settings)
             .environment(plus)
             .environment(safetyNotes)
+            .environment(schedules)
             .fullScreenCover(isPresented: $isOnboarding) {
                 OnboardingView(
                     model: OnboardingModel(

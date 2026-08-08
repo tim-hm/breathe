@@ -74,15 +74,6 @@ struct TechniqueListView: View {
                             .textCase(nil)
                     }
                 }
-
-                // Durable where the strip above is conditional: that one
-                // offers Coach only under a fallback answer, so an assistant
-                // call that failed outright left no way to the coach at all.
-                // One slot, two tenants — the upgrade line until Coach is
-                // held, then the door to the conversation it bought.
-                coachLine
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
             }
             .listStyle(.plain)
 
@@ -96,36 +87,6 @@ struct TechniqueListView: View {
                     Task { await model.load() }
                 }
             }
-        }
-    }
-
-    /// The durable coach line at the foot of the catalogue. Styled like
-    /// `UpgradePrompt`'s own row on purpose: purchase changes where the line
-    /// goes, not what the foot of this list looks like.
-    @ViewBuilder
-    private var coachLine: some View {
-        if plus.tier >= .coach {
-            NavigationLink {
-                CoachChatView()
-            } label: {
-                HStack(spacing: Theme.Spacing.tight) {
-                    Text("Questions about your practice?")
-                        .foregroundStyle(Theme.Ink.secondary)
-                    Text("Ask the coach")
-                        .foregroundStyle(Theme.Accent.brand)
-                    Image(systemName: "chevron.right")
-                        .font(.caption2)
-                        .foregroundStyle(Theme.Accent.brand)
-                }
-                .font(.footnote)
-                .multilineTextAlignment(.leading)
-            }
-            .buttonStyle(.plain)
-        } else {
-            UpgradePrompt(
-                reason: "Where to start and why it works, written for you by",
-                offering: .coach
-            )
         }
     }
 

@@ -1,19 +1,28 @@
 import Foundation
 
-/// A technique's breathing pattern as a line — lung fullness over time, in
-/// normalised coordinates the detail screen draws before the person commits
-/// to a session.
+/// One stage of a technique that never holds, drawn as a line — lung fullness
+/// over time.
 ///
-/// Pure geometry: x runs 0...1 across the drawn sequence, level runs 0
-/// (lungs empty) to 1 (full). The view maps it to points; this type owns
-/// every judgement about what the line shows:
+/// **Slope is the point.** x is duration and y is fullness, so a phase's
+/// steepness *is* its length: extended exhale's four-second rise is visibly
+/// steeper than its six-second fall, and the asymmetry that names the exercise
+/// is stated without a label. This is one construction rather than a library of
+/// waveforms — coherent breathing reads as a symmetric sine because its two
+/// phases are equal, not because anything here special-cases it.
 ///
-/// - One cycle per stage. Repetition is a caption ("×30"), not thirty
-///   identical humps the eye cannot count.
-/// - Width is proportional to time within a stage, but no stage narrower
-///   than `minimumStageShare`: a two-second fast-breath cycle beside a
-///   minute-long retention would otherwise vanish.
-/// - Every segment of an open-ended stage is `dashed` — its durations
+/// Pure geometry: x runs 0...1 across the drawn window, level runs 0 (lungs
+/// empty) to 1 (full), or -1...1 when signed. The view maps it to points; this
+/// type owns every judgement about what the line shows:
+///
+/// - **Whole cycles, as many as the window holds.** Slope alone cannot separate
+///   coherent breathing from bellows breath — both are one-to-one, so both are
+///   symmetric — and the only thing that distinguishes 5½ breaths a minute from
+///   twenty fast ones is tempo. Drawing a fixed span of *time* rather than a
+///   fixed count of cycles is what puts tempo on the page.
+/// - **No phase narrower than `minimumPhaseShare`.** The physiological sigh's
+///   0.7-second sip beside its five-second exhale would otherwise render
+///   sub-pixel, and the sip is the technique.
+/// - **Every segment of an open-ended stage is `dashed`** — its durations
 ///   describe a typical pass, not a scheduled one, and the line should not
 ///   promise what the clock will not keep.
 public struct BreathRhythm: Sendable, Equatable {
@@ -26,14 +35,25 @@ public struct BreathRhythm: Sendable, Equatable {
         public let endLevel: Double
         /// Whether the phase's length is the person's rather than the clock's.
         public let dashed: Bool
+        /// Which cycle of the window this segment belongs to, and which phase of
+        /// that cycle — so a renderer can label the first cycle only rather than
+        /// stamping the same three words across every repeat.
+        public let cycle: Int
+        public let phase: Int
 
+        /// No defaults on `cycle` and `phase`: they say which segment this *is*,
+        /// and a caller that forgot one would get a segment quietly claiming to
+        /// be the first phase of the first cycle — which is the one the labels
+        /// are drawn from.
         public init(
             kind: PhaseKind,
             start: Double,
             end: Double,
             startLevel: Double,
             endLevel: Double,
-            dashed: Bool
+            dashed: Bool,
+            cycle: Int,
+            phase: Int
         ) {
             self.kind = kind
             self.start = start
@@ -41,100 +61,97 @@ public struct BreathRhythm: Sendable, Equatable {
             self.startLevel = startLevel
             self.endLevel = endLevel
             self.dashed = dashed
+            self.cycle = cycle
+            self.phase = phase
         }
     }
 
-    /// The span one stage occupies, for captioning its repeat count.
-    public struct Band: Sendable, Equatable {
-        public let start: Double
-        public let end: Double
-        public let cycles: Int
+    /// The span of breathing a line draws, when the stage repeats often enough
+    /// to fill it.
+    ///
+    /// Twenty-two seconds is long enough to hold two cycles of the slowest
+    /// hold-free exercise in the catalogue (coherent breathing, at eleven
+    /// seconds a cycle) and eleven of the fastest (bellows, at two) — so the two
+    /// that are geometrically identical are never visually similar.
+    private static let window = Duration.seconds(22)
 
-        public init(start: Double, end: Double, cycles: Int) {
-            self.start = start
-            self.end = end
-            self.cycles = cycles
-        }
-    }
+    /// The ceiling on repeats. Past a dozen the humps stop being countable and
+    /// start being texture, which says "fast" just as well and draws faster.
+    private static let maximumCycles = 12
 
-    /// The floor under a stage's share of the width when there is more than
-    /// one stage to fit.
-    public static let minimumStageShare = 0.18
+    /// The floor under one phase's share of a cycle.
+    private static let minimumPhaseShare = 0.08
 
     public let segments: [Segment]
-    /// One per stage, in order. A single-stage technique needs no caption, but
-    /// the band is still the honest description of the width it fills.
-    public let bands: [Band]
+    /// How many cycles of the stage the line draws.
+    public let cycles: Int
+    /// Whether levels run -1...1 about a midline rather than 0...1 above a
+    /// baseline. True only where a technique alternates sides.
+    public let signed: Bool
 
-    public init(technique: Technique) {
-        let stages = technique.stages
-        let durations = stages.map { max($0.cycleDuration.seconds, 0.1) }
-        let shares = Self.shares(for: durations)
+    /// How many whole cycles of `stage` fit the window.
+    ///
+    /// An open-ended stage draws one: there is no clock to fit, and a retention
+    /// repeated is not a thing the exercise does.
+    private static func cycles(fitting stage: Stage) -> Int {
+        guard !stage.openEnded else { return 1 }
+
+        let cycle = max(stage.cycleDuration.seconds, 0.1)
+        let fitting = Int((window.seconds / cycle).rounded())
+        return min(max(fitting, 1), min(maximumCycles, max(stage.cycles, 1)))
+    }
+
+    /// - Parameters:
+    ///   - stage: the stage to draw one or more cycles of.
+    ///   - signs: one entry per phase of a *cycle*, `+1` above the midline and
+    ///     `-1` below, or nil for a one-sided line. Supplied by the caller
+    ///     rather than read here, because which side a breath belongs to is a
+    ///     presentation fact the catalogue does not carry — see `PhaseHints`.
+    public init(stage: Stage, signs: [Double]? = nil) {
+        let phases = stage.phases
+        let repeats = Self.cycles(fitting: stage)
+        let shares = ProportionalShares.of(
+            phases.map { max($0.duration.seconds, 0.001) },
+            floor: Self.minimumPhaseShare
+        )
 
         var segments: [Segment] = []
-        var bands: [Band] = []
         var x = 0.0
         var level = 0.0
 
-        for (stage, share) in zip(stages, shares) {
-            let bandStart = x
-            let cycleSeconds = max(stage.cycleDuration.seconds, 0.1)
+        for cycle in 0 ..< repeats {
+            for (index, (phase, endLevel)) in zip(
+                phases,
+                Self.levels(through: phases, from: level)
+            ).enumerated() {
+                let width = shares[index] / Double(repeats)
+                // A one-sided line, and a signs array shorter than the cycle,
+                // both mean "above the midline" — the figure stays a drawing
+                // rather than half-vanishing below a line it never established.
+                let sign = signs?[safe: index] ?? 1
 
-            for (phase, endLevel) in zip(
-                stage.phases,
-                Self.levels(through: stage.phases, from: level)
-            ) {
-                let width = share * (phase.duration.seconds / cycleSeconds)
                 segments.append(Segment(
                     kind: phase.kind,
                     start: x,
                     end: x + width,
-                    startLevel: level,
-                    endLevel: endLevel,
-                    dashed: stage.openEnded
+                    // Where the last segment finished, always — which is what
+                    // keeps a signed line continuous as it changes side. The
+                    // side only ever swaps at empty lungs, so the join lands on
+                    // the midline rather than jumping across it.
+                    startLevel: segments.last?.endLevel ?? 0,
+                    endLevel: endLevel * sign,
+                    dashed: stage.openEnded,
+                    cycle: cycle,
+                    phase: index
                 ))
                 x += width
                 level = endLevel
             }
-
-            bands.append(Band(start: bandStart, end: x, cycles: stage.cycles))
         }
 
         self.segments = segments
-        self.bands = bands
-    }
-
-    /// Each stage's share of the width: proportional to its one-cycle
-    /// duration, with every share lifted to the floor and the rest rescaled
-    /// into what remains. Rescaling can push a mid-sized stage below the
-    /// floor in turn, so the pass repeats until stable — each pass floors at
-    /// least one more stage, bounding the loop by the stage count.
-    private static func shares(for durations: [Double]) -> [Double] {
-        guard durations.count > 1 else { return [1] }
-
-        let total = durations.reduce(0, +)
-        // Never above an equal split, or the floors alone would overflow the
-        // width once there are more than five stages.
-        let floor = Swift.min(minimumStageShare, 1 / Double(durations.count))
-        var floored = [Bool](repeating: false, count: durations.count)
-        var shares = durations.map { $0 / total }
-
-        while true {
-            let newlyFloored = shares.indices.filter { !floored[$0] && shares[$0] < floor }
-            if newlyFloored.isEmpty {
-                return shares
-            }
-            for index in newlyFloored {
-                floored[index] = true
-            }
-
-            let remaining = 1 - floor * Double(floored.filter(\.self).count)
-            let unflooredTotal = durations.indices
-                .reduce(0.0) { floored[$1] ? $0 : $0 + durations[$1] }
-            shares = durations.indices.map { index in
-                floored[index] ? floor : durations[index] / unflooredTotal * remaining
-            }
-        }
+        cycles = repeats
+        signed = signs != nil
     }
 
     /// The level each phase ends at.

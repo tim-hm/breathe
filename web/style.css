@@ -7,8 +7,14 @@
   --ink-soft: #5c6a66;
   --line: #e3e8e6;
   --accent: #397a6e;
+  /* The accent softened towards the ground: the exhale, on the technique
+     figures. The app mixes the same 45% at runtime; here it is resolved once
+     per appearance, because CSS has no reason to compute what a token can
+     state. */
+  --accent-soft: #8bb3ab;
   --orb: #64b0a2;
-  /* The orb and captions shift to this during the two holds. */
+  /* The orb and captions shift to this during the two holds, and the figures
+     stroke their holds with it. */
   --hold: #7286b8;
 
   --serif: "Iowan Old Style", "Palatino Nova", Palatino, Georgia, serif;
@@ -28,6 +34,9 @@
     --ink-soft: #94a29d;
     --line: #242c29;
     --accent: #6fbcad;
+    /* Towards the dark ground rather than towards white, so the exhale dims
+       here where it pales in the light appearance. */
+    --accent-soft: #457066;
     --orb: #4d9184;
     --hold: #8497c4;
   }
@@ -480,16 +489,35 @@ p + p {
   color: var(--ink-soft);
 }
 
-.diagram .stroke-accent {
+/* Each phase of a breath in its own ink, matching the app exactly — the figures
+   themselves are generated from the app's geometry (mise run generate:diagrams),
+   and these three classes are the palette half of that agreement.
+
+   Two of the three already existed and already meant the right thing: --accent
+   is the breath that moves, and --hold is the periwinkle the hero orb shifts to
+   while nothing is moving. Only the exhale needed a token, and it is the accent
+   softened towards the ground rather than a fourth hue — mixing towards a fixed
+   cool colour muddies a warm accent, and a hue of its own would collide with the
+   hold. Softening along the accent's own hue cannot collide, and it resolves in
+   both appearances by construction: over white it pales, over near-black it
+   dims. */
+.diagram .stroke-in {
   stroke: var(--accent);
 }
 
-.diagram figcaption {
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
+.diagram .stroke-out {
+  stroke: var(--accent-soft);
+}
+
+.diagram .stroke-hold {
+  stroke: var(--hold);
+}
+
+/* The reference line a figure is measured against, never the subject. The site
+   has always drawn these at 40% of the body ink. */
+.diagram .stroke-baseline {
+  stroke: currentcolor;
+  opacity: 0.4;
 }
 
 .diagram text {

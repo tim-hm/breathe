@@ -28,14 +28,18 @@ struct TechniqueDetailView: View {
                 header
                 BreathRhythmChart(technique: dialled)
                 SafetyNoteCard(technique: technique)
-                sessionShape(of: dialled)
+                stageTitles(of: dialled)
                 lengthControl(of: dialled)
                 advanced(of: dialled)
-                beginButton(playing: dialled)
             }
             .padding(Theme.Spacing.standard)
         }
         .paletteGround()
+        // Begin sits above the tab bar rather than at the end of the content,
+        // so the one action this screen exists for is always in reach — on a
+        // technique with a safety note it used to be below the fold. The
+        // content scrolls under it.
+        .safeAreaInset(edge: .bottom) { beginBar(playing: dialled) }
         .navigationTitle(technique.name)
         .navigationBarTitleDisplayMode(.inline)
         .paywall(highlighting: technique.requires, isPresented: $isShowingPaywall)
@@ -50,7 +54,13 @@ struct TechniqueDetailView: View {
     /// it.
     private var header: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.close) {
-            GoalBadge(goal: technique.goal)
+            // What the exercise is for, in the person's own words rather than as
+            // a category label. The uppercase capsule this replaced was the
+            // loudest thing above the summary and named a taxonomy — and the
+            // goal is still carried by colour on every accent on the screen.
+            Text("For when you want to \(technique.goal.intentObject)")
+                .font(.subheadline)
+                .foregroundStyle(Theme.Ink.tertiary)
             Text(technique.summary)
                 .font(.body)
                 .foregroundStyle(Theme.Ink.secondary)
@@ -58,24 +68,20 @@ struct TechniqueDetailView: View {
         }
     }
 
-    /// The session, spelled out stage by stage. Someone deciding whether they
-    /// have the patience for a seven-second hold should be able to see it first.
-    private func sessionShape(of dialled: Technique) -> some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.standard) {
-            ForEach(Array(dialled.stages.enumerated()), id: \.offset) { index, stage in
-                VStack(alignment: .leading, spacing: Theme.Spacing.close) {
+    /// What each stage is, for a staged protocol.
+    ///
+    /// The row of phase capsules this replaced said `In 4s Hold 4s Out 4s Hold
+    /// 4s` under a picture that now writes `in · 4` on the side it belongs to —
+    /// the same four facts, twice, one of them detached from the thing it
+    /// describes. What a figure cannot carry is which stage of a Wim Hof round
+    /// you are looking at, so that stays.
+    @ViewBuilder
+    private func stageTitles(of dialled: Technique) -> some View {
+        if technique.isStaged {
+            VStack(alignment: .leading, spacing: Theme.Spacing.close) {
+                ForEach(Array(dialled.stages.enumerated()), id: \.offset) { index, stage in
                     Text(stageTitle(index: index, stage: stage))
                         .font(.subheadline.weight(.semibold))
-
-                    HStack(spacing: Theme.Spacing.close) {
-                        ForEach(Array(stage.phases.enumerated()), id: \.offset) { _, phase in
-                            Text(shortLabel(for: phase, openEnded: stage.openEnded))
-                                .font(.caption)
-                                .padding(.horizontal, Theme.Spacing.close)
-                                .padding(.vertical, Theme.Spacing.tight)
-                                .background(technique.goal.accent.opacity(0.15), in: Capsule())
-                        }
-                    }
                 }
             }
         }
@@ -175,7 +181,7 @@ struct TechniqueDetailView: View {
     /// arrives on a locked technique should still read about it, which is what
     /// the catalogue is for; the offer belongs at the moment they try to
     /// breathe it.
-    private func beginButton(playing dialled: Technique) -> some View {
+    private func beginBar(playing dialled: Technique) -> some View {
         let isUnlocked = technique.isUnlocked(for: plus.tier)
 
         return Button {
@@ -202,6 +208,11 @@ struct TechniqueDetailView: View {
         }
         .buttonStyle(.borderedProminent)
         .tint(technique.goal.accent)
+        .padding(Theme.Spacing.standard)
+        // The same treatment the paywall's pinned bar uses: a material rather
+        // than a ground, so the content passing underneath stays legible as it
+        // goes.
+        .background(.bar)
     }
 
     /// The person's own settings, or the catalogue's where they have none —
@@ -259,20 +270,8 @@ struct TechniqueDetailView: View {
         return "About \(planned). However many you do is the practice."
     }
 
-    /// "In 1.5s" — short enough to sit four across a phone, and precise enough
-    /// for the physiological sigh's sub-second sip of air.
-    private func shortLabel(for phase: Phase, openEnded: Bool) -> String {
-        let name = switch phase.kind {
-        case .inhale: "In"
-        case .exhale: "Out"
-        case .holdIn, .holdOut: "Hold"
-        }
-        return openEnded ? name : "\(name) \(inSeconds(phase.duration))"
-    }
-
     private func inSeconds(_ duration: Duration) -> String {
-        let seconds = duration.seconds.formatted(.number.precision(.fractionLength(0 ... 1)))
-        return "\(seconds)s"
+        "\(duration.inSeconds)s"
     }
 
     private func inWords(_ duration: Duration) -> String {

@@ -25,7 +25,50 @@ public enum PhaseHints {
             return nil
         }
 
-        return stages.map(\.hints)
+        return stages.map { $0.hints.map { $0?.text } }
+    }
+
+    /// Which side of the midline each phase is drawn on — `+1` above, `-1`
+    /// below — indexed `[stage][phase]` exactly as `hints(for:)` is, and nil
+    /// throughout where a technique has no sides to alternate between and draws
+    /// one-sided against a baseline.
+    ///
+    /// Stage-indexed rather than flat, so a caller cannot hand stage zero's
+    /// sides to stage two's phases. The flat version needed a guard rejecting
+    /// every staged technique to stay safe, which quietly meant a staged
+    /// protocol that alternated nostrils would draw one-sided and nothing would
+    /// say so.
+    ///
+    /// Signed **per breath, by the nostril the inhale goes through** — not per
+    /// phase. Alternate-nostril breathing changes nostril within a breath (in
+    /// left, out right), so signing each phase separately would send the line
+    /// across the midline at full lungs and draw a jump where the exercise has
+    /// none. Taking the inhale's side for the exhale that empties it keeps every
+    /// crossing at empty lungs, which is where the breath actually pauses.
+    ///
+    /// - Parameter hints: this technique's own `hints(for:)`, passed in rather
+    ///   than fetched again. Sides are only meaningful where the shape check
+    ///   passed, and every caller needs the hints anyway — so asking for them
+    ///   here runs that check once per figure instead of twice.
+    public static func sides(for technique: Technique, hints: [[String?]]?) -> [[Double]?]? {
+        guard let stages = table[technique.slug], hints != nil else { return nil }
+
+        let sides = zip(stages, technique.stages).map { stage, phases -> [Double]? in
+            guard stage.hints.contains(where: { $0 != nil }) else { return nil }
+
+            var sides: [Double] = []
+            var current = Side.left
+
+            for (hint, phase) in zip(stage.hints, phases.phases) {
+                if phase.kind == .inhale, let hint {
+                    current = hint.side
+                }
+                sides.append(current.rawValue)
+            }
+            return sides
+        }
+
+        return sides.contains(where: { $0 != nil }) ? sides : nil
     }
 
     /// The hint for `beat` within a table from `hints(for:)` — "Left nostril" —
@@ -43,6 +86,19 @@ public enum PhaseHints {
         return hints[beat.stage][beat.phase]
     }
 
+    /// The hint for one phase of a single stage's table, or nil where that phase
+    /// has none.
+    ///
+    /// The sibling of `hint(for:in:)` for callers holding one stage's row rather
+    /// than the whole technique's. Here rather than at the call sites because a
+    /// row is `[String?]?` — optional table, optional entry — and every safe
+    /// lookup into one comes back double-wrapped. Flattening that in the type
+    /// that owns the shape beats spelling it out wherever a figure asks.
+    public static func hint(_ hints: [String?]?, at index: Int) -> String? {
+        guard let hints, hints.indices.contains(index) else { return nil }
+        return hints[index]
+    }
+
     /// "Breathe in, left nostril" — the phase as VoiceOver should say it.
     ///
     /// The hint rides along whatever the guidance level: wanting a quieter
@@ -52,8 +108,18 @@ public enum PhaseHints {
         in hints: [[String?]]?
     ) -> String {
         guard let beat else { return "" }
-        guard let hint = hint(for: beat, in: hints) else { return beat.kind.spokenInstruction }
-        return "\(beat.kind.spokenInstruction), \(hint.lowercased())"
+        return spoken(beat.kind, hint: hint(for: beat, in: hints))
+    }
+
+    /// "Breathe in, left nostril" — one phase as it should be said aloud.
+    ///
+    /// One composition, because the same sentence is spoken twice about the same
+    /// exercise: while somebody is choosing it (the figure's description) and
+    /// while they are breathing it (the player's announcements). Two spellings
+    /// of it would drift with nothing comparing them.
+    static func spoken(_ kind: PhaseKind, hint: String?) -> String {
+        guard let hint else { return kind.spokenInstruction }
+        return "\(kind.spokenInstruction), \(hint.lowercased())"
     }
 
     /// One stage's hints, with the phase kinds they were written against —
@@ -61,7 +127,33 @@ public enum PhaseHints {
     /// rewrite of a technique cannot inherit stale hints.
     private struct StageHints {
         let kinds: [PhaseKind]
-        let hints: [String?]
+        let hints: [Hint?]
+    }
+
+    /// One phase's hint: the words for it, and the side of the body it happens
+    /// on.
+    ///
+    /// The side is a value rather than something read back out of the words.
+    /// It decides the *shape* of the drawing — which half of the midline a
+    /// breath is drawn on — and parsing that out of "Left nostril" means
+    /// rewording the sentence, or translating it, silently redraws the figure
+    /// with nothing failing.
+    struct Hint {
+        let text: String
+        let side: Side
+
+        init(_ text: String, _ side: Side) {
+            self.text = text
+            self.side = side
+        }
+    }
+
+    /// Which side of the midline a breath is drawn on. Left is positive because
+    /// the catalogue's cycle starts there, so the figure opens by climbing —
+    /// the same up-is-filling reading every other drawing has.
+    public enum Side: Double, Sendable {
+        case left = 1
+        case right = -1
     }
 
     /// Seeded order: in through the left, out through the right, in through
@@ -70,7 +162,12 @@ public enum PhaseHints {
         "alternate-nostril": [
             StageHints(
                 kinds: [.inhale, .exhale, .inhale, .exhale],
-                hints: ["Left nostril", "Right nostril", "Right nostril", "Left nostril"]
+                hints: [
+                    Hint("Left nostril", .left),
+                    Hint("Right nostril", .right),
+                    Hint("Right nostril", .right),
+                    Hint("Left nostril", .left),
+                ]
             ),
         ],
     ]

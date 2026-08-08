@@ -10,6 +10,7 @@
 //! been generated against a database this binary is responsible for creating.
 
 use anyhow::{Context, Result};
+use serde::Serialize;
 use sqlx::PgPool;
 
 /// Mirrors the `technique_goal` Postgres enum declared in `0001_init.sql`.
@@ -24,8 +25,9 @@ use sqlx::PgPool;
 /// database's own type system accepts, so a mistyped label is a compile error
 /// rather than a failed migration, and the vocabulary exists once here instead
 /// of once as a string literal and again inside a test asserting the list.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, sqlx::Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, sqlx::Type, Serialize)]
 #[sqlx(type_name = "technique_goal", rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 enum TechniqueGoal {
     Calm,
     Sleep,
@@ -36,8 +38,9 @@ enum TechniqueGoal {
 
 /// Mirrors the `phase_kind` Postgres enum, on the same terms as
 /// [`TechniqueGoal`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, sqlx::Type)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, sqlx::Type, Serialize)]
 #[sqlx(type_name = "phase_kind", rename_all = "SCREAMING_SNAKE_CASE")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 enum PhaseKind {
     Inhale,
     HoldIn,
@@ -47,6 +50,8 @@ enum PhaseKind {
 
 /// One phase: its kind, the curated default, and the range a dial may move it
 /// within.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct PhaseSeed {
     kind: PhaseKind,
     duration_ms: i32,
@@ -55,6 +60,8 @@ struct PhaseSeed {
 }
 
 /// A run of cycles sharing one phase pattern.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct StageSeed {
     phases: &'static [PhaseSeed],
     cycles: i32,
@@ -63,6 +70,8 @@ struct StageSeed {
 }
 
 /// One technique and the session it describes.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct TechniqueSeed {
     slug: &'static str,
     name: &'static str,
@@ -436,6 +445,34 @@ const FOUNDATIONS: &[FoundationSeed] = &[
     },
 ];
 
+/// The technique catalogue as JSON, in presentation order.
+///
+/// Exists so the drawings can be derived from the same numbers the database is
+/// seeded with. The geometry that turns a technique into a figure lives in
+/// Swift (`OndKit.TechniqueFigure`), the catalogue lives here, and something has
+/// to cross between them — this crosses it once, into a committed artefact
+/// `mise run check:generated` pins, rather than once per consumer.
+///
+/// Reads `TECHNIQUES` directly and never opens a connection: the catalogue is a
+/// `const`, so exporting it must not require a database that the check running
+/// in CI would then have to stand up.
+///
+/// Trailing newline because every other committed generated file has one and a
+/// diff over a missing one is noise.
+pub fn catalogue_json() -> Result<String> {
+    #[derive(Serialize)]
+    struct Catalogue {
+        techniques: &'static [TechniqueSeed],
+    }
+
+    let mut json = serde_json::to_string_pretty(&Catalogue {
+        techniques: TECHNIQUES,
+    })
+    .context("failed to serialise the technique catalogue")?;
+    json.push('\n');
+    Ok(json)
+}
+
 pub async fn run(pool: &PgPool) -> Result<()> {
     let mut tx = pool
         .begin()
@@ -573,6 +610,67 @@ mod tests {
     /// The only slug the client is allowed to know about by name, and the only
     /// technique in the catalogue that has stages worth calling stages.
     const WIM_HOF: &str = "wim-hof-rounds";
+
+    /// The committed export, parsed. Both tests below read it, and neither cares
+    /// how it was produced.
+    fn exported() -> serde_json::Value {
+        serde_json::from_str(&catalogue_json().expect("the catalogue serialises"))
+            .expect("the export is valid JSON")
+    }
+
+    /// The export is what the app's drawings and the marketing site's are both
+    /// derived from, so a technique missing from it is a technique that silently
+    /// stops having a picture. Checking every slug and every phase kind rather
+    /// than the count alone: a serialiser that dropped `stages` would still
+    /// produce nine entries.
+    #[test]
+    fn the_export_carries_every_technique_and_every_phase() {
+        let json = exported();
+        let exported = json["techniques"]
+            .as_array()
+            .expect("the export holds a technique array");
+
+        assert_eq!(exported.len(), TECHNIQUES.len());
+
+        for (exported, seeded) in exported.iter().zip(TECHNIQUES) {
+            assert_eq!(exported["slug"], seeded.slug);
+
+            let stages = exported["stages"]
+                .as_array()
+                .expect("a technique holds a stage array");
+            assert_eq!(stages.len(), seeded.stages.len(), "`{}`", seeded.slug);
+
+            for (stage, seeded) in stages.iter().zip(seeded.stages) {
+                let phases = stage["phases"]
+                    .as_array()
+                    .expect("a stage holds a phase array");
+                assert_eq!(phases.len(), seeded.phases.len(), "`{}`", exported["slug"]);
+
+                for (phase, seeded) in phases.iter().zip(seeded.phases) {
+                    assert_eq!(phase["durationMs"], seeded.duration_ms);
+                }
+            }
+        }
+    }
+
+    /// The vocabulary the export speaks is the database's and the contract's,
+    /// not Rust's. A serde rename lost here would leave the Swift side decoding
+    /// `Inhale` where it expects `INHALE`, which fails at the far end of a
+    /// generate step rather than here.
+    #[test]
+    fn the_export_speaks_the_contract_vocabulary() {
+        let json = exported();
+
+        assert_eq!(json["techniques"][0]["goal"], "CALM");
+        assert_eq!(
+            json["techniques"][0]["stages"][0]["phases"][0]["kind"],
+            "INHALE"
+        );
+        assert_eq!(
+            json["techniques"][0]["stages"][0]["phases"][1]["kind"],
+            "HOLD_IN"
+        );
+    }
 
     /// The free tier is a product promise, and it is one line of this file away
     /// from being broken in either direction — a `true` typed into the wrong

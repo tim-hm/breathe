@@ -1,6 +1,6 @@
-# Formatting and linting only — the fast, dependency-free slice of the gate.
-# Tests, the SQLx cache check, and the generated-Swift drift check stay local
-# (`mise run check`) until CI grows a database and BSR access.
+# Formatting, linting, and the one drift check that needs no database — the fast
+# slice of the gate. Tests, the SQLx cache check, and the generated-Swift drift
+# check stay local (`mise run check`) until CI grows a database and BSR access.
 name: checks
 
 on:
@@ -28,16 +28,30 @@ jobs:
       - run: mise run check:doc-links
 
   lint-swift:
-    runs-on: macos-15
+    # macos-26 rather than macos-15 for the Xcode it ships. `check:diagrams`
+    # builds the package, whose manifest is `swift-tools-version: 6.2` and whose
+    # platforms are `.v26` — an older image's Xcode cannot parse it, and the
+    # failure lands at manifest parsing rather than anywhere informative.
+    # `check:swift` alone never compiled anything, which is why the older image
+    # was fine until now.
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v2
         with:
-          # Only the two tools check:swift runs — skips the Rust toolchain and
+          # Only the tools these two tasks run — skips the Rust toolchain and
           # cargo tools, which cost real minutes on the 10x-billed macOS runner.
-          install_args: swiftformat swiftlint
+          # `vp` is here because check:diagrams formats the HTML it writes; the
+          # Swift compiler comes from the runner's Xcode, not from mise.
+          install_args: swiftformat swiftlint vp
       - run: mise run check:swift
         env:
           # Without this, `mise run` auto-installs every tool in .mise.toml,
           # defeating the selective install above.
+          MISE_AUTO_INSTALL: "false"
+      # The only automatic check that the marketing site's figures still match
+      # the geometry the apps draw. It needs a Swift toolchain, which is why it
+      # rides this job rather than the Linux one and cannot join `mise run check`.
+      - run: mise run check:diagrams
+        env:
           MISE_AUTO_INSTALL: "false"

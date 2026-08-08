@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 import PackageDescription
 
 // One package, four targets — not four packages. SwiftPM offers no way to
@@ -16,10 +16,22 @@ let package = Package(
     // Connect, leaving a booted simulator as the only way to run a unit test —
     // which is not a dependency a decoding test should have.
     //
-    // watchOS 11 is the floor that pairs with iOS 18 — the watch app ships
+    // watchOS 26 is the floor that pairs with iOS 26 — the watch app ships
     // alongside the phone app, so the two move together rather than the wrist
-    // dragging a lower floor into the shared targets.
-    platforms: [.iOS(.v18), .macOS(.v14), .watchOS(.v11)],
+    // dragging a lower floor into the shared targets. The floor sits at 26
+    // because the phone's chrome is built on Liquid Glass — the minimising tab
+    // bar — and an unreleased app has no installed base to strand by asking for
+    // it unconditionally.
+    //
+    // The tools-version above is 6.2 for this line alone: `.v26` was not a
+    // `SupportedPlatform` case before it, and the string form would trade a
+    // checked constant for a literal nothing validates.
+    //
+    // macOS sits at 15 rather than 14 for one API: `Color.mix(with:by:)`, which
+    // `OndStyle` uses to soften a goal accent into the exhale ink. Nothing runs
+    // on macOS but the tests, and the floor only has to be low enough that a
+    // host can build them — it is not a platform this ships to.
+    platforms: [.iOS(.v26), .macOS(.v15), .watchOS(.v26)],
     products: [
         .library(name: "OndKit", targets: ["OndKit"]),
         .library(name: "OndUI", targets: ["OndUI"]),
@@ -67,10 +79,21 @@ let package = Package(
         // and a mapping written once per app target is one the phone and the
         // wrist are free to disagree about silently.
         .target(name: "OndStyle", dependencies: ["OndKit", "OndUI"]),
+        // Decodes the committed catalogue.json — the Rust seed's field names,
+        // which is a second way onto `Technique` and one no shipping binary
+        // should have. A target and not a product, on the same terms as OndAPI:
+        // the apps cannot name the module, so the rule is the compiler's rather
+        // than a comment's.
+        .target(name: "OndCatalogue", dependencies: ["OndKit"]),
+        // Redraws the marketing site's figures from the same geometry the apps
+        // draw. Also a target and not a product, so a development-time tool
+        // cannot drift into a shipping binary. Run through
+        // `mise run generate:diagrams`.
+        .executableTarget(name: "OndDiagrams", dependencies: ["OndKit", "OndCatalogue"]),
         // Depends on OndAPI as well as OndKit because it builds proto
         // messages to feed the decoders. That is the boundary being tested, so
         // reaching across it here is the point rather than a leak.
-        .testTarget(name: "OndKitTests", dependencies: ["OndKit", "OndAPI"]),
+        .testTarget(name: "OndKitTests", dependencies: ["OndKit", "OndAPI", "OndCatalogue"]),
         .testTarget(name: "OndUITests", dependencies: ["OndUI"]),
     ]
 )
