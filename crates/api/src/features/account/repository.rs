@@ -130,11 +130,40 @@ async fn claim(
 /// Every statement is in the caller's transaction. Half a merge is a person whose
 /// sessions moved and whose breath-test history did not, with nothing left to
 /// tell anyone it happened.
+///
+/// ## Why `from` is locked first
+///
+/// The lock is not tidiness, and its position above the reparents is the whole of
+/// what it does. A sync landing on `from` at the same moment — the same device,
+/// which has not been told its id is about to change — inserts a child row, and
+/// that insert takes `FOR KEY SHARE` on `from`'s `users` row for the life of its
+/// transaction. Nothing in the reparents conflicts with that lock, so without the
+/// `FOR UPDATE` below the sequence is: the reparent runs against a snapshot taken
+/// before the insert committed and does not see it, the insert commits, and the
+/// `DELETE` then destroys it through `ON DELETE CASCADE`. Silent, and precisely
+/// the history this function exists to preserve.
+///
+/// `FOR UPDATE` conflicts with `FOR KEY SHARE`, so taking it here makes the merge
+/// wait for an in-flight write instead of stepping over it — and because each
+/// statement takes its own snapshot under READ COMMITTED, the reparents that
+/// follow the lock see everything it waited for. A write that starts *after* the
+/// lock is held blocks, and then fails its foreign key once `from` is gone rather
+/// than being cascaded away; the client resends under the id it has by then
+/// adopted, which is the outcome that loses nothing.
+///
+/// It doubles as the existence check the `DELETE` would otherwise need: no row to
+/// lock is a caller whose identity vanished between the middleware creating it and
+/// this write.
 async fn merge(
     tx: &mut Transaction<'_, Postgres>,
     from: UserId,
     into: Uuid,
 ) -> Result<(), AccountError> {
+    sqlx::query_scalar!("SELECT id FROM users WHERE id = $1 FOR UPDATE", from.0)
+        .fetch_optional(&mut **tx)
+        .await?
+        .ok_or(AccountError::Missing)?;
+
     sqlx::query!(
         "UPDATE sessions AS moving
             SET user_id = $2
@@ -176,14 +205,9 @@ async fn merge(
     .execute(&mut **tx)
     .await?;
 
-    let deleted = sqlx::query!("DELETE FROM users WHERE id = $1", from.0)
+    sqlx::query!("DELETE FROM users WHERE id = $1", from.0)
         .execute(&mut **tx)
-        .await?
-        .rows_affected();
-
-    if deleted == 0 {
-        return Err(AccountError::Missing);
-    }
+        .await?;
 
     Ok(())
 }

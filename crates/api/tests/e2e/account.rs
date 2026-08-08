@@ -9,6 +9,8 @@
 //! the unit tests beside it; what the *server* does with a proven Apple account
 //! is pinned here.
 
+use std::time::Duration;
+
 use api::identity::USER_ID_HEADER;
 use api::proto::ond::v1 as pb;
 use axum::Router;
@@ -326,6 +328,71 @@ async fn a_merge_keeps_both_histories_and_sums_a_shared_days_allowance() {
         .expect("the row is readable"),
         Some("Older".to_owned()),
         "the surviving row keeps its own profile answers"
+    );
+}
+
+/// A sync that is already in flight when the merge runs is not cascaded away.
+///
+/// The window is narrow and the writer is the same device that is signing in, so
+/// it is not fanciful: a `RecordSessions` call and a `SignInWithApple` call can
+/// overlap, and both name the identity that is about to stop existing.
+///
+/// Without the `FOR UPDATE` at the top of `repository::merge`, the reparent runs
+/// against a snapshot that predates the insert, the insert then commits, and
+/// `DELETE FROM users` destroys it through `ON DELETE CASCADE` — a silent loss of
+/// exactly the history the merge exists to preserve. The lock makes the merge
+/// wait for the writer instead, so the reparent's own snapshot includes it.
+///
+/// The open transaction is the mechanism: an insert into `sessions` takes
+/// `FOR KEY SHARE` on the referenced `users` row and holds it until commit, which
+/// is precisely the state a `RecordSessions` call is in mid-flight. The sleep only
+/// has to be long enough for the sign-in to reach the merge; too short and the
+/// writer simply commits first, which is a case that passes either way — so this
+/// test can be insensitive but never flaky.
+#[tokio::test]
+async fn a_sync_in_flight_when_the_merge_runs_is_not_cascaded_away() {
+    let db = TestDatabase::create("account_merge_race").await;
+    let verifier = ScriptedIdentityVerifier::with(vec![("jws-apple", APPLE_ACCOUNT)]);
+
+    let in_flight = "5e551011-0000-4000-8000-000000000009";
+
+    given_user(&db.pool, OLD_DEVICE, "Older").await;
+    given_user(&db.pool, NEW_DEVICE, "Newer").await;
+    sign_in(
+        db.app_with_identity(verifier.clone()),
+        OLD_DEVICE,
+        "jws-apple",
+    )
+    .await;
+
+    let mut writer = db.pool.begin().await.expect("a second transaction");
+    sqlx::query!(
+        "INSERT INTO sessions (
+            user_id, client_session_id, technique_slug, started_at,
+            duration_ms, cycles_completed, breath_count, completed
+         ) VALUES ($1, $2, 'breathed-mid-merge', now(), 60000, 5, 20, true)",
+        uuid(NEW_DEVICE),
+        uuid(in_flight)
+    )
+    .execute(&mut *writer)
+    .await
+    .expect("the in-flight session is written");
+
+    let app = db.app_with_identity(verifier);
+    let signing_in = tokio::spawn(async move { sign_in(app, NEW_DEVICE, "jws-apple").await });
+
+    tokio::time::sleep(Duration::from_millis(250)).await;
+    writer.commit().await.expect("the in-flight sync lands");
+
+    let adopted = signing_in.await.expect("the sign-in finished");
+    assert_eq!(adopted, OLD_DEVICE);
+
+    assert!(
+        sessions_of(&db.pool, OLD_DEVICE)
+            .await
+            .iter()
+            .any(|(id, _)| *id == uuid(in_flight)),
+        "the session landed on an identity the merge then deleted"
     );
 }
 
