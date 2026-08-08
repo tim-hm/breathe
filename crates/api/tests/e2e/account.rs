@@ -632,13 +632,14 @@ async fn a_request_on_an_erased_identity_recreates_it_empty() {
 
     // The catalogue: the most innocent request there is, and identified, which
     // is all it takes.
-    let _: GrpcWebResponse<pb::ListTechniquesResponse> = call_grpc_web_with(
+    let listed: GrpcWebResponse<pb::ListTechniquesResponse> = call_grpc_web_with(
         db.app_with_identity(verifier),
         "/ond.v1.TechniqueService/ListTechniques",
         &pb::ListTechniquesRequest {},
         &[(USER_ID_HEADER, OLD_DEVICE)],
     )
     .await;
+    assert_eq!(listed.status, tonic::Code::Ok as i32);
 
     assert!(exists(&db.pool, OLD_DEVICE).await);
     assert!(
