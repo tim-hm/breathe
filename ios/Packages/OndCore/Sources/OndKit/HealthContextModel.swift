@@ -37,7 +37,7 @@ public struct CoachHealthContext: Sendable, Equatable {
 /// be the first health-adjacent fact it stores.
 @MainActor
 @Observable
-public final class HealthContextModel {
+public final class HealthContextModel: PersonalStore {
     /// How far back the daily series reach: eight weeks, enough history for
     /// `HealthSummaryBuilder` to clear its trend thresholds with room while
     /// staying a bounded, cheap pair of queries.
@@ -78,6 +78,18 @@ public final class HealthContextModel {
         // Assigning in an initialiser does not run `didSet`, so restoring the
         // stored choice neither rewrites it nor re-asks Health for access.
         coachReadsHeartTrends = defaults.bool(forKey: Self.optInKey)
+    }
+
+    /// Withdraws the opt-in, and forgets that it was ever given.
+    ///
+    /// The only state this model owns, and the only one it could erase — nothing
+    /// read from Health is ever stored, here or on the server. Switching it off
+    /// does not revoke HealthKit's own grant, which is Apple's to hold and the
+    /// person's to withdraw in Health; what it does is stop this app asking, and
+    /// a request made after this carries no heart context at all.
+    public func erase() async {
+        coachReadsHeartTrends = false
+        defaults.removeObject(forKey: Self.optInKey)
     }
 
     /// The context a coach request should carry right now: both metrics'

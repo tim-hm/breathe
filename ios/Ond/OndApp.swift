@@ -89,7 +89,8 @@ struct OndApp: App {
         let identity = identity
         let baseURL = AppConfiguration.apiBaseURL
         recorder = MindfulMinutesRecorder(wrapping: sessions, health: HealthKitHealthStore())
-        let watch = WatchLink(outbox: WatchHandoffOutbox(identity: identity, scores: scores))
+        let outbox = WatchHandoffOutbox(identity: identity, scores: scores)
+        let watch = WatchLink(outbox: outbox)
         self.watch = watch
 
         let techniques = CachedTechniqueRepository(
@@ -104,41 +105,53 @@ struct OndApp: App {
         _profiles = State(wrappedValue: profiles)
         _isOnboarding = State(wrappedValue: !profiles.hasCompletedOnboarding)
 
-        _plus = State(
-            wrappedValue: SubscriptionStore(
-                front: StoreKitStoreFront(),
-                entitlements: EntitlementRepository(baseURL: baseURL, identity: identity)
-            )
+        let plus = SubscriptionStore(
+            front: StoreKitStoreFront(),
+            entitlements: EntitlementRepository(baseURL: baseURL, identity: identity)
         )
+        _plus = State(wrappedValue: plus)
 
         let journeys = JourneyRepository(baseURL: baseURL, identity: identity)
         let sessions = sessions
         let scores = scores
+        let queue = SessionSyncQueue(
+            sessions: sessions,
+            scores: scores,
+            journeys: journeys,
+            tombstones: sessions
+        )
         let journey = JourneyModel(
             sessions: sessions,
             scores: scores,
             journeys: journeys,
-            queue: SessionSyncQueue(
-                sessions: sessions,
-                scores: scores,
-                journeys: journeys,
-                tombstones: sessions
-            )
+            queue: queue
         )
         _journey = State(wrappedValue: journey)
 
         _account = State(
             wrappedValue: AccountModel(
                 identity: identity,
-                accounts: AccountRepository(baseURL: baseURL, identity: identity)
+                accounts: AccountRepository(baseURL: baseURL, identity: identity),
+                // Everything on this device that holds something about the
+                // person, for the deletion to empty. Written out here because
+                // this is the only place that knows the whole of it, and a store
+                // missing from this line is a "delete everything" that quietly
+                // leaves that one behind.
+                stores: [sessions, scores, queue, profiles, plus, LiveHealth.model, outbox]
             ) {
                 // The two things that hold their own copy of the identity: the
                 // watch, which was handed one and caches it, and the restore,
                 // which has already walked the history of whoever this device
                 // used to be. Both are told here rather than at the sign-in
-                // button, so signing out fans out exactly as signing in does.
+                // button, so signing out and deleting fan out exactly as signing
+                // in does.
                 watch.push()
                 await journey.syncAdoptedIdentity()
+                // Last, and unconditional, because a deletion has emptied the
+                // stores this model folds its numbers from — and `sync` only
+                // re-reads when a *restore* changed something, which is a case a
+                // freshly minted identity never has.
+                await journey.refresh()
             }
         )
     }

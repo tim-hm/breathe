@@ -43,7 +43,7 @@ public extension BoltScoreRecording {
 }
 
 /// Score history as one JSON file, beside the sessions.
-public actor FileBoltScoreStore: BoltScoreRecording {
+public actor FileBoltScoreStore: BoltScoreRecording, PersonalStore {
     private let file: JSONFileStore<BoltScore>
 
     /// - Parameter directory: where `bolt-scores.json` lives. Application
@@ -64,5 +64,11 @@ public actor FileBoltScoreStore: BoltScoreRecording {
 
     public func recordedScores() async -> [BoltScore] {
         file.load()
+    }
+
+    /// Erasing this is what blanks the number on the wrist, since the phone
+    /// mirrors its best pause to the watch and can only mirror what it has.
+    public func erase() async {
+        file.erase()
     }
 }

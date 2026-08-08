@@ -546,7 +546,13 @@ async fn deleting_an_account_leaves_nothing_behind() {
         "breathed",
     )
     .await;
-    given_bolt_score(&db.pool, OLD_DEVICE, "b01f0000-0000-4000-8000-00000000000a", 37).await;
+    given_bolt_score(
+        &db.pool,
+        OLD_DEVICE,
+        "b01f0000-0000-4000-8000-00000000000a",
+        37,
+    )
+    .await;
     given_quota(&db.pool, OLD_DEVICE, 0, 4).await;
     subscribe(&db.pool, OLD_DEVICE, "COACH").await;
     given_app_store_binding(&db.pool, OLD_DEVICE, transaction).await;

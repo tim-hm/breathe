@@ -137,7 +137,7 @@ struct SettingsView: View {
             }
             .listRowBackground(Theme.Surface.raised)
 
-            AccountSection(account: account)
+            AccountSection(account: account, isManagingSubscription: $isManagingSubscription)
 
             Section {
                 Link("Privacy", destination: LegalLinks.privacyPolicy)

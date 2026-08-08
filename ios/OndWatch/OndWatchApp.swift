@@ -19,7 +19,11 @@ struct OndWatchApp: App {
     private let identity = ProvisionedUserIdentityStore()
 
     /// One store for the whole app, and the same file the sync queue drains.
-    private let sessions: any SessionRecording = FileSessionStore()
+    ///
+    /// Concrete rather than `any SessionRecording`, because the inbox below also
+    /// needs its other face: what this wrist holds of a person, for the context
+    /// that says they have deleted their account.
+    private let sessions = FileSessionStore()
 
     /// What the screens record through: the same file, with each kept session
     /// also credited to Health as Mindful Minutes — the wrist writes its own,
@@ -61,16 +65,21 @@ struct OndWatchApp: App {
         // unchanged. It stays empty on the wrist: the BOLT test is a phone
         // screen, and the number it produces reaches here over the pairing.
         let scores = FileBoltScoreStore()
+        let queue = SessionSyncQueue(sessions: sessions, scores: scores, journeys: journeys)
         _journey = State(
             wrappedValue: JourneyModel(
                 sessions: sessions,
                 scores: scores,
                 journeys: journeys,
-                queue: SessionSyncQueue(sessions: sessions, scores: scores, journeys: journeys)
+                queue: queue
             )
         )
 
-        let inbox = WatchHandoffInbox(identity: identity)
+        // Everything on this wrist that is about the person rather than about
+        // the app. The phone's list is longer because the phone holds more; this
+        // one is the sessions breathed here, the empty score file beside them,
+        // and the ledger of what has already gone up.
+        let inbox = WatchHandoffInbox(identity: identity, stores: [sessions, scores, queue])
         _phone = State(wrappedValue: inbox)
         link = PhoneLink(inbox: inbox)
     }

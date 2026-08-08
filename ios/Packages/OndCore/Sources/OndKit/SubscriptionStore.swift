@@ -19,7 +19,7 @@ import os
 /// rules until the next launch retries.
 @MainActor
 @Observable
-public final class SubscriptionStore {
+public final class SubscriptionStore: PersonalStore {
     private static let logger = Logger(category: "subscription")
 
     /// The key keeps its old spelling on purpose: it names a value already
@@ -227,6 +227,30 @@ public final class SubscriptionStore {
         // Regardless of the outcome: `AppStore.sync()` throws when the person
         // dismisses the password prompt, and the entitlement may still have
         // arrived through `updates` while it was open.
+        await refresh()
+    }
+
+    /// Drops the cached tier and re-derives it, which is not the same as
+    /// cancelling anything.
+    ///
+    /// Deleting an account does not end an App Store subscription — only Apple
+    /// can, and the confirmation that leads here says so. So this is the one
+    /// erasure that puts back what it took: the cached tier is a note about a
+    /// person filed on this device and goes, while the entitlement it was a note
+    /// *about* is a fact about their Apple ID and survives. Leaving the cache
+    /// cleared would show a paying subscriber the free tier until something
+    /// happened to refresh it, which is the app appearing to have cancelled a
+    /// subscription it cannot cancel.
+    ///
+    /// Clearing `submitted` is what carries the subscription onto the new
+    /// identity in this run rather than the next launch: the erased row took the
+    /// binding with it, and the refresh below resubmits the transaction against
+    /// no holder at all — exactly what a merge relies on.
+    public func erase() async {
+        tier = .free
+        submitted.removeAll()
+        defaults.removeObject(forKey: Self.tierKey)
+
         await refresh()
     }
 

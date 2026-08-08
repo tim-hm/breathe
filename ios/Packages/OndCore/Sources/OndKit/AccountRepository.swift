@@ -55,6 +55,13 @@ public protocol AccountSyncing: Sendable {
     ///   it in the same credential, which is a value a modified client can type.
     /// - Returns: the identity to send in every request from now on.
     func signIn(identityToken: String) async throws -> UUID
+
+    /// Erases the calling identity and everything the server holds under it.
+    ///
+    /// Answers nothing, which is the shape of the contract: the caller has to
+    /// mint a fresh identity itself the moment this returns, because the server
+    /// has no id left to hand back and no memory of the one that just called.
+    func delete() async throws
 }
 
 /// The only type that touches the generated account types, mirroring
@@ -93,5 +100,18 @@ public struct AccountRepository: AccountSyncing {
         }
 
         return adopted
+    }
+
+    /// Only two outcomes are worth telling apart here, unlike the sign-in above.
+    /// The server refuses nothing on its own account — there is no credential to
+    /// judge and no binding to conflict with — so anything that is not a message
+    /// is a request that did not arrive, and the answer is to try again later.
+    public func delete() async throws {
+        let response = await client.deleteAccount(request: Ond_V1_DeleteAccountRequest())
+
+        guard response.message != nil else {
+            throw AccountRepositoryError
+                .transport(response.error?.localizedDescription ?? "the server sent no message")
+        }
     }
 }

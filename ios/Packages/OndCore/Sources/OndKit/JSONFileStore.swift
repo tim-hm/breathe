@@ -46,6 +46,31 @@ struct JSONFileStore<Element: Codable & Sendable>: Sendable {
         }
     }
 
+    /// Removes the file, leaving the store as it was before its first write.
+    ///
+    /// Deleted rather than overwritten with an empty array. Somebody who asked
+    /// to be forgotten should not be left with a file whose modification date
+    /// says when they gave up, and `load` already reads an absent file as the
+    /// ordinary pre-first-write state — so there is nothing to repair
+    /// afterwards.
+    func erase() {
+        // Checked rather than caught, exactly as `load` does: an erasure of a
+        // store nothing was ever written to is the normal case for the bolt
+        // scores on a watch, not a failure.
+        guard FileManager.default.fileExists(atPath: fileURL.path(percentEncoded: false)) else {
+            return
+        }
+
+        do {
+            try FileManager.default.removeItem(at: fileURL)
+        } catch {
+            logger
+                .error(
+                    "failed to erase \(fileURL.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)"
+                )
+        }
+    }
+
     func save(_ elements: [Element]) {
         do {
             let encoder = JSONEncoder()
