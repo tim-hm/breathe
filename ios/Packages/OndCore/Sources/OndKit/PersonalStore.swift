@@ -5,10 +5,13 @@ import Foundation
 ///
 /// The server half of a deletion is a single `DELETE` and the schema does the
 /// rest. The device has no cascade: the practice is spread across a file of
-/// sessions, a file of controlled pauses, half a dozen `UserDefaults` keys, and
-/// the in-memory copies every one of those is read into at launch. A deletion
-/// that reached only the server would leave the whole journey on screen, and one
-/// that reached only the disk would leave it on screen until the next launch.
+/// sessions, a file of controlled pauses, half a dozen `UserDefaults` keys, the
+/// in-memory copies every one of those is read into at launch, and a handful of
+/// notification requests iOS is holding on this app's behalf. A deletion that
+/// reached only the server would leave the whole journey on screen; one that
+/// reached only the disk would leave it there until the next launch; and one
+/// that stopped at this process would go on buzzing somebody's erased routine
+/// onto their lock screen every weekday morning.
 ///
 /// So each store answers for itself — it is the only thing that knows its own
 /// file name, its own keys, and what it is holding in memory — and

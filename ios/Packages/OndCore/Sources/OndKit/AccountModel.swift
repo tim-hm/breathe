@@ -183,7 +183,9 @@ public final class AccountModel {
     ///    is the rule signing out follows, for a sharper version of the same
     ///    reason.
     /// 3. **Then the local stores**, each of which answers for its own files,
-    ///    keys and in-memory copies.
+    ///    keys and in-memory copies — and, in the schedules' case, for the
+    ///    pending notifications iOS is holding on their behalf, which nothing
+    ///    else could take back.
     /// 4. **Then everything holding a copy of the identity**, which is where the
     ///    watch is told — and told *after* the erasure rather than before, so
     ///    the context it is handed carries the fresh id and no personal best,

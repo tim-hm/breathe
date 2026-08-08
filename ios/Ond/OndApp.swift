@@ -70,10 +70,13 @@ struct OndApp: App {
     /// The basics, shared the same way — reference data loaded once.
     @State private var foundations: FoundationsModel
 
-    /// The standing appointments, backed by local notifications. Composed here
-    /// so the store outlives the Settings screen that edits it — the
-    /// notifications have to stay honest whether or not it is ever opened.
-    @State private var schedules = ScheduleStore(notifier: NotificationScheduler())
+    /// The standing appointments, backed by local notifications. Composed in
+    /// `init` rather than inline so the deletion below can reach it — the
+    /// pending requests are iOS's rather than this app's, and nothing else can
+    /// take them back. It outlives the Settings screen that edits it either way,
+    /// because the notifications have to stay honest whether or not it is ever
+    /// opened.
+    @State private var schedules: ScheduleStore
 
     /// Totals, streaks, and the boards. Local-first: everything it shows about
     /// this person is folded from the two stores above, so the tab is complete
@@ -92,6 +95,9 @@ struct OndApp: App {
         let outbox = WatchHandoffOutbox(identity: identity, scores: scores)
         let watch = WatchLink(outbox: outbox)
         self.watch = watch
+
+        let schedules = ScheduleStore(notifier: NotificationScheduler())
+        _schedules = State(wrappedValue: schedules)
 
         let techniques = CachedTechniqueRepository(
             caching: TechniqueRepository(baseURL: baseURL, identity: identity)
@@ -112,8 +118,6 @@ struct OndApp: App {
         _plus = State(wrappedValue: plus)
 
         let journeys = JourneyRepository(baseURL: baseURL, identity: identity)
-        let sessions = sessions
-        let scores = scores
         let queue = SessionSyncQueue(
             sessions: sessions,
             scores: scores,
@@ -137,23 +141,37 @@ struct OndApp: App {
                 // this is the only place that knows the whole of it, and a store
                 // missing from this line is a "delete everything" that quietly
                 // leaves that one behind.
-                stores: [sessions, scores, queue, profiles, plus, LiveHealth.model, outbox]
-            ) {
-                // The two things that hold their own copy of the identity: the
-                // watch, which was handed one and caches it, and the restore,
-                // which has already walked the history of whoever this device
-                // used to be. Both are told here rather than at the sign-in
-                // button, so signing out and deleting fan out exactly as signing
-                // in does.
-                watch.push()
-                await journey.syncAdoptedIdentity()
-                // Last, and unconditional, because a deletion has emptied the
-                // stores this model folds its numbers from — and `sync` only
-                // re-reads when a *restore* changed something, which is a case a
-                // freshly minted identity never has.
-                await journey.refresh()
-            }
+                stores: [
+                    sessions, scores, queue, profiles, schedules, plus, LiveHealth.model, outbox,
+                ],
+                onIdentityChange: Self.identityChange(telling: watch, and: journey)
+            )
         )
+    }
+
+    /// What every path that changes the identity has to do once it has.
+    ///
+    /// A function rather than a closure written inline because it is the same
+    /// three steps for signing in, signing out and deleting — and because the
+    /// reason each of them is there outgrew the argument list it was sitting in.
+    private static func identityChange(
+        telling watch: WatchLink,
+        and journey: JourneyModel
+    ) -> @MainActor () async -> Void {
+        {
+            // The two things that hold their own copy of the identity: the
+            // watch, which was handed one and caches it, and the restore, which
+            // has already walked the history of whoever this device used to be.
+            // Both are told here rather than at the sign-in button, so signing
+            // out and deleting fan out exactly as signing in does.
+            watch.push()
+            await journey.syncAdoptedIdentity()
+            // Last, and unconditional, because a deletion has emptied the stores
+            // this model folds its numbers from — and `sync` re-reads only when
+            // a *restore* changed something, which is a case a freshly minted
+            // identity never has.
+            await journey.refresh()
+        }
     }
 
     var body: some Scene {

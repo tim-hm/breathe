@@ -91,6 +91,25 @@ private final class RecordingEntitlements: EntitlementSyncing {
     }
 }
 
+/// Records every list the store re-synced it with, which is how a test sees the
+/// pending notification requests being taken back — an empty sync is what
+/// removes them.
+private final class RecordingNotifier: ScheduleNotifying {
+    private let state = OSAllocatedUnfairLock(initialState: [[Schedule]]())
+
+    var synced: [[Schedule]] {
+        state.withLock { $0 }
+    }
+
+    func requestAuthorization() async -> Bool {
+        true
+    }
+
+    func sync(_ schedules: [Schedule]) async {
+        state.withLock { $0.append(schedules) }
+    }
+}
+
 /// Health that has nothing to say, because none of this is about what it holds —
 /// the model stores exactly one thing, and it is the person's own choice.
 private struct SilentHealthStore: HealthStore {
@@ -132,6 +151,8 @@ struct AccountDeletionTests {
         let scores: FileBoltScoreStore
         let queue: SessionSyncQueue
         let profiles: ProfileStore
+        let schedules: ScheduleStore
+        let notifier: RecordingNotifier
         let plus: SubscriptionStore
         let entitlements: RecordingEntitlements
         let health: HealthContextModel
@@ -158,6 +179,8 @@ struct AccountDeletionTests {
             ledger: SyncLedger(defaults: defaults)
         )
         let profiles = ProfileStore(profiles: SettledProfiles(), defaults: defaults)
+        let notifier = RecordingNotifier()
+        let schedules = ScheduleStore(notifier: notifier, defaults: defaults)
         let entitlements = RecordingEntitlements()
         let plus = SubscriptionStore(
             front: SubscribedStoreFront(),
@@ -175,6 +198,8 @@ struct AccountDeletionTests {
             scores: scores,
             queue: queue,
             profiles: profiles,
+            schedules: schedules,
+            notifier: notifier,
             plus: plus,
             entitlements: entitlements,
             health: health,
@@ -183,7 +208,7 @@ struct AccountDeletionTests {
             account: AccountModel(
                 identity: identity,
                 accounts: accounts,
-                stores: [sessions, scores, queue, profiles, plus, health, outbox],
+                stores: [sessions, scores, queue, profiles, schedules, plus, health, outbox],
                 defaults: defaults
             ) {
                 told.withLock { $0 += 1 }
@@ -194,7 +219,7 @@ struct AccountDeletionTests {
 
     /// A person who has used the app: onboarded, breathed twice, deleted one of
     /// those sessions, taken a controlled-pause test, opted the coach into their
-    /// heart trends, and synced.
+    /// heart trends, set a standing weekday appointment, and synced.
     private func givenAPractice(on install: Install) async {
         install.profiles.complete(
             with: Profile(
@@ -205,6 +230,15 @@ struct AccountDeletionTests {
             )
         )
         install.health.coachReadsHeartTrends = true
+        install.schedules.add(
+            Schedule(
+                techniqueSlug: "box-breathing",
+                techniqueName: "Box Breathing",
+                hour: 8,
+                minute: 0,
+                weekdays: Weekday.weekdays
+            )
+        )
 
         let kept = SessionRecord(
             techniqueSlug: "box-breathing",
@@ -259,6 +293,11 @@ struct AccountDeletionTests {
         #expect(install.profiles.profile == .unanswered)
         #expect(install.profiles.hasCompletedOnboarding == false)
         #expect(install.health.coachReadsHeartTrends == false)
+        #expect(install.schedules.schedules.isEmpty)
+        #expect(
+            install.notifier.synced.contains([]),
+            "a schedule left registered would buzz the erased account onto the lock screen"
+        )
         #expect(
             install.defaults.stringArray(forKey: "journey.acknowledgedSessions") == nil,
             "the ledger answered for an identity that no longer exists"
@@ -301,6 +340,7 @@ struct AccountDeletionTests {
         let sessions = await install.sessions.recordedSessions()
         #expect(sessions.count == 1)
         #expect(install.profiles.hasCompletedOnboarding)
+        #expect(install.schedules.schedules.count == 1)
         #expect(install.identity.userId() == before)
         #expect(install.account.failure != nil)
         #expect(install.told.withLock { $0 } == 0)

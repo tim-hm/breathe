@@ -27,7 +27,7 @@ public protocol ScheduleNotifying: Sendable {
 /// can only drift between a change and the async resync completing.
 @MainActor
 @Observable
-public final class ScheduleStore {
+public final class ScheduleStore: PersonalStore {
     private static let key = "schedules.list"
 
     public private(set) var schedules: [Schedule]
@@ -72,6 +72,32 @@ public final class ScheduleStore {
         guard let index = schedules.firstIndex(where: { $0.id == schedule.id }) else { return }
         schedules[index].isEnabled = isEnabled
         persistAndResync()
+    }
+
+    /// Forgets the appointments, and unregisters the notifications they had
+    /// already placed with iOS.
+    ///
+    /// The list itself is personal data and not merely configuration: a
+    /// technique, an hour, a minute and a set of weekdays is a record of
+    /// somebody's routine and of when they are at home.
+    ///
+    /// The pending requests are the half that would be *seen*. They live in the
+    /// notification centre rather than in this app, they survive it being
+    /// killed, and they fire on the lock screen naming the exercise — so a
+    /// deletion that dropped the list alone would have the erased account
+    /// announcing itself the next morning, on a schedule, to somebody who was
+    /// told their practice was gone from this iPhone.
+    ///
+    /// Awaited rather than sent off in a `Task` like every other mutation here:
+    /// the rest of this class is answering somebody editing a list who will not
+    /// notice the resync, and this one is the last thing that happens before an
+    /// erasure claims to be complete. `sync` takes the whole list by design, so
+    /// an empty one removes every request this app owns and adds none.
+    public func erase() async {
+        schedules = []
+        defaults.removeObject(forKey: Self.key)
+
+        await notifier.sync(schedules)
     }
 
     private func persistAndResync() {
