@@ -90,10 +90,19 @@ public extension TechniqueFigure.Ink {
     /// on. Softening along the accent's own hue cannot collide with anything,
     /// and it resolves correctly in both appearances by construction: over white
     /// the exhale pales, over near-black it dims.
+    ///
+    /// How far it softens is `Theme.Softening.strongest` rather than a number
+    /// chosen here, because the fraction that reads as *soft* and the fraction
+    /// that still clears 3:1 against the ground are one decision, and this is the
+    /// stroke that decision is measured on. Two things the next reader is likely
+    /// to try, and neither is an improvement: raising it, when the 0.45 this used
+    /// to take is illegal on every accent over white; and splitting it per
+    /// appearance, which the palette's own ceiling makes unnecessary and which
+    /// would make this the one place in either app reading `colorScheme` by hand.
     func colour(on accent: Color) -> Color {
         switch self {
         case .inhale: accent
-        case .exhale: accent.mix(with: Theme.Surface.ground, by: 0.45)
+        case .exhale: accent.mix(with: Theme.Surface.ground, by: Theme.Softening.strongest)
         case .hold: Theme.Accent.still
         // The site draws its baselines at 40% of the body ink. Here that is the
         // palette's own faintest step, which already resolves per appearance.

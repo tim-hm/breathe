@@ -11,11 +11,11 @@
      figures. Resolved once per appearance rather than computed, because CSS has
      no reason to derive what a token can state.
 
-     A 20% mix, not the 45% the app takes at runtime (OndStyle/FigureShape.swift)
-     and the dark value below keeps: white runs out of room first. 45% measures
-     2.30:1 here, under WCAG 1.4.11's 3:1 floor for a stroke that carries
-     meaning; 20% lands at 3.40:1, about the 3.33:1 the dark value already
-     holds. */
+     A 20% mix, which is `Theme.Softening.strongest` — the app's palette-wide
+     ceiling, set by whichever of its accents runs out of room over white first
+     rather than by this one, which would take 27%. 45% measures 2.30:1 here,
+     under WCAG 1.4.11's 3:1 floor for a stroke that carries meaning; 20% lands
+     at 3.40:1. */
   --accent-soft: #61958b;
   --orb: #64b0a2;
   /* The orb and captions shift to this during the two holds, and the figures
@@ -40,7 +40,9 @@
     --line: #242c29;
     --accent: #6fbcad;
     /* Towards the dark ground rather than towards white, so the exhale dims
-       here where it pales in the light appearance. */
+       here where it pales in the light appearance. Still the 45% the light
+       value gave up — the near-black has room for it, at 3.33:1 — which makes
+       this the one value the page and the app soften by different amounts. */
     --accent-soft: #457066;
     --orb: #4d9184;
     --hold: #8497c4;
