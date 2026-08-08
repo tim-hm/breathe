@@ -27,16 +27,19 @@ public enum AccountState: Sendable, Equatable {
     }
 }
 
-/// Signing in, signing out, and the identity swap either of them performs.
+/// Signing in, signing out, deleting the account, and the identity swap all
+/// three of them perform.
 ///
 /// The swap is the reason this is a model rather than three lines in a view.
 /// Sign in and the server may answer with an identity *older* than the caller's,
 /// having merged this install's history into it; sign out and this install must
 /// stop using the identity it just bound, or the next person to sign in here
 /// either cannot, or inherits a stranger's practice — `signOut` has the full
-/// account of that. Both are the same rule: the client is the authority on which
-/// id is live, so every path that changes it changes it completely, and both end
-/// with everything holding a copy being told.
+/// account of that. Delete, and the id names nothing at all, while the server
+/// would recreate it the moment anything asked. All three are the same rule: the
+/// client is the authority on which id is live, so every path that changes it
+/// changes it completely, and every one of them ends with everything holding a
+/// copy being told.
 @MainActor
 @Observable
 public final class AccountModel {
@@ -67,9 +70,14 @@ public final class AccountModel {
 
     private let identity: any UserIdentityStore
     private let accounts: any AccountSyncing
+    private let stores: [any PersonalStore]
     private let defaults: UserDefaults
     private let onIdentityChange: @MainActor () async -> Void
 
+    /// - Parameter stores: everything on this device that holds something about
+    ///   the person, for `deleteAccount` to empty. Listed by the composition
+    ///   root rather than discovered, because there is no way to discover one
+    ///   and a store left off the list is a deletion that quietly is not one.
     /// - Parameter onIdentityChange: run after the identity has actually
     ///   changed, to tell everything holding a copy of it — the watch, which
     ///   carries its own, and the journey, whose restore has already run under
@@ -78,11 +86,13 @@ public final class AccountModel {
     public init(
         identity: any UserIdentityStore,
         accounts: any AccountSyncing,
+        stores: [any PersonalStore],
         defaults: UserDefaults = .standard,
         onIdentityChange: @escaping @MainActor () async -> Void
     ) {
         self.identity = identity
         self.accounts = accounts
+        self.stores = stores
         self.defaults = defaults
         self.onIdentityChange = onIdentityChange
         // Assigning in an initialiser does not run `didSet`, which is what keeps
@@ -148,6 +158,63 @@ public final class AccountModel {
         if identity.adopt(UUID()) {
             await onIdentityChange()
         }
+    }
+
+    /// Erases the account on the server, then everything this device holds about
+    /// the person, and starts them again under an identity nobody has ever seen.
+    ///
+    /// Offered whether or not this install has signed in, because signing in was
+    /// never what created anything: an anonymous identity has a row, sessions, a
+    /// controlled-pause history and possibly an entitlement from its first RPC.
+    /// A "delete account" that only appeared once you had one would leave the
+    /// majority of people with no way to erase what is held about them.
+    ///
+    /// The order below is the whole of the correctness, and each step is only
+    /// safe after the one above it:
+    ///
+    /// 1. **The server first.** Nothing local is touched until the row is gone,
+    ///    so a request that failed leaves a device that can simply ask again.
+    ///    Erasing first would strand somebody offline with an empty app and a
+    ///    server that still holds everything.
+    /// 2. **A fresh identity next, before anything is awaited.** The old id
+    ///    names nothing now, and `identity::resolve` upserts a row for any
+    ///    well-formed id it is shown — so a single request that slipped out
+    ///    under it would recreate the erased person as an empty stranger. This
+    ///    is the rule signing out follows, for a sharper version of the same
+    ///    reason.
+    /// 3. **Then the local stores**, each of which answers for its own files,
+    ///    keys and in-memory copies — and, in the schedules' case, for the
+    ///    pending notifications iOS is holding on their behalf, which nothing
+    ///    else could take back.
+    /// 4. **Then everything holding a copy of the identity**, which is where the
+    ///    watch is told — and told *after* the erasure rather than before, so
+    ///    the context it is handed carries the fresh id and no personal best,
+    ///    rather than the departing person's.
+    ///
+    /// What survives is the App Store subscription, which is not this app's to
+    /// cancel. `SubscriptionStore.erase` re-derives it from `StoreKit` on the
+    /// way past, and the confirmation that leads here says so plainly.
+    public func deleteAccount() async {
+        failure = nil
+        isWorking = true
+        defer { isWorking = false }
+
+        do {
+            try await accounts.delete()
+        } catch {
+            failure = error.localizedDescription
+            return
+        }
+
+        identity.adopt(UUID())
+        state = .localOnly
+
+        for store in stores {
+            await store.erase()
+        }
+
+        Self.logger.notice("erased the account and everything this device held")
+        await onIdentityChange()
     }
 
     /// Records a failure that happened before there was a token to send — the

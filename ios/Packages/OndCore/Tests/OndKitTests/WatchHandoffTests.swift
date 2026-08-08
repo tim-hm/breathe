@@ -10,13 +10,37 @@ import Testing
 /// silently never receives an identity.
 @Suite("Watch handoff")
 struct WatchHandoffTests {
-    @Test("The context round-trips both fields")
+    @Test("The context round-trips every field")
     func roundTripsEverything() throws {
-        let sent = WatchHandoff(userId: UUID(), boltBestSeconds: 42)
+        let sent = WatchHandoff(userId: UUID(), boltBestSeconds: 42, erasesPriorHistory: true)
 
         let received = try #require(WatchHandoff(dictionary: sent.dictionary))
 
         #expect(received == sent)
+    }
+
+    /// The erasure flag is the one field whose two values are not symmetrical.
+    /// Read as true where the phone meant nothing of the kind, it wipes a
+    /// person's practice off their wrist — so an absent, misspelled or
+    /// mistyped key has to read as false, and does.
+    @Test("An erasure nobody asked for cannot be read out of a context")
+    func defaultsToKeepingTheHistory() throws {
+        let id = UUID()
+        let ordinary: [[String: Any]] = [
+            ["userId": id.uuidString],
+            ["userId": id.uuidString, "erasesPriorHistory": "true"],
+            ["userId": id.uuidString, "erasesPriorHistroy": true],
+        ]
+
+        for context in ordinary {
+            let decoded = try #require(WatchHandoff(dictionary: context))
+            #expect(decoded.erasesPriorHistory == false)
+        }
+
+        #expect(
+            !WatchHandoff(userId: id).dictionary.keys.contains("erasesPriorHistory"),
+            "an ordinary context should not carry the key at all"
+        )
     }
 
     /// The common case for a long time: somebody breathing on the wrist who has

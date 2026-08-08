@@ -165,6 +165,73 @@ struct WatchHandoffOutboxTests {
         #expect(radio.handed.last?.userId == adopted)
     }
 
+    /// The context that tells the wrist a person is gone, rather than merely
+    /// filed under a different name.
+    ///
+    /// It has to survive a relaunch, which is why it is on disk: a watch can be
+    /// off, out of range or unpaired for days after somebody deletes their
+    /// account, and a marker that lived for the process would leave it holding
+    /// their practice with nothing left to tell it otherwise.
+    @Test("A deletion is handed over as an erasure, and goes on being one")
+    func handsOverAnErasureUntilTheIdentityChangesAgain() async throws {
+        let radio = Radio()
+        let identity = StubIdentity(id: UUID())
+        let defaults = try #require(
+            UserDefaults(suiteName: "outbox-tests.erasure.\(UUID().uuidString)")
+        )
+        let outbox = WatchHandoffOutbox(
+            identity: identity,
+            scores: StubScores(),
+            defaults: defaults
+        )
+
+        // What a deletion does, in the order `AccountModel` does it: mint, then
+        // empty everything that holds anything.
+        identity.adopt(UUID())
+        await outbox.erase()
+        await outbox.handOver(radio.accept)
+
+        #expect(radio.handed.last?.erasesPriorHistory == true)
+
+        // A fresh process, which is what a relaunch before the watch is next in
+        // range amounts to.
+        let relaunched = WatchHandoffOutbox(
+            identity: identity,
+            scores: StubScores(),
+            defaults: defaults
+        )
+        await relaunched.handOver(radio.accept)
+
+        #expect(radio.handed.last?.erasesPriorHistory == true)
+    }
+
+    /// The marker is stored as the identity it belongs to rather than as a flag,
+    /// so it expires by itself: the next sign-in or sign-out mints another id
+    /// and the contexts that follow are ordinary again, with nothing anywhere
+    /// having to remember to clear it.
+    @Test("An identity minted after the deletion is handed over as an ordinary one")
+    func stopsErasingOnceTheIdentityMovesOn() async throws {
+        let radio = Radio()
+        let identity = StubIdentity(id: UUID())
+        let defaults = try #require(
+            UserDefaults(suiteName: "outbox-tests.expiry.\(UUID().uuidString)")
+        )
+        let outbox = WatchHandoffOutbox(
+            identity: identity,
+            scores: StubScores(),
+            defaults: defaults
+        )
+
+        identity.adopt(UUID())
+        await outbox.erase()
+        await outbox.handOver(radio.accept)
+
+        identity.adopt(UUID())
+        await outbox.handOver(radio.accept)
+
+        #expect(radio.handed.map(\.erasesPriorHistory) == [true, false])
+    }
+
     /// A worse score is not news. The watch mirrors the best, so a later, shorter
     /// pause leaves the context exactly as it was.
     @Test("A worse score is not news")

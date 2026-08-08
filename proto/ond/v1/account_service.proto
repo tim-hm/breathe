@@ -24,6 +24,22 @@ service AccountService {
   // journey is merged into it and the device adopts its id. A client that
   // ignores the response keeps writing to an identity that no longer exists.
   rpc SignInWithApple(SignInWithAppleRequest) returns (SignInWithAppleResponse);
+
+  // Erases the caller: the `users` row, and everything the schema hangs off it.
+  //
+  // Sessions, controlled-pause scores and the assistant's spend all cascade, and
+  // the profile answers are columns on the row itself. The App Store binding
+  // goes with it too, which is what leaves the transaction free to entitle
+  // whatever identity presents it next — the same release a merge performs.
+  //
+  // It does **not** cancel an App Store subscription. Nothing on this side can:
+  // Apple owns that, and the client says so before it asks.
+  //
+  // The device must adopt a freshly minted identity the moment this returns, and
+  // before it sends anything else. There is nothing here that could refuse the
+  // erased id afterwards — every request upserts the row it names, so one late
+  // call on the old one brings it back as an empty stranger nobody can reach.
+  rpc DeleteAccount(DeleteAccountRequest) returns (DeleteAccountResponse);
 }
 
 message SignInWithAppleRequest {
@@ -46,3 +62,11 @@ message SignInWithAppleResponse {
   // answer applies to it.
   string user_id = 1;
 }
+
+// Empty: the caller is the `ond-user-id` header, and a message carrying an id
+// would be an invitation to erase somebody else's.
+message DeleteAccountRequest {}
+
+// Empty. Nothing survives worth reporting, and a count of deleted rows would be
+// a number no client could act on.
+message DeleteAccountResponse {}

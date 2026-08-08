@@ -7,7 +7,9 @@ use tonic::{Request, Response, Status};
 use crate::features::account::service;
 use crate::identity;
 use crate::proto::ond::v1::account_service_server::AccountService;
-use crate::proto::ond::v1::{SignInWithAppleRequest, SignInWithAppleResponse};
+use crate::proto::ond::v1::{
+    DeleteAccountRequest, DeleteAccountResponse, SignInWithAppleRequest, SignInWithAppleResponse,
+};
 use crate::state::AppState;
 
 pub struct AccountServiceImpl {
@@ -40,6 +42,20 @@ impl AccountService for AccountServiceImpl {
             &identity_token,
         )
         .await?;
+
+        Ok(Response::new(response))
+    }
+
+    /// Requires an identity for the reason the sign-in does, turned around: with
+    /// no header there is nothing to erase, and a call that answered `OK` to one
+    /// would tell somebody their account is gone having touched nothing.
+    async fn delete_account(
+        &self,
+        request: Request<DeleteAccountRequest>,
+    ) -> Result<Response<DeleteAccountResponse>, Status> {
+        let user_id = identity::require(&request)?;
+
+        let response = service::delete_account(&self.state.pool, user_id).await?;
 
         Ok(Response::new(response))
     }

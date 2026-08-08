@@ -13,7 +13,7 @@ import os
 /// A timestamp assumes sessions arrive in order, which they do not — a watch
 /// session recorded on Tuesday can reach the file after Wednesday's — and would
 /// silently skip anything that landed behind the mark.
-public actor SessionSyncQueue {
+public actor SessionSyncQueue: PersonalStore {
     private static let logger = Logger(category: "journey-sync")
 
     private static let acknowledgedSessionsKey = "journey.acknowledgedSessions"
@@ -110,6 +110,24 @@ public actor SessionSyncQueue {
     public func syncAdoptedIdentity() async -> Bool {
         hasRestored = false
         return await sync()
+    }
+
+    /// Forgets what the server acknowledged, because there is no longer a server
+    /// row that acknowledged it.
+    ///
+    /// The ledger is ids and nothing else, but it is ids of this person's
+    /// sessions and it decides what gets sent. Left behind, it would answer for
+    /// an identity that no longer exists: the stores it prunes against are being
+    /// emptied in the same breath, so every entry in it is about practice that
+    /// has just been erased.
+    ///
+    /// The restore is reopened for the same reason it is after a sign-in — the
+    /// question "what does the server hold for me" has a new answer, and this
+    /// queue had already stopped asking.
+    public func erase() async {
+        ledger.forget(Self.acknowledgedSessionsKey)
+        ledger.forget(Self.acknowledgedScoresKey)
+        hasRestored = false
     }
 
     /// Tells the server about sessions deleted here, and forgets the tombstone
@@ -278,6 +296,11 @@ public struct SyncLedger: @unchecked Sendable {
         guard defaults.stringArray(forKey: key) != encoded else { return }
 
         defaults.set(encoded, forKey: key)
+    }
+
+    /// Drops the whole ledger under `key`, rather than pruning it.
+    func forget(_ key: String) {
+        defaults.removeObject(forKey: key)
     }
 
     /// Adds ids without pruning — for sessions that arrived from the server and

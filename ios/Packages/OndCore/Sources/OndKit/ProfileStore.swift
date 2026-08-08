@@ -16,7 +16,7 @@ import os
 /// reads back what the surviving identity already answered.
 @MainActor
 @Observable
-public final class ProfileStore {
+public final class ProfileStore: PersonalStore {
     private static let logger = Logger(category: "profile")
 
     private static let profileKey = "profile.answers"
@@ -179,6 +179,26 @@ public final class ProfileStore {
             Self.logger
                 .notice("profile sync deferred: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    /// Forgets the answers, and that they were ever given.
+    ///
+    /// Onboarding comes back with them, which is the honest consequence rather
+    /// than an oversight: the questions are about this person, the answers have
+    /// just been erased on both sides, and an app that skipped them would be
+    /// remembering that it had met somebody it no longer knows anything about.
+    ///
+    /// The three keys are removed rather than left holding the values the
+    /// assignments above wrote through. An empty profile encoded into
+    /// `UserDefaults` is still a record that somebody was here.
+    public func erase() async {
+        profile = .unanswered
+        syncState = .settled
+        hasCompletedOnboarding = false
+
+        defaults.removeObject(forKey: Self.profileKey)
+        defaults.removeObject(forKey: Self.completedKey)
+        defaults.removeObject(forKey: Self.pendingKey)
     }
 
     private func persist(_ profile: Profile) {

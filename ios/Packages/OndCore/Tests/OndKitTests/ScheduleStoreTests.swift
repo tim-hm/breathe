@@ -110,6 +110,32 @@ struct ScheduleStoreTests {
         #expect(spy.authorizationRequests == 1)
     }
 
+    /// The half of an account deletion that would otherwise be *seen*. A pending
+    /// request lives in the notification centre rather than in this app and
+    /// fires on the lock screen naming the exercise — so a deletion that dropped
+    /// the list alone would have the erased account announcing itself the next
+    /// morning to somebody who was told their practice was gone.
+    ///
+    /// The sync is awaited inside `erase`, unlike every other mutation here,
+    /// which is why this test needs no polling to see it.
+    @Test("Erasing forgets the appointments and takes back the notifications")
+    func erasingUnregistersTheNotifications() async throws {
+        let spy = NotifierSpy()
+        let suite = defaults("erase")
+        let store = ScheduleStore(notifier: spy, defaults: suite)
+        store.add(schedule())
+        try await waitForSync(on: spy, count: 1)
+
+        await store.erase()
+
+        #expect(store.schedules.isEmpty)
+        #expect(spy.synced.last == [], "an empty list is what removes every pending request")
+        #expect(
+            ScheduleStore(notifier: spy, defaults: suite).schedules.isEmpty,
+            "and the routine is not read back on the next launch"
+        )
+    }
+
     @Test("The days label collapses the common shapes")
     func daysLabelReadsNaturally() {
         #expect(schedule(weekdays: Set(Weekday.allCases)).daysLabel == "Every day")

@@ -3,13 +3,19 @@ import OndKit
 import OndUI
 import SwiftUI
 
-/// What this install is, and the two ways to change it.
+/// What this install is, the two ways to change it, and the way out.
 ///
 /// A section rather than a screen: signing in is not a gate and never becomes
 /// one, so it sits in Settings beside the subscription rather than in front of
 /// the app. Local-only is named on the row for the same reason — it is the state
 /// most people will stay in, and a row that only offered a button would read as
 /// something unfinished rather than as a choice already made.
+///
+/// The deletion below it is the promise the privacy policy makes, and what
+/// Guideline 5.1.1(v) requires of an app that offers account creation. Its
+/// confirmation has to say what goes *and* what does not, because the one thing
+/// it cannot touch is the subscription — a person who deletes their account
+/// believing the billing stops has been misled by omission.
 ///
 /// The only place `AuthenticationServices` is touched. Everything the sheet
 /// produces is reduced here to the one string the server acts on, which is what
@@ -18,9 +24,17 @@ import SwiftUI
 struct AccountSection: View {
     let account: AccountModel
 
+    /// Opens the system's own subscription sheet, which `SettingsView` presents.
+    /// A binding rather than a sheet of this section's own, because the
+    /// confirmation below has to point somewhere real when it says that only
+    /// Apple can cancel a subscription — and there is no second place to point.
+    @Binding var isManagingSubscription: Bool
+
     /// The button draws its own chrome and has to be legible against both
     /// palettes, which is a decision the system will not make for it.
     @Environment(\.colorScheme) private var colorScheme
+
+    @State private var isConfirmingDeletion = false
 
     var body: some View {
         Section {
@@ -53,6 +67,42 @@ struct AccountSection: View {
             Text(footer)
         }
         .listRowBackground(Theme.Surface.raised)
+
+        // Its own section, and offered in both states. Signing in was never what
+        // created anything: an anonymous identity has a row, a journey and
+        // possibly a subscription from its first request, so an erasure that
+        // only appeared to signed-in people would be one most people could not
+        // reach.
+        Section {
+            Button("Delete account", role: .destructive) {
+                isConfirmingDeletion = true
+            }
+            .disabled(account.isWorking)
+        }
+        .listRowBackground(Theme.Surface.raised)
+        .confirmationDialog(
+            "Delete your account?",
+            isPresented: $isConfirmingDeletion,
+            titleVisibility: .visible
+        ) {
+            Button("Delete everything", role: .destructive) {
+                Task { await account.deleteAccount() }
+            }
+            // Beside the deletion rather than only named in the message,
+            // because "only Apple can cancel it" is no use to somebody who
+            // then has to go and find where.
+            Button("Manage subscription") {
+                isManagingSubscription = true
+            }
+        } message: {
+            Text(
+                "Your profile, your sessions and your breath-hold history are "
+                    + "erased from this iPhone, from a paired Apple Watch, and from "
+                    + "our servers. It cannot be undone.\n\n"
+                    + "Deleting your account does not cancel your subscription — "
+                    + "only Apple can do that, under Manage Subscription."
+            )
+        }
     }
 
     /// The failure, when there is one, and otherwise what each state means.

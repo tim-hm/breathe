@@ -54,7 +54,7 @@ extension PhoneLink: WCSessionDelegate {
             return
         }
 
-        Task { @MainActor in self.inbox.adopt(handoff) }
+        Task { @MainActor in await self.inbox.adopt(handoff) }
     }
 
     nonisolated func session(
@@ -62,6 +62,6 @@ extension PhoneLink: WCSessionDelegate {
         didReceiveApplicationContext applicationContext: [String: Any]
     ) {
         guard let handoff = WatchHandoff(dictionary: applicationContext) else { return }
-        Task { @MainActor in self.inbox.adopt(handoff) }
+        Task { @MainActor in await self.inbox.adopt(handoff) }
     }
 }

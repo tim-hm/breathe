@@ -33,6 +33,23 @@ public protocol Ond_V1_AccountServiceClientInterface: Sendable {
     /// ignores the response keeps writing to an identity that no longer exists.
     @available(iOS 13, *)
     func `signInWithApple`(request: Ond_V1_SignInWithAppleRequest, headers: Connect.Headers) async -> ResponseMessage<Ond_V1_SignInWithAppleResponse>
+
+    /// Erases the caller: the `users` row, and everything the schema hangs off it.
+    ///
+    /// Sessions, controlled-pause scores and the assistant's spend all cascade, and
+    /// the profile answers are columns on the row itself. The App Store binding
+    /// goes with it too, which is what leaves the transaction free to entitle
+    /// whatever identity presents it next — the same release a merge performs.
+    ///
+    /// It does **not** cancel an App Store subscription. Nothing on this side can:
+    /// Apple owns that, and the client says so before it asks.
+    ///
+    /// The device must adopt a freshly minted identity the moment this returns, and
+    /// before it sends anything else. There is nothing here that could refuse the
+    /// erased id afterwards — every request upserts the row it names, so one late
+    /// call on the old one brings it back as an empty stranger nobody can reach.
+    @available(iOS 13, *)
+    func `deleteAccount`(request: Ond_V1_DeleteAccountRequest, headers: Connect.Headers) async -> ResponseMessage<Ond_V1_DeleteAccountResponse>
 }
 
 /// Concrete implementation of `Ond_V1_AccountServiceClientInterface`.
@@ -48,9 +65,15 @@ public final class Ond_V1_AccountServiceClient: Ond_V1_AccountServiceClientInter
         return await self.client.unary(path: "/ond.v1.AccountService/SignInWithApple", idempotencyLevel: .unknown, request: request, headers: headers)
     }
 
+    @available(iOS 13, *)
+    public func `deleteAccount`(request: Ond_V1_DeleteAccountRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Ond_V1_DeleteAccountResponse> {
+        return await self.client.unary(path: "/ond.v1.AccountService/DeleteAccount", idempotencyLevel: .unknown, request: request, headers: headers)
+    }
+
     public enum Metadata {
         public enum Methods {
             public static let signInWithApple = Connect.MethodSpec(name: "SignInWithApple", service: "ond.v1.AccountService", type: .unary)
+            public static let deleteAccount = Connect.MethodSpec(name: "DeleteAccount", service: "ond.v1.AccountService", type: .unary)
         }
     }
 }

@@ -1,5 +1,5 @@
 //! Business logic — turns a proven Apple account into the identity the device
-//! should carry from now on.
+//! should carry from now on, and erases one on request.
 //!
 //! Receives explicit dependencies (`&PgPool`, `&dyn IdentityTokenVerifier`),
 //! never `Arc<AppState>`, and contains zero raw queries.
@@ -45,4 +45,25 @@ pub async fn sign_in_with_apple(
     Ok(pb::SignInWithAppleResponse {
         user_id: adopted.to_string(),
     })
+}
+
+/// Erases the caller and everything filed under them.
+///
+/// Logged at `info` for the same reason the merge above is: this is the second
+/// of the two destructive things the server does on a client's say-so, and the
+/// row it names will not exist afterwards to be asked about. The id is not
+/// repeated here — `identity::resolve` has already put it on the span, and what
+/// was erased is by definition not something to write down on the way past.
+pub async fn delete_account(
+    pool: &PgPool,
+    caller: UserId,
+) -> Result<pb::DeleteAccountResponse, AccountError> {
+    repository::delete_account(pool, caller).await?;
+
+    tracing::info!(
+        feature = "account",
+        "erased an account at its owner's request"
+    );
+
+    Ok(pb::DeleteAccountResponse {})
 }

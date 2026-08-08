@@ -1,15 +1,50 @@
-//! Account SQL — one column on `users`, and the merge a returning sign-in
-//! performs.
+//! Account SQL — one column on `users`, the merge a returning sign-in performs,
+//! and the erasure a departure does.
 //!
 //! The row's existence is `crate::identity`'s business, which is why nothing
 //! here inserts a user. What it does do that no other repository does is *delete*
-//! one, which is why every statement below runs inside one transaction.
+//! one — which is why the merge runs inside a single transaction, and why the
+//! erasure below explains at length why it needs neither transaction nor lock.
 
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use super::errors::AccountError;
 use crate::identity::UserId;
+
+/// Erases a user row, and with it everything the schema hangs off that row.
+///
+/// One statement, because the schema already says what erasure means. `sessions`
+/// and `bolt_scores` (`0005_journey.sql`) and `assistant_usage`
+/// (`0006_assistant_quota.sql`) are all `ON DELETE CASCADE`, the profile answers
+/// are columns on `users` itself (`0004_users_and_profiles.sql`), and the App
+/// Store binding is two more columns — so it is released here exactly as [`merge`]
+/// releases the identity it folds away, leaving the transaction free to entitle
+/// whoever presents it next.
+///
+/// No transaction and no lock, which is where this parts company with [`merge`].
+/// The lock there exists to stop a concurrent write being cascaded away *while
+/// the row survives* — half a merge is a person whose sessions moved and whose
+/// scores did not. Nothing survives here, so every outcome of that race is the
+/// one the caller asked for: a sync holding `FOR KEY SHARE` on the row makes
+/// this `DELETE` wait, and whatever it committed goes with the cascade.
+///
+/// What this cannot defend against is the request *after* it. `identity::resolve`
+/// upserts a row for any well-formed id, so a client that goes on sending the
+/// erased one recreates it empty — which is why `DeleteAccount` requires the
+/// device to mint a fresh identity before it sends anything else, and why the
+/// e2e suite pins that behaviour rather than leaving it as a remark.
+///
+/// `rows_affected` is not checked. The middleware has just created the row if it
+/// were missing, so the only way to affect none is a second deletion of the same
+/// identity, and "it is gone" is the honest answer to that.
+pub async fn delete_account(pool: &PgPool, caller: UserId) -> Result<(), AccountError> {
+    sqlx::query!("DELETE FROM users WHERE id = $1", caller.0)
+        .execute(pool)
+        .await?;
+
+    Ok(())
+}
 
 /// Binds `apple_user_id` to an identity and returns the one the device should
 /// adopt.

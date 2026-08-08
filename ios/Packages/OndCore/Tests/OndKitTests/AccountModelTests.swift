@@ -35,6 +35,12 @@ private final class FakeAccounts: AccountSyncing {
         bindings.withLock { $0 }
     }
 
+    /// Unreachable from this suite. What a deletion does is pinned in
+    /// `AccountDeletionTests`, over the real stores rather than a double.
+    func delete() async throws {
+        throw AccountRepositoryError.transport("not what this suite is about")
+    }
+
     func signIn(identityToken: String) async throws -> UUID {
         guard let caller = identity.userId() else {
             throw AccountRepositoryError.transport("no identity to bind")
@@ -90,6 +96,9 @@ struct AccountModelTests {
         AccountModel(
             identity: identity,
             accounts: accounts,
+            // Empty on purpose: what a deletion empties is `AccountDeletionTests`,
+            // and signing in or out touches none of it.
+            stores: [],
             defaults: defaults,
             onIdentityChange: onIdentityChange
         )

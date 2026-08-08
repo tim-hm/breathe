@@ -4,7 +4,7 @@ import Foundation
 ///
 /// An actor because the write is read-modify-write and a session ending while
 /// the sync queue is draining the file must not interleave.
-public actor FileSessionStore: SessionRecording, TombstoneStoring {
+public actor FileSessionStore: SessionRecording, TombstoneStoring, PersonalStore {
     private let file: JSONFileStore<SessionRecord>
     private let tombstones: JSONFileStore<UUID>
 
@@ -77,5 +77,18 @@ public actor FileSessionStore: SessionRecording, TombstoneStoring {
     public func forgetTombstones(_ ids: [SessionRecord.ID]) async {
         let forgotten = Set(ids)
         tombstones.save(tombstones.load().filter { !forgotten.contains($0) })
+    }
+
+    /// Both files, because both are about the person: the sessions they
+    /// breathed, and the ids of the ones they deleted.
+    ///
+    /// The tombstones go undrained, which is the right outcome rather than a
+    /// loss. They exist to stop a restore handing a deleted session back, and
+    /// the server they were addressed to no longer holds the account they would
+    /// have named — the deletion the account erasure performs is a superset of
+    /// every deletion waiting in them.
+    public func erase() async {
+        file.erase()
+        tombstones.erase()
     }
 }
