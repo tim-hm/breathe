@@ -52,7 +52,7 @@ public struct TechniqueRepository: TechniqueReading {
             )
         }
 
-        return try message.techniques.map(Technique.init(proto:))
+        return try message.techniques.map { try Technique(proto: $0) }
     }
 
     public func listFoundations() async throws -> [FoundationTopic] {
@@ -69,7 +69,12 @@ public struct TechniqueRepository: TechniqueReading {
 }
 
 extension Technique {
-    init(proto: Ond_V1_Technique) throws {
+    /// - Parameter origin: which service answered. The wire carries no such
+    ///   field — an exercise somebody wrote and a curated one are the same
+    ///   message, deliberately, so that one decoder and one `SessionTimeline`
+    ///   serve both — so the caller states it, and only
+    ///   `UserTechniqueRepository` ever states `.personal`.
+    init(proto: Ond_V1_Technique, origin: TechniqueOrigin = .catalogue) throws {
         guard let goal = TechniqueGoal(proto: proto.goal) else {
             throw TechniqueRepositoryError.malformedResponse(
                 "technique `\(proto.slug)` has unrecognised goal `\(proto.goal)`"
@@ -108,7 +113,8 @@ extension Technique {
             // is one paid catalogue and no plan for a second: everything locked
             // is locked at Plus. Widening that is a proto change, and this is
             // the one line it would land on.
-            requires: proto.requiresSubscription ? .plus : .free
+            requires: proto.requiresSubscription ? .plus : .free,
+            origin: origin
         )
     }
 }
@@ -214,6 +220,19 @@ extension PhaseKind {
         case .exhale: self = .exhale
         case .holdOut: self = .holdOut
         case .unspecified, .UNRECOGNIZED: return nil
+        }
+    }
+
+    /// The outbound direction, used by a technique somebody composed. Beside the
+    /// inbound one for the reason `TechniqueGoal.proto` gives: both halves have
+    /// to change together, and the asymmetry over `unspecified` is only
+    /// reviewable if they sit next to each other.
+    var proto: Ond_V1_PhaseKind {
+        switch self {
+        case .inhale: .inhale
+        case .holdIn: .holdIn
+        case .exhale: .exhale
+        case .holdOut: .holdOut
         }
     }
 }

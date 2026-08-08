@@ -23,6 +23,16 @@ public enum OndClients {
         Ond_V1_TechniqueServiceClient(client: protocolClient(baseURL: baseURL, userId: userId))
     }
 
+    public static func userTechniqueService(
+        baseURL: URL,
+        userId: @escaping @Sendable () -> UUID?
+    ) -> Ond_V1_UserTechniqueServiceClient {
+        Ond_V1_UserTechniqueServiceClient(client: protocolClient(
+            baseURL: baseURL,
+            userId: userId
+        ))
+    }
+
     public static func profileService(
         baseURL: URL,
         userId: @escaping @Sendable () -> UUID?
