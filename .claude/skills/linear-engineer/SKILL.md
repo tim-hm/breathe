@@ -27,16 +27,22 @@ You do not choose what to work on and you do not merge. Both belong to `linear-t
 
    Plus `mise run check:swift` and `mise run test:swift` if anything under `ios/` moved, and `mise run check:diagrams` if anything under `ios/` or `web/` moved. Neither is in `check`, because both need a full Xcode toolchain — and without `check:diagrams` the marketing site keeps drawing a technique the app has since changed.
 
-6. **Simplification pass.** Reread the diff and ask whether a smaller change does the same job. Delete anything the issue did not ask for.
+6. **Simplification pass**, in two parts. The first is about the diff, the second about the design, and the second is the one that gets skipped.
+
+   - **Is it smaller than it needs to be?** Reread the diff and delete anything the issue did not ask for.
+   - **Is it the right shape?** You understand the problem better now than when you started, so ask the question you could not answer then: knowing what you know now, is this how you would build it? A fix that felt hacky while you were writing it is the signal — go back and do the elegant version rather than defending the first one. This does not license gold-plating: the test is whether a different shape is _simpler_, not whether it is more general.
+
+   Say in your report what you considered and rejected, and why. A pass that changed nothing is a fine outcome and worth one line; a pass you cannot describe did not happen.
 7. **Self code-review.** Read the diff as if someone else wrote it, against `CLAUDE.md` §1 — types, doc comments that carry the _why_ on the item, no restatement comments, no commented-out code, no comments narrating the edit.
 8. **Open the PR** through the `gitbutler` skill. Commit subjects are `<prefix>: <description>` under ~72 characters, with the body explaining _why_.
 9. **Move the card to `Ready`** — ready to land — and hand back a report.
 
 ## The report
 
-Three things, plainly:
+Four things, plainly:
 
 - **What was verified** — which command, which test, what output. "Tests pass" is not a report; `mise run check` green plus the new test name is.
+- **What the simplification pass changed** — the alternative shape you weighed and why the one you shipped won. One line if it changed nothing.
 - **What was assumed** — anything the issue did not state that you had to decide.
 - **Any judgment call made** — flag it even if it feels trivial. The tech lead's merge rule treats a flagged ambiguity as an automatic escalation, and that is the point: it is cheaper to have Tim glance at a small call than to find it in production.
 
