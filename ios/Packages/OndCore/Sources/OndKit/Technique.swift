@@ -125,10 +125,15 @@ public struct Technique: Sendable, Identifiable, Hashable, Codable {
     /// list. One for everything cyclic; a person's own preference overrides it
     /// for the session they are starting.
     public let recommendedRounds: Int
-    /// The caution this technique carries, or nil where it carries none.
+    /// The caution to show somebody already breathing this one, or nil where
+    /// there is nothing to say at that moment.
     ///
-    /// Separate from `summary` because it has a second audience: the summary is
-    /// read while choosing, this while breathing.
+    /// Narrower than it reads, and narrower than it used to be. Breathwork's
+    /// general hazards — fainting, water, driving, stopping at lightheadedness —
+    /// are agreed to once in onboarding, so what is left here is only what a
+    /// screen seen weeks earlier does not discharge. Nil for most of the
+    /// catalogue, and a browsing surface that renders it is putting a warning
+    /// back where it was deliberately taken from.
     public let safetyNote: String?
 
     /// The tier this one needs. `.free` for the two the app opens with,
