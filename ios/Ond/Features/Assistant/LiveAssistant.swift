@@ -12,13 +12,13 @@ import OndKit
 /// file: nothing else changes, and neither view has to learn where its
 /// dependency comes from.
 ///
-/// `KeychainUserIdentityStore` reads the same Keychain item `OndApp` does,
-/// so this is the same person — the store is a reader over one shared item, not
-/// a second source of identity.
+/// The identity is `LiveIdentity`'s rather than a store of its own, so this is
+/// the same person *and* the same cache — a sign-in that swaps the id has one
+/// place to swap it.
 enum LiveAssistant {
     static let reading: any AssistantReading = AssistantRepository(
         baseURL: AppConfiguration.apiBaseURL,
-        identity: KeychainUserIdentityStore(),
+        identity: LiveIdentity.store,
         // Asked per request, so withdrawing the opt-in in Settings takes
         // effect on the very next question with no restart.
         healthContext: { await LiveHealth.model.context() }

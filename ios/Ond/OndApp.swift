@@ -5,9 +5,10 @@ import SwiftUI
 @main
 struct OndApp: App {
     /// This install's anonymous id, minted on first use and read from the
-    /// Keychain thereafter. Built here and handed to every repository, so one
-    /// person is one identity across the whole app.
-    private let identity: any UserIdentityStore = KeychainUserIdentityStore()
+    /// Keychain thereafter. Handed to every repository, so one person is one
+    /// identity across the whole app — and one *store*, so a sign-in that swaps
+    /// the id is not left racing a second cache. See `LiveIdentity`.
+    private let identity: any UserIdentityStore = LiveIdentity.store
 
     /// One store for the whole app: every session ends up in the same file, and
     /// the journey's sync has one place to drain. Concrete rather than `any
@@ -50,6 +51,11 @@ struct OndApp: App {
     /// Holds the onboarding answers and knows whether they have been given.
     @State private var profiles: ProfileStore
 
+    /// Signing in with Apple, signing out, and staying local-only. In the
+    /// environment because the rows that offer it are in Settings, two pushes
+    /// below a tab root that has no use for it.
+    @State private var account: AccountModel
+
     /// Separate from `profiles.hasCompletedOnboarding`, which is set the moment
     /// the last answer is stored — a screen that dismissed itself on that flag
     /// would vanish before the person saw the last card.
@@ -83,7 +89,8 @@ struct OndApp: App {
         let identity = identity
         let baseURL = AppConfiguration.apiBaseURL
         recorder = MindfulMinutesRecorder(wrapping: sessions, health: HealthKitHealthStore())
-        watch = WatchLink(outbox: WatchHandoffOutbox(identity: identity, scores: scores))
+        let watch = WatchLink(outbox: WatchHandoffOutbox(identity: identity, scores: scores))
+        self.watch = watch
 
         let techniques = CachedTechniqueRepository(
             caching: TechniqueRepository(baseURL: baseURL, identity: identity)
@@ -107,18 +114,32 @@ struct OndApp: App {
         let journeys = JourneyRepository(baseURL: baseURL, identity: identity)
         let sessions = sessions
         let scores = scores
-        _journey = State(
-            wrappedValue: JourneyModel(
+        let journey = JourneyModel(
+            sessions: sessions,
+            scores: scores,
+            journeys: journeys,
+            queue: SessionSyncQueue(
                 sessions: sessions,
                 scores: scores,
                 journeys: journeys,
-                queue: SessionSyncQueue(
-                    sessions: sessions,
-                    scores: scores,
-                    journeys: journeys,
-                    tombstones: sessions
-                )
+                tombstones: sessions
             )
+        )
+        _journey = State(wrappedValue: journey)
+
+        _account = State(
+            wrappedValue: AccountModel(
+                identity: identity,
+                accounts: AccountRepository(baseURL: baseURL, identity: identity)
+            ) {
+                // The two things that hold their own copy of the identity: the
+                // watch, which was handed one and caches it, and the restore,
+                // which has already walked the history of whoever this device
+                // used to be. Both are told here rather than at the sign-in
+                // button, so signing out fans out exactly as signing in does.
+                watch.push()
+                await journey.syncAdoptedIdentity()
+            }
         )
     }
 
@@ -140,6 +161,7 @@ struct OndApp: App {
             // system, which keeps the default behaviour exactly today's.
             .preferredColorScheme(settings.appearance.colorScheme)
             .environment(settings)
+            .environment(account)
             .environment(plus)
             .environment(safetyNotes)
             .environment(schedules)

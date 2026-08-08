@@ -18,6 +18,10 @@ import SwiftUI
 /// this row now names the tier unconditionally and opens the paywall to
 /// change it.
 ///
+/// The account rows are here on the same reasoning and one more: signing in is
+/// never a gate, so the only place it can live is where somebody goes looking
+/// for it.
+///
 /// The two legal links below it repeat the paywall's pair on purpose. App
 /// Review expects both reachable outside a purchase flow, and somebody
 /// deciding whether to trust the app with their breathing history should not
@@ -33,6 +37,7 @@ struct SettingsView: View {
     @Environment(ScheduleStore.self) private var schedules
     @Environment(SessionSettings.self) private var settings
     @Environment(SubscriptionStore.self) private var plus
+    @Environment(AccountModel.self) private var account
 
     @State private var isShowingPaywall = false
     @State private var isManagingSubscription = false
@@ -131,6 +136,8 @@ struct SettingsView: View {
                 }
             }
             .listRowBackground(Theme.Surface.raised)
+
+            AccountSection(account: account)
 
             Section {
                 Link("Privacy", destination: LegalLinks.privacyPolicy)
