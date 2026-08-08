@@ -3,10 +3,14 @@ import Foundation
 /// Where this build points its API.
 ///
 /// Three sources, most deliberate first: the `OND_API_BASE_URL` environment
-/// variable, then the URL `ios:gen` bakes into the Info.plist, then localhost.
-/// The environment variable only exists while Xcode's debugger launches the app
-/// — an app opened from the home screen never sees it — which is why a physical
-/// device cannot rely on it and reads the baked URL instead.
+/// variable, then the URL `ios:gen` bakes into the Info.plist, then the default
+/// for the build configuration. The environment variable only exists while
+/// Xcode's debugger launches the app — an app opened from the home screen never
+/// sees it — which is why a physical device cannot rely on it and reads the
+/// baked URL instead. Both of the first two are development affordances: the
+/// baked URL compiles away in Release, and no app launched from a home screen
+/// or from TestFlight has an environment to override it with — so a shipped
+/// build resolves to the configuration default and nothing else.
 enum AppConfiguration {
     // Where a build points when nothing more deliberate says otherwise.
     //
