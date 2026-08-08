@@ -8,10 +8,12 @@ import Testing
 private final class FakeStoreFront: StoreFront, @unchecked Sendable {
     private let lock = NSLock()
     private var entitlements: [SubscriptionTransaction]
+    private var purchaseError: (any Error)?
     private(set) var purchased: [SubscriptionTier] = []
 
-    init(entitlements: [SubscriptionTransaction] = []) {
+    init(entitlements: [SubscriptionTransaction] = [], failingWith error: (any Error)? = nil) {
         self.entitlements = entitlements
+        purchaseError = error
     }
 
     func set(_ entitlements: [SubscriptionTransaction]) {
@@ -34,7 +36,15 @@ private final class FakeStoreFront: StoreFront, @unchecked Sendable {
     }
 
     func purchase(_ tier: SubscriptionTier) async throws -> PurchaseOutcome {
-        lock.withLock { purchased.append(tier) }
+        let error = lock.withLock {
+            purchased.append(tier)
+            return purchaseError
+        }
+
+        if let error {
+            throw error
+        }
+
         return .cancelled
     }
 
@@ -282,6 +292,45 @@ struct SubscriptionStoreTests {
         await store.refresh()
         #expect(store.tier == .free)
         #expect(relaunch(over: defaults, front: front).tier == .free)
+    }
+
+    /// The regression this suite exists for. A build the App Store has no
+    /// products for cannot sell anything, and the failure has to be legible: it
+    /// once looked exactly like a cancelled purchase, so a paywall whose buttons
+    /// did nothing read as a broken subscription rather than as a run launched
+    /// without its `StoreKit` configuration.
+    @Test("A build with nothing on sale says so rather than looking cancelled")
+    func nothingOnSaleIsItsOwnState() async {
+        let front = FakeStoreFront(failingWith: StoreFrontError.productUnavailable)
+        let store = SubscriptionStore(
+            front: front,
+            entitlements: RecordingEntitlements(),
+            defaults: scratchDefaults()
+        )
+
+        await store.purchase(.plus)
+
+        #expect(store.isUnavailable)
+        #expect(!store.isBusy, "the button comes back, because retrying is free")
+        #expect(store.tier == .free, "and nothing was granted")
+    }
+
+    /// The other half of the same rule: an ordinary failure stays silent, so the
+    /// notice above means what it says rather than appearing on every dropped
+    /// connection.
+    @Test("An ordinary purchase failure leaves the paywall as it was")
+    func anOrdinaryFailureIsSilent() async {
+        let front = FakeStoreFront(failingWith: StoreFrontError.unverified)
+        let store = SubscriptionStore(
+            front: front,
+            entitlements: RecordingEntitlements(),
+            defaults: scratchDefaults()
+        )
+
+        await store.purchase(.plus)
+
+        #expect(!store.isUnavailable)
+        #expect(store.purchaseState == .idle)
     }
 
     /// A fresh store over the same defaults, which is what a cold launch is.

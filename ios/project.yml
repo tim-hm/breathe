@@ -210,6 +210,12 @@ schemes:
       # nothing else — a device or TestFlight build resolves products from the
       # real App Store, because the scheme is not what ships.
       #
+      # This line only reaches a run Xcode itself started. A build installed and
+      # launched by `simctl` gets no scheme at all and therefore no products, so
+      # `mise run ios:sim` copies the file to the simulator the way Xcode does;
+      # a hand-rolled `simctl launch` does not, and every purchase under one
+      # fails as `productUnavailable`.
+      #
       # Note what a simulator purchase does *not* exercise: transactions minted
       # here are signed by a per-machine Xcode test certificate, so the server
       # refuses them. That is the offline-first design working — the UI is
