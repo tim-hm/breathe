@@ -27,7 +27,6 @@ struct TechniqueDetailView: View {
             VStack(alignment: .leading, spacing: Theme.Spacing.loose) {
                 header
                 BreathRhythmChart(technique: dialled)
-                SafetyNoteCard(technique: technique)
                 stageTitles(of: dialled)
                 lengthControl(of: dialled)
                 advanced(of: dialled)
@@ -36,8 +35,7 @@ struct TechniqueDetailView: View {
         }
         .paletteGround()
         // Begin sits above the tab bar rather than at the end of the content,
-        // so the one action this screen exists for is always in reach — on a
-        // technique with a safety note it used to be below the fold. The
+        // so the one action this screen exists for is always in reach. The
         // content scrolls under it.
         .safeAreaInset(edge: .bottom) { beginBar(playing: dialled) }
         .navigationTitle(technique.name)

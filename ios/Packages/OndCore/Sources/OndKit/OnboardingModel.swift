@@ -29,6 +29,14 @@ public final class OnboardingModel {
         /// reads as a preference rather than as the price of entry, and last so
         /// that saving happens on the way out of it.
         case reminders
+        /// The safety terms, and the one thing in this flow nobody may pass by.
+        ///
+        /// Last, immediately before the first session, because that is where a
+        /// warning is worth most — the same argument that used to keep a caution
+        /// on the exercise screens, applied once. Not a question: it asks
+        /// nothing about the person, it appears in no progress indicator, and
+        /// `Skip` refuses it.
+        case safety
         /// Everything is saved; the way out.
         case done
 
@@ -36,9 +44,10 @@ public final class OnboardingModel {
             self
         }
 
-        /// The steps that ask something — what a step indicator counts.
-        /// `welcome` is a greeting and `done` a confirmation; neither is a
-        /// question to be part-way through.
+        /// The steps that ask something — what a step indicator counts, and the
+        /// steps a person may move back through. `welcome` is a greeting,
+        /// `safety` a condition of use, and `done` a confirmation; none of the
+        /// three is a question to be part-way through.
         public static let questions: [Step] = [.goals, .experience, .about, .reminders]
     }
 
@@ -68,6 +77,7 @@ public final class OnboardingModel {
     private let store: ProfileStore
     private let schedules: ScheduleStore?
     private let catalogue: TechniqueListModel?
+    private let consent: SafetyConsentStore
 
     /// - Parameters:
     ///   - schedules: where a reminder the person asked for lands. Absent, the
@@ -75,14 +85,26 @@ public final class OnboardingModel {
     ///   - catalogue: what that reminder opens with. Also absent-able, and for
     ///     the same reason: onboarding has to finish with no network, and the
     ///     catalogue is a fetch.
+    ///   - consent: where agreement to the safety terms is recorded. The one
+    ///     collaborator here with no optional form and no do-nothing default: a
+    ///     consent step that records nothing satisfies nothing, and an app
+    ///     composing this without one would look identical until somebody asked
+    ///     what a person had agreed to.
     public init(
         store: ProfileStore,
         schedules: ScheduleStore? = nil,
-        catalogue: TechniqueListModel? = nil
+        catalogue: TechniqueListModel? = nil,
+        consent: SafetyConsentStore = SafetyConsentStore()
     ) {
         self.store = store
         self.schedules = schedules
         self.catalogue = catalogue
+        self.consent = consent
+    }
+
+    /// The safety terms this flow puts on screen.
+    public var safetyTerms: SafetyConsent {
+        consent.terms
     }
 
     /// Whether this person has told the flow anything yet.
@@ -176,6 +198,13 @@ public final class OnboardingModel {
             Task { await store.syncIfNeeded() }
         }
 
+        // Written on the way out of the step rather than when the screen
+        // appears, because pressing the button is the agreement — reaching the
+        // screen is not.
+        if step == .safety {
+            consent.record()
+        }
+
         guard let next = Step(rawValue: step.rawValue + 1) else { return }
         step = next
     }
@@ -225,12 +254,14 @@ public final class OnboardingModel {
 
     /// Whether there is a question behind this one to return to.
     ///
-    /// False on the welcome screen, which has nothing before it, and on `.done`,
-    /// where the answers are already saved and going back would offer to change
-    /// something that has been sent. Exposed rather than left to `back()` alone
-    /// because the view needs the same answer for the button it draws.
+    /// True exactly on the questions. The welcome screen has nothing before it;
+    /// `.safety` and `.done` both sit after the save, where going back would
+    /// offer to change something already stored and sent — and where a second
+    /// pass over `.reminders` would run its one-shot reminder seeding again.
+    /// Exposed rather than left to `back()` alone because the view needs the
+    /// same answer for the button it draws.
     public var canGoBack: Bool {
-        step != .welcome && step != .done
+        Step.questions.contains(step)
     }
 
     public func back() {

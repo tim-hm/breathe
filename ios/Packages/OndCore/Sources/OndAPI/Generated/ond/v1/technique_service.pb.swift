@@ -224,10 +224,15 @@ public nonisolated struct Ond_V1_Technique: Sendable {
   /// exists to store it against.
   public var recommendedRounds: UInt32 = 0
 
-  /// The caution this technique carries, or empty where it carries none.
+  /// The caution to show somebody who is already breathing this one, or empty
+  /// where there is nothing to say at that moment.
   ///
-  /// Separate from `summary` because it has to reach the person who is already
-  /// breathing: a client shows the summary when choosing and this while doing.
+  /// Narrower than it reads. The general hazards of breathwork — fainting,
+  /// water, driving, stopping at lightheadedness — are consented to once in a
+  /// client's onboarding, so this carries only what a screen seen weeks earlier
+  /// does not discharge. Empty for most of the catalogue, and a client that
+  /// renders it while somebody is *choosing* is putting a warning back where it
+  /// was deliberately taken from.
   public var safetyNote: String = String()
 
   /// Whether breathing this one needs a subscription.

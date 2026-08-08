@@ -76,8 +76,21 @@ struct TechniqueSeed {
     slug: &'static str,
     name: &'static str,
     summary: &'static str,
-    /// The caution this technique carries, empty where it carries none. Shown
-    /// while breathing, not only while choosing.
+    /// The caution shown to somebody who is already breathing this one, empty
+    /// where there is nothing to say at that moment.
+    ///
+    /// Not the place for general breathwork advice: every client now asks once,
+    /// in onboarding, for consent to the hazards the whole catalogue shares —
+    /// fainting, water, driving, stopping at lightheadedness. What survives here
+    /// is only what a screen seen weeks earlier does not discharge, which is why
+    /// two techniques carry a note and seven carry none. `4-7-8` and the
+    /// extended exhale used to warn about drowsiness and lost it deliberately:
+    /// drowsiness arrives slowly enough to be somebody's own problem, and
+    /// fainting in a bath does not.
+    ///
+    /// Filling this in is therefore a decision that a caution must interrupt a
+    /// session, and the field is the only thing that decides it — no view
+    /// anywhere names a slug.
     safety_note: &'static str,
     goal: TechniqueGoal,
     stages: &'static [StageSeed],
@@ -93,9 +106,11 @@ struct TechniqueSeed {
     /// direction.
     ///
     /// Two are free, and which two is a product decision rather than a
-    /// technical one. Both carry an empty `safety_note` — the free tier is the
-    /// part of the app nobody is guided through, so it holds only techniques
-    /// that cannot go wrong. Between them they cover the two things somebody
+    /// technical one. Both carry an empty `safety_note`, which still means
+    /// something now that the consent lives in onboarding: the free pair is the
+    /// path somebody walks in March on the strength of a screen they tapped
+    /// through in January, so it holds nothing whose caution has to interrupt a
+    /// session. Between them they cover the two things somebody
     /// downloads a breathing app for: a couple of minutes to settle before
     /// something (box breathing), and thirty seconds to come down from
     /// something (the physiological sigh). Somebody who never pays still has an
@@ -190,7 +205,7 @@ const TECHNIQUES: &[TechniqueSeed] = &[
         name: "4-7-8 Breathing",
         summary: "Inhale for four, hold for seven, exhale for eight. The long exhale is doing the \
                   work; if the hold feels strained, shorten all three and keep the ratio.",
-        safety_note: "Meant to make you drowsy. Somewhere you can stay put, not behind a wheel.",
+        safety_note: "",
         goal: TechniqueGoal::Sleep,
         stages: &[stage(
             &[
@@ -211,7 +226,7 @@ const TECHNIQUES: &[TechniqueSeed] = &[
         summary: "In for four, out for six. The same lever 4-7-8 pulls — an out-breath longer \
                   than the in-breath — with no hold to strain against. Stretch the exhale towards \
                   eight when six stops feeling like enough.",
-        safety_note: "Meant to make you drowsy. Somewhere you can stay put, not behind a wheel.",
+        safety_note: "",
         goal: TechniqueGoal::Sleep,
         stages: &[stage(
             &[
@@ -677,10 +692,12 @@ mod tests {
     /// struct takes the app's whole free experience away, and a `false` gives
     /// the catalogue away.
     ///
-    /// The safety half is the one worth stating out loud: nobody is guided
-    /// through the free tier, so it may only hold techniques that carry no
-    /// caution. Anything with a `safety_note` is a technique somebody should
-    /// meet after deciding this app is for them.
+    /// The safety half survived the move to a single consent screen, with its
+    /// reasoning rewritten rather than its assertion weakened. A `safety_note`
+    /// now means "this one can hurt you mid-breath", and the free pair is
+    /// exactly the path somebody takes months after tapping through the consent
+    /// — the one journey through the app that must not depend on that screen
+    /// having been read.
     #[test]
     fn the_free_techniques_are_the_two_that_cannot_go_wrong() {
         let mut free = Vec::new();
@@ -816,20 +833,30 @@ mod tests {
         );
     }
 
-    /// The strongest safety framing in the app belongs to the one technique that
-    /// can make someone faint. Losing it to a copy edit is the regression here.
+    /// The strongest safety framing in the app belongs to the two techniques
+    /// that can make someone faint. Losing it to a copy edit is the regression
+    /// here, and it is the reason these phrases are pinned rather than the
+    /// sentences: the wording may be improved, the hazards may not disappear.
+    ///
+    /// The list is asserted in both directions. A missing note is a warning lost
+    /// at the moment of risk; an extra one is a session interrupted by advice
+    /// the consent screen already gave, which is the drift that put a caution on
+    /// every screen in the first place.
     #[test]
     fn the_contraindicated_techniques_carry_their_warnings() {
+        let carry_a_note: Vec<_> = TECHNIQUES
+            .iter()
+            .filter(|technique| !technique.safety_note.is_empty())
+            .map(|technique| technique.slug)
+            .collect();
+        assert_eq!(carry_a_note, vec!["bellows-breath", WIM_HOF]);
+
         for slug in [WIM_HOF, "bellows-breath"] {
             let technique = TECHNIQUES
                 .iter()
                 .find(|technique| technique.slug == slug)
                 .unwrap_or_else(|| panic!("the catalogue contains `{slug}`"));
 
-            assert!(
-                !technique.safety_note.is_empty(),
-                "`{slug}` carries no safety note"
-            );
             for phrase in ["water", "driv"] {
                 assert!(
                     technique.safety_note.contains(phrase),

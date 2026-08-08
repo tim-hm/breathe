@@ -219,6 +219,41 @@ struct OnboardingFlowTests {
         #expect(writer.sent.first?.experienceLevel == .occasional)
     }
 
+    /// The safety terms are the one step in this flow nobody may pass by, and
+    /// the only one that leaves a record of having been seen. Reaching the
+    /// screen is not agreeing to it — the record is written by the button.
+    @Test("The safety step is a wall, and agreeing to it is recorded")
+    func recordsSafetyConsent() {
+        let store = ProfileStore(profiles: RecordingWriter(), defaults: defaults("consent"))
+        let consent = SafetyConsentStore(defaults: defaults("consent-record"))
+        let model = OnboardingModel(store: store, consent: consent)
+
+        model.advance()
+        model.toggle(.calm)
+        model.advance()
+        model.experienceLevel = .new
+        model.advance()
+        model.advance()
+        model.advance()
+
+        #expect(model.step == .safety)
+        #expect(consent.needsConsent, "arriving at the screen is not agreeing to it")
+
+        #expect(!model.canSkip, "the safety terms have no way around them")
+        model.skip()
+        #expect(model.step == .safety)
+
+        #expect(!model.canGoBack, "the answers behind this screen are already saved")
+        model.back()
+        #expect(model.step == .safety)
+
+        model.advance()
+
+        #expect(model.step == .done)
+        #expect(!consent.needsConsent)
+        #expect(consent.agreed?.text == SafetyConsent.current.text)
+    }
+
     /// A second launch must not ask the questions again, and must not re-send
     /// answers the server already has.
     @Test("A completed profile survives a relaunch")

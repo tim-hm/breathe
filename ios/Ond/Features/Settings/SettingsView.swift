@@ -99,7 +99,7 @@ struct SettingsView: View {
                 Text(
                     "Full guidance keeps the instruction, the countdown, and any "
                         + "hints on screen. Just the visuals leaves the orb to guide "
-                        + "you. Safety notes always show."
+                        + "you. Where an exercise carries a caution, it shows either way."
                 )
             }
             .listRowBackground(Theme.Surface.raised)

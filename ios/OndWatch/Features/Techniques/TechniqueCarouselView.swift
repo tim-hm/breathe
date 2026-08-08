@@ -73,11 +73,6 @@ struct TechniqueCarouselView: View {
             TechniqueGlyph(technique: technique)
                 .frame(height: 76)
                 .padding(.horizontal, Theme.Spacing.close)
-                .overlay(alignment: .topTrailing) {
-                    if technique.safetyNote != nil {
-                        cautionBadge
-                    }
-                }
 
             VStack(spacing: 0) {
                 Text(technique.name)
@@ -118,17 +113,6 @@ struct TechniqueCarouselView: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Begin \(technique.name)")
         .accessibilityHint(technique.safetyNote == nil ? "" : "Shows a caution first")
-    }
-
-    /// A marker, not the caution itself. The longest one in the catalogue is
-    /// eight lines on this screen and there is no honest way to abbreviate a
-    /// contraindication, so the page says there is one and `CautionView` says
-    /// what it is.
-    private var cautionBadge: some View {
-        Image(systemName: "exclamationmark.triangle.fill")
-            .font(.caption2)
-            .foregroundStyle(Theme.Accent.caution)
-            .accessibilityHidden(true)
     }
 
     /// Built at the tap rather than held: a session is a one-shot object, and

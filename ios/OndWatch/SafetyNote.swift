@@ -9,9 +9,11 @@ import SwiftUI
 /// no card. One note taking a font, a card flag and a wrap flag would be a worse
 /// type than two that each say one thing.
 ///
-/// Shown while choosing and not while breathing — the phone repeats it
-/// in-session because it has the room, and a watch face given over to a warning
-/// is a watch face nobody can read the phase off.
+/// `CautionView` is the only place it appears: the screen between choosing and
+/// breathing, which is as close to the moment of risk as a wrist gets. The phone
+/// puts the same words under its breath guide because it has the room, and a
+/// watch face given over to a warning is a watch face nobody can read the phase
+/// off.
 struct SafetyNote: View {
     let technique: Technique
 
