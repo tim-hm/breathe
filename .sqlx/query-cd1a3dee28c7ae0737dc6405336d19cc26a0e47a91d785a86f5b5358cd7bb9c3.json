@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO user_techniques (user_id, name, goal, rounds)\n         VALUES ($1, $2, $3, $4)\n         RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "user_techniques",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        {
+          "Custom": {
+            "name": "technique_goal",
+            "kind": {
+              "Enum": [
+                "CALM",
+                "SLEEP",
+                "ENERGY",
+                "RESET",
+                "FOCUS"
+              ]
+            }
+          }
+        },
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "cd1a3dee28c7ae0737dc6405336d19cc26a0e47a91d785a86f5b5358cd7bb9c3"
+}

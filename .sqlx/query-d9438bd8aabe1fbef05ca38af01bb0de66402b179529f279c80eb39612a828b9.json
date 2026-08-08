@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT s.technique_id, s.ordinal, s.cycles\n          FROM user_technique_stages s\n          JOIN user_techniques t ON t.id = s.technique_id\n          WHERE t.user_id = $1\n          ORDER BY s.technique_id, s.ordinal",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "technique_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "user_technique_stages",
+            "name": "technique_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "ordinal",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "user_technique_stages",
+            "name": "ordinal"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "cycles",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "user_technique_stages",
+            "name": "cycles"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d9438bd8aabe1fbef05ca38af01bb0de66402b179529f279c80eb39612a828b9"
+}

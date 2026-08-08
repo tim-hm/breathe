@@ -15,6 +15,7 @@ const SERVICE_PROTOS: &[&str] = &[
     "../../proto/ond/v1/journey_service.proto",
     "../../proto/ond/v1/profile_service.proto",
     "../../proto/ond/v1/technique_service.proto",
+    "../../proto/ond/v1/user_technique_service.proto",
 ];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

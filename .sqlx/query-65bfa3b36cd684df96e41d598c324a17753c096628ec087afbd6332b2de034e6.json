@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n            p.kind AS \"kind: PhaseKind\",\n            MIN(p.min_duration_ms) AS \"min_duration_ms!\",\n            MAX(p.max_duration_ms) AS \"max_duration_ms!\"\n         FROM technique_phases p\n         JOIN technique_stages s\n           ON s.technique_id = p.technique_id AND s.ordinal = p.stage_ordinal\n         WHERE NOT s.open_ended\n         GROUP BY p.kind\n         ORDER BY p.kind",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "kind: PhaseKind",
+        "type_info": {
+          "Custom": {
+            "name": "phase_kind",
+            "kind": {
+              "Enum": [
+                "INHALE",
+                "HOLD_IN",
+                "EXHALE",
+                "HOLD_OUT"
+              ]
+            }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "technique_phases",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "min_duration_ms!",
+        "type_info": "Int4",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "max_duration_ms!",
+        "type_info": "Int4",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "65bfa3b36cd684df96e41d598c324a17753c096628ec087afbd6332b2de034e6"
+}

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO user_technique_stages (technique_id, ordinal, cycles)\n         SELECT $1, s.ordinal, s.cycles\n         FROM UNNEST($2::integer[], $3::integer[]) AS s(ordinal, cycles)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4Array",
+        "Int4Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8e69946e80d2e183239fc68afae9b56c22f0ff7e9d61394b260a70ec54624322"
+}

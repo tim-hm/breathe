@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM user_technique_stages WHERE technique_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cd1d9dbe5dd8c524ad2cacfe830d493c842a3737896c3353d71a7e28700a7d50"
+}

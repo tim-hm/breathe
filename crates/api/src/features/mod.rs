@@ -7,3 +7,4 @@ pub mod entitlement;
 pub mod journey;
 pub mod profile;
 pub mod technique;
+pub mod user_technique;
