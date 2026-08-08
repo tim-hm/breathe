@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO assistant_usage (user_id, usage_date, calls)\n         VALUES ($1, CURRENT_DATE - $2::integer, $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "133f7486272d1e3c775605a6bca061052e8e3e5a4ceff936112f59ed17362236"
+}

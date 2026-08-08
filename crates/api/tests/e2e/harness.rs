@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
+use api::account::{IdentityTokenVerifier, VerificationError, VerifiedIdentity};
 use api::assistant::{
     DisabledModelClient, ModelClient, ModelError, ModelRequest, ModelStream, daily_model_calls,
 };
@@ -102,7 +103,12 @@ impl TestDatabase {
     /// model is the one thing that varies, and twenty unrelated tests should not
     /// carry it.
     pub fn app_with_model(&self, assistant: Arc<dyn ModelClient>) -> Router {
-        build_app_with(self.pool.clone(), assistant, Arc::new(AppStoreVerifier))
+        build_app_with(
+            self.pool.clone(),
+            assistant,
+            Arc::new(AppStoreVerifier),
+            ScriptedIdentityVerifier::refusing(),
+        )
     }
 
     /// The same router with a scripted App Store verifier behind the seam.
@@ -116,6 +122,22 @@ impl TestDatabase {
             self.pool.clone(),
             Arc::new(DisabledModelClient),
             entitlement,
+            ScriptedIdentityVerifier::refusing(),
+        )
+    }
+
+    /// The same router with a scripted Sign in with Apple verifier behind the
+    /// seam.
+    ///
+    /// The third of the same pairing, and the one where the seam is load-bearing
+    /// twice over: no test can hold a token Apple signed, *and* the real verifier
+    /// would go and ask Apple for the key to check it with.
+    pub fn app_with_identity(&self, account: Arc<dyn IdentityTokenVerifier>) -> Router {
+        build_app_with(
+            self.pool.clone(),
+            Arc::new(DisabledModelClient),
+            Arc::new(AppStoreVerifier),
+            account,
         )
     }
 }
@@ -247,6 +269,48 @@ impl ModelClient for ScriptedModel {
     }
 }
 
+/// A Sign in with Apple verifier that knows a fixed set of tokens and refuses
+/// everything else.
+///
+/// Keyed on the token string, so a test can submit "the same credential" twice
+/// and mean it. In the harness rather than in the account suite because every
+/// router this file builds needs one: the real verifier fetches Apple's signing
+/// keys over the network, and a default that could do that is a suite that fails
+/// on a train.
+pub struct ScriptedIdentityVerifier {
+    /// Token to the Apple account it proves.
+    identities: HashMap<String, String>,
+}
+
+impl ScriptedIdentityVerifier {
+    pub fn with(tokens: Vec<(&str, &str)>) -> Arc<Self> {
+        Arc::new(Self {
+            identities: tokens
+                .into_iter()
+                .map(|(token, apple_user_id)| (token.to_owned(), apple_user_id.to_owned()))
+                .collect(),
+        })
+    }
+
+    /// The default for every suite that is not about signing in: it refuses
+    /// every token, and reaches nothing to do it.
+    pub fn refusing() -> Arc<Self> {
+        Self::with(vec![])
+    }
+}
+
+#[tonic::async_trait]
+impl IdentityTokenVerifier for ScriptedIdentityVerifier {
+    async fn verify(&self, identity_token: &str) -> Result<VerifiedIdentity, VerificationError> {
+        self.identities
+            .get(identity_token)
+            .map(|apple_user_id| VerifiedIdentity {
+                apple_user_id: apple_user_id.clone(),
+            })
+            .ok_or_else(|| VerificationError::Untrusted("scripted rejection".to_owned()))
+    }
+}
+
 /// Assembles the production router over an arbitrary pool.
 ///
 /// Separate from [`TestDatabase::app`] so a test can supply a pool that is
@@ -256,14 +320,16 @@ pub fn build_app(pool: PgPool) -> Router {
         pool,
         Arc::new(DisabledModelClient),
         Arc::new(AppStoreVerifier),
+        ScriptedIdentityVerifier::refusing(),
     )
 }
 
-/// [`build_app`], plus both of the seams a deployment chooses at startup.
+/// [`build_app`], plus all three of the seams a deployment chooses at startup.
 pub fn build_app_with(
     pool: PgPool,
     assistant: Arc<dyn ModelClient>,
     entitlement: Arc<dyn TransactionVerifier>,
+    account: Arc<dyn IdentityTokenVerifier>,
 ) -> Router {
     let config = Config {
         environment: Environment::Dev,
@@ -276,7 +342,7 @@ pub fn build_app_with(
         openrouter_api_key: None,
     };
 
-    api::build_app(AppState::new(pool, config, assistant, entitlement))
+    api::build_app(AppState::new(pool, config, assistant, entitlement, account))
         .expect("the router assembles")
 }
 

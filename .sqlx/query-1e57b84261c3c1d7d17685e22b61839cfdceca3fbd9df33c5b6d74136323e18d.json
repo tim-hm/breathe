@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT client_session_id, technique_slug FROM sessions\n          WHERE user_id = $1 ORDER BY technique_slug",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "client_session_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "sessions",
+            "name": "client_session_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "technique_slug",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "sessions",
+            "name": "technique_slug"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "1e57b84261c3c1d7d17685e22b61839cfdceca3fbd9df33c5b6d74136323e18d"
+}

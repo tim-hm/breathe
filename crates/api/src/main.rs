@@ -7,6 +7,7 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use api::account::AppleIdentityVerifier;
 use api::entitlement::AppStoreVerifier;
 use api::state::AppState;
 use api::{assistant, config, http, obs};
@@ -44,10 +45,23 @@ async fn main() -> Result<()> {
     // model seam this process runs. Logged there, either way.
     let assistant = assistant::from_config(&config);
 
-    // No equivalent choice for the App Store: the trust anchor is compiled in,
-    // so every environment runs the same verifier and there is no configuration
-    // that could relax it.
-    let state = AppState::new(pool, config, assistant, Arc::new(AppStoreVerifier));
+    // No equivalent choice for either Apple seam: the App Store's trust anchor
+    // is compiled in and Sign in with Apple's keys are fetched from a fixed
+    // endpoint, so every environment runs the same two verifiers and there is no
+    // configuration that could relax either. The identity verifier is built
+    // rather than named because it owns an HTTP client, and a process whose TLS
+    // stack will not initialise cannot reach Postgres either — so the failure is
+    // fatal rather than something to degrade around.
+    let account =
+        AppleIdentityVerifier::new().context("failed to build the Apple identity verifier")?;
+
+    let state = AppState::new(
+        pool,
+        config,
+        assistant,
+        Arc::new(AppStoreVerifier),
+        Arc::new(account),
+    );
     let port = state.config.port;
     let app = api::build_app(state)?;
 

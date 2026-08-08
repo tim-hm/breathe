@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT usage_date, calls FROM assistant_usage WHERE user_id = $1 ORDER BY usage_date",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "usage_date",
+        "type_info": "Date",
+        "origin": {
+          "Table": {
+            "table": "assistant_usage",
+            "name": "usage_date"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "calls",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "assistant_usage",
+            "name": "calls"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "9d349727e4c35674a45456e0051ea1f40a213cf0f609a1f0d809f612d327d0f6"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE sessions AS moving\n            SET user_id = $2\n          WHERE moving.user_id = $1\n            AND NOT EXISTS (\n              SELECT 1 FROM sessions AS held\n               WHERE held.user_id = $2\n                 AND held.client_session_id = moving.client_session_id\n            )",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ba74634c3feb2317f429b5e2dcb8c58e90c4302309a4eeb4b07ace550ec52ba2"
+}

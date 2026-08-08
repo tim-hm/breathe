@@ -5,13 +5,14 @@ use std::sync::Arc;
 use sqlx::PgPool;
 
 use crate::config::Config;
+use crate::features::account::verifier::IdentityTokenVerifier;
 use crate::features::assistant::model::ModelClient;
 use crate::features::entitlement::verifier::TransactionVerifier;
 
 /// Shared as `Arc<AppState>` by both transports.
 ///
 /// Flat on purpose. Grouping dependencies into sub-structs earns its keep once
-/// there are enough of them to lose track of; with three, it would only add a
+/// there are enough of them to lose track of; with four, it would only add a
 /// level of indirection between a handler and its pool.
 pub struct AppState {
     pub pool: PgPool,
@@ -35,6 +36,14 @@ pub struct AppState {
     /// Nothing configures it — the trust anchor is compiled in — so the field
     /// exists purely as the seam.
     pub entitlement: Arc<dyn TransactionVerifier>,
+
+    /// The Sign in with Apple credential checker.
+    ///
+    /// Here for the same reason as the App Store verifier, and with one thing
+    /// the others do not have behind it: this one holds Apple's published keys,
+    /// so the seam is also what keeps a test suite off the network rather than
+    /// merely off Apple's signatures.
+    pub account: Arc<dyn IdentityTokenVerifier>,
 }
 
 impl AppState {
@@ -43,12 +52,14 @@ impl AppState {
         config: Config,
         assistant: Arc<dyn ModelClient>,
         entitlement: Arc<dyn TransactionVerifier>,
+        account: Arc<dyn IdentityTokenVerifier>,
     ) -> Arc<Self> {
         Arc::new(Self {
             pool,
             config,
             assistant,
             entitlement,
+            account,
         })
     }
 }
