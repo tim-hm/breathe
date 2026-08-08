@@ -82,9 +82,9 @@ struct ProfileRefusalTests {
     @Test("The name the server refused is not shown back as the saved one")
     func aRefusedNameIsNotReflectedBack() async {
         let store = ProfileStore(profiles: RefusingProfiles(), defaults: defaults("refused-name"))
-        let model = LeaderboardNameModel(store: store)
+        let model = ProfileEditModel(store: store)
 
-        model.displayName = "Tim"
+        model.draft.displayName = "Tim"
         await model.save()
 
         #expect(model.rejection == Self.reason)
@@ -99,9 +99,9 @@ struct ProfileRefusalTests {
             profiles: UnreachableProfiles(),
             defaults: defaults("unreachable")
         )
-        let model = LeaderboardNameModel(store: store)
+        let model = ProfileEditModel(store: store)
 
-        model.displayName = "Tim"
+        model.draft.displayName = "Tim"
         await model.save()
 
         #expect(model.rejection == nil)

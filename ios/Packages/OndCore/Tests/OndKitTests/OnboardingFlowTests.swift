@@ -160,7 +160,7 @@ struct OnboardingFlowTests {
         #expect(model.profile.intentNote == "I want to stop clenching my jaw")
     }
 
-    /// The same clamp `LeaderboardNameModel` applies to the name, in the same
+    /// The same clamp `ProfileEditModel` applies to the name, in the same
     /// unit: a note the server would refuse must be impossible to type.
     @Test("The intent note stops accepting input at the server's limit")
     func clampsTheIntentNote() {

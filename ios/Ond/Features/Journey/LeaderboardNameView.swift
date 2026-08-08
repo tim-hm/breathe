@@ -8,12 +8,18 @@ import SwiftUI
 /// Said plainly rather than as a toggle labelled "privacy", because that is
 /// literally how it works — the server lists only profiles that carry a name,
 /// and it never invents one.
+///
+/// The two fields it shows are also editable under Settings' profile screen, and
+/// both drive the same `ProfileEditModel`. Two entry points rather than one
+/// because the reason to type a name is the board you are looking at, and this
+/// is where that reason can be stated; what must not be duplicated is the rule
+/// behind the field, and it is not.
 struct LeaderboardNameView: View {
-    @State private var model: LeaderboardNameModel
+    @State private var model: ProfileEditModel
     @Environment(\.dismiss) private var dismiss
 
     init(profiles: ProfileStore) {
-        _model = State(wrappedValue: LeaderboardNameModel(store: profiles))
+        _model = State(wrappedValue: ProfileEditModel(store: profiles))
     }
 
     var body: some View {
@@ -21,7 +27,7 @@ struct LeaderboardNameView: View {
 
         Form {
             Section {
-                TextField("Name", text: $model.displayName)
+                TextField("Name", text: $model.draft.displayName)
                     .textInputAutocapitalization(.words)
                     .autocorrectionDisabled()
             } header: {
@@ -42,7 +48,7 @@ struct LeaderboardNameView: View {
             .listRowBackground(Theme.Surface.raised)
 
             Section {
-                Picker("Born", selection: $model.birthYearBand) {
+                Picker("Born", selection: $model.draft.birthYearBand) {
                     Text("Rather not say").tag(BirthYearBand?.none)
                     ForEach(BirthYearBand.allCases) { band in
                         Text(band.title).tag(BirthYearBand?.some(band))
