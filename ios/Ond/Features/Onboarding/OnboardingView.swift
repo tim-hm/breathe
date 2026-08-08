@@ -91,12 +91,13 @@ struct OnboardingView: View {
     }
 
     /// One dot per question, the current one stretched — where you are and how
-    /// much is left, read at a glance. Absent on the welcome screen, where
-    /// there is nothing to be part-way through, and on the last one, where it
-    /// would read as unfinished.
+    /// much is left, read at a glance. Only on the questions it counts: the
+    /// welcome, the safety terms, and the last screen are not places to be
+    /// part-way through, and a row of dots with none of them lit is worse than
+    /// no row at all.
     @ViewBuilder
     private var progress: some View {
-        if model.canGoBack {
+        if OnboardingModel.Step.questions.contains(model.step) {
             HStack(spacing: Theme.Spacing.close) {
                 ForEach(OnboardingModel.Step.questions) { question in
                     Capsule()
@@ -132,6 +133,7 @@ struct OnboardingView: View {
         case .experience: ExperienceStepView(model: model)
         case .about: AboutYouStepView(model: model, isEditingNote: $isEditingNote)
         case .reminders: RemindersStepView(model: model)
+        case .safety: SafetyConsentStepView(terms: model.safetyTerms)
         case .done: DoneStepView()
         }
     }
@@ -213,6 +215,9 @@ struct OnboardingView: View {
         switch model.step {
         case .welcome: "Get started"
         case .reminders: "Save"
+        // The agreement's own words rather than "Next": what this button does is
+        // record a consent, and it has to say so.
+        case .safety: model.safetyTerms.agreement
         case .done: "Start breathing"
         default: "Next"
         }

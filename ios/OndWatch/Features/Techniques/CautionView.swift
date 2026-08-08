@@ -5,16 +5,17 @@ import SwiftUI
 
 /// The one screen that stands between choosing a technique and breathing it.
 ///
-/// Only the few techniques that carry a caution ever reach here, and for those
-/// the extra tap is the point: "never in water, never while driving" is not
-/// something to meet at a glance on a card somebody is already halfway through
-/// tapping. Everything without a caution goes straight from the carousel into
-/// the session.
+/// The wrist's answer to the phone's in-session caution, and the reason the
+/// watch kept one at all when the browsing surfaces lost theirs. The two
+/// exercises that can make somebody faint reach here; the other seven go
+/// straight from the carousel into the session, as does everything once the
+/// consent step in the phone's onboarding has named the general hazards.
 ///
-/// It exists because the alternative was worse. The longest caution in the
-/// catalogue runs to eight lines on a 46mm screen — it does not fit on a
-/// carousel page, and the only way to make it fit is to truncate it, which is
-/// the one thing a contraindication may never do.
+/// A screen rather than a line under the breath guide, because the alternative
+/// was worse in both directions. The longest caution in the catalogue runs to
+/// eight lines on a 46mm screen: it does not fit on a carousel page, it does not
+/// fit beside a phase countdown, and the only way to make it fit either is to
+/// truncate it — which is the one thing a contraindication may never do.
 struct CautionView: View {
     let technique: Technique
     let sessions: any SessionRecording

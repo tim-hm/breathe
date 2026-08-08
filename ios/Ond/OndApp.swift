@@ -23,8 +23,9 @@ struct OndApp: App {
     private let recorder: any SessionRecording
 
     /// Controlled-pause scores, kept beside the sessions and for the same
-    /// reason — the journey tab reads them with no network at all.
-    private let scores: any BoltScoreRecording = FileBoltScoreStore()
+    /// reason — the journey tab reads them with no network at all. Concrete for
+    /// the reason the sessions are: a deletion has to be able to empty it.
+    private let scores = FileBoltScoreStore()
 
     /// Hands the identity above to the watch app, which never mints one of its
     /// own. Composed here because the pairing belongs to the install rather
@@ -42,11 +43,11 @@ struct OndApp: App {
     /// every one of them.
     @State private var plus: SubscriptionStore
 
-    /// Which exercises' cautions have been put away. In the environment beside
-    /// `settings` for the same reason: the card that writes it and the detail
-    /// screen that reads it are one view apart, but the store has to outlive
-    /// every push and pop between them.
-    @State private var safetyNotes = SafetyNoteStore()
+    /// Whether the safety terms have been agreed to, and the record of it. Held
+    /// here rather than passed into onboarding alone because it is also what
+    /// decides whether somebody who onboarded before that step existed is asked
+    /// on this launch.
+    @State private var consent = SafetyConsentStore()
 
     /// Holds the onboarding answers and knows whether they have been given.
     @State private var profiles: ProfileStore
@@ -56,10 +57,17 @@ struct OndApp: App {
     /// below a tab root that has no use for it.
     @State private var account: AccountModel
 
-    /// Separate from `profiles.hasCompletedOnboarding`, which is set the moment
-    /// the last answer is stored — a screen that dismissed itself on that flag
-    /// would vanish before the person saw the last card.
-    @State private var isOnboarding: Bool
+    /// What this install still owes before anybody breathes, decided once at
+    /// launch and cleared when it is met.
+    ///
+    /// One piece of state for both covers rather than a flag each. They are
+    /// mutually exclusive — a new install meets the safety terms as a step of
+    /// onboarding, so it is never asked twice — and an enum is what makes that
+    /// true rather than merely intended. Separate from
+    /// `profiles.hasCompletedOnboarding`, which is set the moment the last
+    /// answer is stored: a screen that dismissed itself on that flag would
+    /// vanish before the person saw the last card.
+    @State private var firstRun: FirstRunGate?
 
     /// One catalogue model for every tab: home's wheel and the techniques list
     /// are two views onto the same load. Built here, at the composition root,
@@ -109,7 +117,10 @@ struct OndApp: App {
             profiles: ProfileRepository(baseURL: baseURL, identity: identity)
         )
         _profiles = State(wrappedValue: profiles)
-        _isOnboarding = State(wrappedValue: !profiles.hasCompletedOnboarding)
+
+        let consent = SafetyConsentStore()
+        _consent = State(wrappedValue: consent)
+        _firstRun = State(wrappedValue: .pending(profiles: profiles, consent: consent))
 
         let plus = SubscriptionStore(
             front: StoreKitStoreFront(),
@@ -194,17 +205,25 @@ struct OndApp: App {
             .environment(settings)
             .environment(account)
             .environment(plus)
-            .environment(safetyNotes)
             .environment(schedules)
-            .fullScreenCover(isPresented: $isOnboarding) {
-                OnboardingView(
-                    model: OnboardingModel(
-                        store: profiles,
-                        schedules: schedules,
-                        catalogue: catalogue
-                    )
-                ) {
-                    isOnboarding = false
+            .fullScreenCover(item: $firstRun) { gate in
+                switch gate {
+                case .onboarding:
+                    OnboardingView(
+                        model: OnboardingModel(
+                            store: profiles,
+                            schedules: schedules,
+                            catalogue: catalogue,
+                            consent: consent
+                        )
+                    ) {
+                        firstRun = nil
+                    }
+
+                case .safety:
+                    SafetyConsentView(store: consent) {
+                        firstRun = nil
+                    }
                 }
             }
             // Answers given with no signal reach the server on a later launch.
@@ -229,6 +248,32 @@ struct OndApp: App {
             // would hold the other two open forever.
             .task { await plus.watch() }
         }
+    }
+}
+
+/// What the app puts in front of everything else on a launch, before anything
+/// can be breathed.
+///
+/// Two states rather than two booleans, because they must never both be true:
+/// onboarding already carries the safety terms as its last step, so the standalone
+/// version is only ever for an install that finished the flow before that step
+/// existed.
+private enum FirstRunGate: Identifiable {
+    /// The whole first-run flow, for an install that has answered nothing.
+    case onboarding
+    /// The safety terms alone, for somebody who onboarded before they existed —
+    /// no record means never asked, and never asked means ask.
+    case safety
+
+    var id: Self {
+        self
+    }
+
+    /// What `profiles` and `consent` between them say is still outstanding.
+    @MainActor
+    static func pending(profiles: ProfileStore, consent: SafetyConsentStore) -> Self? {
+        guard profiles.hasCompletedOnboarding else { return .onboarding }
+        return consent.needsConsent ? .safety : nil
     }
 }
 

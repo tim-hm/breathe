@@ -2,19 +2,24 @@ import OndKit
 import OndUI
 import SwiftUI
 
-/// The caution an exercise carries, compact, for a screen that belongs to
-/// something else.
+/// The caution an exercise carries, compact, under the breath guide.
 ///
-/// The session player is the only user: the contraindications belong where the
-/// person is, not only where they chose, and nothing about this one is
-/// dismissible. Somebody who is already breathing is exactly who the words are
-/// for.
+/// The last inline caution left in the phone app, and deliberately so. Every
+/// other one — the card on the detail screen, the icons in the lists — was
+/// replaced by the single consent step in onboarding, because a hazard named
+/// once and agreed to is better read than the same hazard named on nine screens
+/// and skimmed on all of them. This one stayed because it is the only one that
+/// would have removed a warning from the moment of risk rather than moving it:
+/// "never in water, never in the bath" is not general advice that a screen seen
+/// weeks ago discharges.
 ///
-/// `SafetyNoteCard` is the same words given the room to be read before anything
-/// starts. Two views rather than one taking flags, because the browsing one
-/// carries dismissal state and this one must never learn about it.
+/// Two exercises reach it, and no view here knows which. `safetyNote` is now
+/// non-empty in the seeded catalogue exactly where a caution has to interrupt a
+/// session, so a tenth technique that can make somebody faint gets this line by
+/// filling in a field rather than by anyone remembering this decision.
 ///
-/// The watch draws its own — the wrist has no room for either of these.
+/// Nothing about it is dismissible, and there is no longer a store that could
+/// make it so. The watch draws its own — the wrist has no room for this one.
 struct SafetyNote: View {
     let technique: Technique
 
