@@ -24,6 +24,7 @@ use tokio_stream::Stream;
 use self::bedrock::BedrockClient;
 use self::breaker::GuardedModelClient;
 use self::disabled::DisabledModelClient;
+use crate::config::Environment;
 
 /// Text arriving a piece at a time, in order.
 ///
@@ -130,8 +131,8 @@ pub trait ModelClient: Send + Sync {
     /// `stream` still refuse on their own, because the breaker can trip between
     /// this answer and the call. What it buys is that the caller can skip the
     /// work a refusal would waste: a quota claim, which is a database write, and
-    /// the prompt, which walks the whole catalogue. With no key configured that
-    /// is every request in the process.
+    /// the prompt, which walks the whole catalogue. Where no AWS credentials
+    /// resolved that is every request in the process.
     ///
     /// Defaulted to `true` so an implementation that always tries — the
     /// provider, a test double — says nothing.
@@ -163,15 +164,24 @@ fn millis(duration: Duration) -> u64 {
 ///   clone run `mise run dev` and the integration tests run in CI with no AWS
 ///   identity at all.
 ///
-/// Takes no configuration because there is none to take — region and model are
-/// constants, and the credentials are found rather than supplied. It is async
-/// only because finding them is.
+/// Nothing about *which* model is configurable — region and model are
+/// constants, and the credentials are found rather than supplied. The
+/// environment is taken for one reason, which is the level the second outcome is
+/// logged at: on a laptop or a CI runner it is the supported state this repo
+/// documents, and on the box the same line means the coach is down. Async only
+/// because finding credentials is.
 ///
 /// One log line either way, because "the assistant is quiet today" is otherwise
 /// indistinguishable from "this machine cannot sign for Bedrock" from outside
 /// the process.
-pub async fn install() -> Arc<dyn ModelClient> {
-    match BedrockClient::connect().await {
+pub async fn install(environment: Environment) -> Arc<dyn ModelClient> {
+    // One message, logged at two levels below. `tracing` takes its level as a
+    // compile-time constant, so the level cannot be a variable and the two calls
+    // cannot share a literal without this.
+    const QUIET: &str =
+        "the assistant cannot reach Bedrock — answering from the rule-based fallback";
+
+    let error = match BedrockClient::connect().await {
         Ok(client) => {
             tracing::info!(
                 feature = "assistant",
@@ -179,15 +189,19 @@ pub async fn install() -> Arc<dyn ModelClient> {
                 region = crate::config::BEDROCK_REGION,
                 "the assistant is live"
             );
-            Arc::new(GuardedModelClient::new(Arc::new(client)))
+            return Arc::new(GuardedModelClient::new(Arc::new(client)));
         }
-        Err(error) => {
-            tracing::info!(
-                feature = "assistant",
-                %error,
-                "the assistant cannot reach Bedrock — answering from the rule-based fallback"
-            );
-            Arc::new(DisabledModelClient)
-        }
+        Err(error) => error,
+    };
+
+    // On a laptop or a CI runner this is the supported state docs/deployment.md
+    // describes; on the box it is the coach being down, and only one of those is
+    // worth a `warn`. A match on `Environment` rather than a bool, which is the
+    // convention config.rs sets for everything that differs between the two.
+    match environment {
+        Environment::Production => tracing::warn!(feature = "assistant", %error, "{QUIET}"),
+        Environment::Dev => tracing::info!(feature = "assistant", %error, "{QUIET}"),
     }
+
+    Arc::new(DisabledModelClient)
 }
