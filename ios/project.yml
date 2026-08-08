@@ -154,8 +154,8 @@ targets:
         WKApplication: true
         WKCompanionAppBundleIdentifier: xyz.holmie.ond
         # The watch talks to the backend itself — it holds its own copy of the
-        # identity and its own catalogue cache (roadmap M9), so a session on the
-        # wrist must not stall waiting for a phone that is in another room.
+        # identity and its own catalogue cache, so a session on the wrist must
+        # not stall waiting for a phone that is in another room.
         WKRunsIndependentlyOfCompanionApp: true
         # What lets a session keep cueing with the wrist down and the screen
         # dim: without this key `WKExtendedRuntimeSession.start()` fails with

@@ -1,6 +1,6 @@
 # Business plan
 
-The product definition: what we are building, for whom, why it wins, and how it pays for itself. The build order lives in [roadmap.md](roadmap.md); the name is **önd**, listed on the App Store as "ond breath" — [naming.md](naming.md) records how it was chosen and what is still open.
+The product definition: what we are building, for whom, why it wins, and how it pays for itself. The build order is tracked outside the repository; the name is **önd**, listed on the App Store as "ond breath" — [naming.md](naming.md) records how it was chosen and what is still open.
 
 ## Vision
 
@@ -99,5 +99,5 @@ Written as testable product rules, not aspirations:
 | A two-technique free tier reads as mean             | The locked ones stay visible and described; the free two carry no safety caution and cover both reasons people install a breathing app       |
 | Crowded category, weak discoverability              | Distinctive coined name + keyword-carrying subtitle ([naming.md](naming.md)); haptic craft as the reviewable "wow"                           |
 | Competition mechanics undermine the calm brand      | Opt-in only, consistency-framed copy, no maximal-hold contests                                                                               |
-| Solo-maintainer scope creep                         | Roadmap milestones are each independently shippable; the parking lot is a real fence ([roadmap.md](roadmap.md))                              |
-| Full Watch app widens V1 scope                      | The watch reuses OndKit's platform-neutral session engine; only the haptic mapping and UI are watch-specific ([roadmap.md](roadmap.md) M9)   |
+| Solo-maintainer scope creep                         | Every unit of work is independently shippable, and what is deliberately out of scope is written down rather than assumed                     |
+| Full Watch app widens V1 scope                      | The watch reuses OndKit's platform-neutral session engine; only the haptic mapping and UI are watch-specific                                 |

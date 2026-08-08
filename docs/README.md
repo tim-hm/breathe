@@ -12,11 +12,10 @@
 
 ## Product
 
-| Doc                                                  | When to read                                                             |
-| :--------------------------------------------------- | :----------------------------------------------------------------------- |
-| [product/business-plan.md](product/business-plan.md) | What we are building, for whom, and how it pays for itself.              |
-| [product/roadmap.md](product/roadmap.md)             | The build order to V1 and the technical decisions behind each milestone. |
-| [product/naming.md](product/naming.md)               | The market-facing name: shortlist and validation checklist.              |
+| Doc                                                  | When to read                                                |
+| :--------------------------------------------------- | :---------------------------------------------------------- |
+| [product/business-plan.md](product/business-plan.md) | What we are building, for whom, and how it pays for itself. |
+| [product/naming.md](product/naming.md)               | The market-facing name: shortlist and validation checklist. |
 
 ## Documentation policy
 
