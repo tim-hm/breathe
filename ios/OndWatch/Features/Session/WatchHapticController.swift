@@ -22,7 +22,18 @@ final class WatchHapticController: SessionCueing {
         self.settings = settings
     }
 
+    /// The wrist keeps tapping with the screen dark, which is the posture these
+    /// techniques are actually done in. `ExtendedRuntime` is what buys that, and
+    /// the watch player holds one for as long as the session lasts.
+    let playsInBackground = true
+
     func prepare() {}
+
+    /// Nothing to release either way. The wrist's runtime is `ExtendedRuntime`'s
+    /// to hold and the player's to end, and a pause is not the session ending.
+    func pause() {}
+
+    func resume() {}
 
     func play(_ beat: SessionTimeline.Beat) {
         play(WatchCue(beat.kind))

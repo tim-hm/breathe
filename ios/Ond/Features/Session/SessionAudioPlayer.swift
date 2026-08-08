@@ -2,14 +2,29 @@ import AVFoundation
 import OndKit
 import os
 
-/// The audible half of a cue: one soft tone per phase, a rising triad at the end.
+/// The audible half of a cue: one soft tone per phase, a rising triad at the end
+/// — and, underneath them, what keeps the app alive to play any of it.
 ///
 /// Pitch carries the direction — the inhale sits above the exhale, the two holds
 /// sit outside both — so the tones remain distinguishable at a volume low enough
 /// to breathe to.
+///
+/// The phone has no `WKExtendedRuntimeSession` the way the watch does, so the
+/// only runtime a backgrounded session can hold is the one `UIBackgroundModes:
+/// audio` grants an app that is playing. That budget lasts exactly as long as
+/// the playing does, and a cue tone is under a second inside a phase that runs
+/// for eleven — so the tones alone buy the first gap and nothing after it. The
+/// silence loop below is what makes the gaps the inside of one playback, and it
+/// is why this type, not the haptics beside it, is what `playsInBackground`
+/// answers for.
 @MainActor
 final class SessionAudioPlayer {
     private static let logger = Logger(category: "audio")
+
+    /// One second, looped. `AVAudioPlayer` repeats from its own buffer without
+    /// the app being woken for it, so the length buys nothing but the 88 KB it
+    /// costs to hold.
+    private static let silenceLoop = ToneSynthesizer.silence(seconds: 1)
 
     /// Synthesised once for the process rather than per session: the tones never
     /// vary, and building them is a few hundred thousand `sin` calls that would
@@ -29,6 +44,7 @@ final class SessionAudioPlayer {
 
     private var players: [PhaseKind: AVAudioPlayer] = [:]
     private var completionPlayer: AVAudioPlayer?
+    private var silence: AVAudioPlayer?
 
     func prepare() {
         do {
@@ -50,6 +66,24 @@ final class SessionAudioPlayer {
 
         players = Self.cueTones.compactMapValues(player(for:))
         completionPlayer = player(for: Self.completionTone)
+
+        silence = player(for: Self.silenceLoop)
+        // Endlessly, and started before the first beat: the runtime has to
+        // already be held when the person locks the phone, which they may well
+        // do during the count-in.
+        silence?.numberOfLoops = -1
+        silence?.play()
+    }
+
+    /// Hands the runtime back for as long as the pause lasts, and takes it again
+    /// on the way out. `pause()` rather than `stop()` on the loop: stopping
+    /// rewinds it, and this player is never anywhere worth returning to.
+    func pause() {
+        silence?.pause()
+    }
+
+    func resume() {
+        silence?.play()
     }
 
     func play(_ beat: SessionTimeline.Beat) {
@@ -72,6 +106,11 @@ final class SessionAudioPlayer {
         players.removeAll()
         completionPlayer?.stop()
         completionPlayer = nil
+        // Before the session is deactivated, and not left to deinit: this is the
+        // one player that would otherwise go on holding background runtime for a
+        // session that has finished.
+        silence?.stop()
+        silence = nil
 
         do {
             // Telling other apps we are done is what lets a paused music app

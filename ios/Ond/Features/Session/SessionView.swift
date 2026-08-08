@@ -52,11 +52,11 @@ struct SessionView: View {
             UIApplication.shared.isIdleTimerDisabled = false
             model.dismiss()
         }
-        // Haptics do not play in the background and a cue nobody can feel is a
-        // phase silently missed, so leaving the app pauses rather than drifts.
         // `.background` and not `.inactive`, which iOS also sends for a
-        // notification banner and a Control Centre pull; the model owns which
-        // pauses undo themselves.
+        // notification banner and a Control Centre pull. The model owns both
+        // halves of the decision from here: which pauses undo themselves, and
+        // whether the departure is worth pausing for at all — a session still
+        // cueing into a dark screen is the app working, not leaving.
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .background: model.pauseForScene()

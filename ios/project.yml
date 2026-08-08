@@ -132,6 +132,24 @@ targets:
         # önd ships no algorithm of its own — and it is the answer that would
         # be given by hand anyway, made once and reviewably.
         ITSAppUsesNonExemptEncryption: false
+        # What lets a session keep cueing with the phone face down, and the
+        # phone's only route to it: iOS has no `WKExtendedRuntimeSession`, so
+        # `audio` is the whole of the vocabulary available to a guided breath.
+        # Without the key the app is suspended the moment the screen locks and
+        # the tones somebody is breathing to stop — which is the posture these
+        # techniques are done in, so the app would be broken exactly where it
+        # claims to work.
+        #
+        # This is a declaration App Review reads, so it is worth being able to
+        # answer for: önd plays an audible cue on every phase boundary for the
+        # length of a session the person explicitly started, through an
+        # `AVAudioSession` already configured `.playback` with `.mixWithOthers`
+        # so it never takes the phone's audio away from anything else. It is
+        # claimed only while a session is running and handed back at the end.
+        # `SessionCues.playsInBackground` is the matching restraint on the other
+        # side: a session with sound switched off does not claim this budget.
+        UIBackgroundModes:
+          - audio
         # The dev backend is plain HTTP on localhost, which App Transport
         # Security blocks by default. `NSAllowsLocalNetworking` is the narrow
         # exemption for exactly that: it permits cleartext to loopback, .local,
