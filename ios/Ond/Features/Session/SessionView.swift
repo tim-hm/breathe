@@ -6,6 +6,20 @@ import SwiftUI
 /// The session itself: one animated breath guide, the controls to interrupt it,
 /// and the summary it hands over at the end.
 struct SessionView: View {
+    /// How the screen opens.
+    ///
+    /// A tap on Begin has already said yes, so the screen counts itself down and
+    /// starts — which is every route through the app itself. A notification's
+    /// tap has said only "show me this": the person was interrupted rather than
+    /// settled, and a breath that begins because a reminder was tapped is the
+    /// reminder practising rather than them.
+    enum Entry {
+        /// Straight into the countdown, because the way in was a Begin control.
+        case beginning
+        /// At rest, with the exercise named and a Begin control of its own.
+        case waiting
+    }
+
     @State private var model: SessionModel
 
     /// Per-phase hint lines — which nostril — or nil for the techniques that
@@ -21,8 +35,13 @@ struct SessionView: View {
     /// starts when the first breath does.
     @State private var countdown: Int?
 
-    init(model: SessionModel) {
+    /// Whether the screen is still holding, waiting to be asked. False from the
+    /// first frame for every entry but a notification's — see `Entry`.
+    @State private var isWaiting: Bool
+
+    init(model: SessionModel, entering entry: Entry = .beginning) {
         _model = State(wrappedValue: model)
+        _isWaiting = State(wrappedValue: entry == .waiting)
         hints = PhaseHints.hints(for: model.technique)
     }
 
@@ -30,6 +49,8 @@ struct SessionView: View {
         ZStack {
             if model.status == .finished, let record = model.record, !model.wasDiscarded {
                 SessionSummaryView(record: record, technique: model.technique) { dismiss() }
+            } else if isWaiting {
+                invitation
             } else if let countdown {
                 CountdownView(count: countdown)
             } else {
@@ -45,8 +66,10 @@ struct SessionView: View {
             UIApplication.shared.isIdleTimerDisabled = true
         }
         // `.task` rather than `onAppear`, so dismissing mid-count cancels it
-        // and the session is never started under a screen that has gone.
-        .task { await runCountdown() }
+        // and the session is never started under a screen that has gone. Keyed
+        // on the flag so that a screen which opened at rest counts down when it
+        // is finally asked to, with the same cancellation it would have had.
+        .task(id: isWaiting) { await runCountdown() }
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
             model.dismiss()
@@ -75,9 +98,10 @@ struct SessionView: View {
 
     /// Counts three seconds down and then starts the session. The guard makes
     /// a re-fired task (or a session already under way) a no-op rather than a
-    /// second countdown over a running breath.
+    /// second countdown over a running breath — and holds the count off entirely
+    /// on a screen still waiting to be asked.
     private func runCountdown() async {
-        guard model.status == .ready, countdown == nil else { return }
+        guard !isWaiting, model.status == .ready, countdown == nil else { return }
 
         for count in [3, 2, 1] {
             countdown = count
@@ -91,6 +115,56 @@ struct SessionView: View {
 
         countdown = nil
         model.start()
+    }
+
+    /// The screen at rest: what is about to be practised, how long it runs, and
+    /// the two honest answers to being reminded of it.
+    ///
+    /// "Not now" is as load-bearing as Begin. A reminder that can only be
+    /// obeyed is a reminder people turn off, and the way out of a full-screen
+    /// cover is otherwise a swipe nobody has been told about.
+    private var invitation: some View {
+        VStack(spacing: Theme.Spacing.loose) {
+            Spacer()
+
+            VStack(spacing: Theme.Spacing.close) {
+                Text(model.technique.name)
+                    .font(.largeTitle.weight(.medium))
+                    .multilineTextAlignment(.center)
+                Text(lengthLabel)
+                    .font(.body)
+            }
+
+            Spacer()
+
+            SafetyNote(technique: model.technique)
+
+            Button("Begin") {
+                isWaiting = false
+            }
+            .font(.headline)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, Theme.Spacing.close)
+            .background(model.technique.goal.accent.opacity(0.2), in: Capsule())
+
+            Button("Not now") {
+                dismiss()
+            }
+            .font(.subheadline)
+            .frame(minHeight: 44)
+        }
+        .padding(Theme.Spacing.loose)
+        // Primary is the only ink that clears AA over the accent wash, so there
+        // is no tone left to spend on hierarchy here.
+        .foregroundStyle(Theme.Ink.primary)
+    }
+
+    /// How long the session runs — "about" for a plan the clock owns, "around"
+    /// for one whose holds the person ends.
+    private var lengthLabel: String {
+        let planned = model.technique.plannedDuration
+            .formatted(.units(allowed: [.minutes, .seconds], width: .abbreviated))
+        return model.technique.hasOpenEndedStage ? "Around \(planned)" : "About \(planned)"
     }
 
     private var player: some View {

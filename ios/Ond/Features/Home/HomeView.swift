@@ -200,9 +200,9 @@ struct HomeView: View {
     }
 
     /// Starts the exercise as this person dialled it, or opens the paywall where
-    /// a subscription owns it. Both are `HomeStart`'s to decide.
+    /// a subscription owns it. Both are `SessionStart`'s to decide.
     private func begin(_ technique: Technique) {
-        let start = HomeStart(sessions: sessions, settings: settings, tier: plus.tier)
+        let start = SessionStart(sessions: sessions, settings: settings, tier: plus.tier)
         guard let model = start.session(for: technique) else {
             isShowingPaywall = true
             return

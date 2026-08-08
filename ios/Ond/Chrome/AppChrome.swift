@@ -32,9 +32,26 @@ struct AppChrome: View {
     let profiles: ProfileStore
     let foundations: FoundationsModel
 
+    /// What a tapped notification asked for. Followed here rather than by any
+    /// one tab, because the exercise a reminder names has nothing to do with
+    /// where the person happened to leave the app.
+    let router: NotificationRouter
+
     /// The aim Breathe is dialled to. Nil until the catalogue lands, which is
     /// the one state with no colour to take.
     @State private var goal: TechniqueGoal?
+
+    /// The session a notification opened, waiting on Begin. Presented over the
+    /// bar rather than pushed into a tab: it is a full-screen cover from every
+    /// other way in too, and the tab underneath is whatever was last used.
+    @State private var invited: StartedSession?
+
+    /// The exercise a reminder named that this tier does not open, which is both
+    /// the offer's trigger and the reason it is being shown.
+    @State private var locked: Technique?
+
+    @Environment(SessionSettings.self) private var settings
+    @Environment(SubscriptionStore.self) private var plus
 
     var body: some View {
         // Built once rather than per `Tab`: the property is a fresh struct each
@@ -67,6 +84,46 @@ struct AppChrome: View {
         .tint(goal?.accent ?? Theme.Accent.brand)
         .tabBarMinimizeBehavior(.onScrollDown)
         .background(Theme.Surface.ground.ignoresSafeArea())
+        .fullScreenCover(item: $invited) { session in
+            SessionView(model: session.model, entering: .waiting)
+        }
+        .sheet(item: $locked) { technique in
+            PaywallView(highlighting: technique.requires)
+        }
+        // Keyed on the request rather than run once, so a tap while the app is
+        // already open takes the same road as the tap that launched it.
+        .task(id: router.pending) { await follow() }
+    }
+
+    /// Opens whatever a tapped notification asked for.
+    ///
+    /// The await is what a cold launch needs: the tap that started the app is
+    /// already waiting on the router by the time this first runs, and the
+    /// catalogue its slug resolves against is not. Taken unconditionally once
+    /// that wait is over — a request that resolves to nothing is dropped rather
+    /// than retried, because opening where the app always would is the stated
+    /// answer for an exercise the catalogue no longer has.
+    private func follow() async {
+        guard router.pending != nil else { return }
+        await catalogue.loadIfNeeded()
+
+        guard let payload = router.take(),
+              case let .loaded(techniques) = catalogue.state,
+              let destination = NotificationDestination(
+                  payload, in: techniques, tier: plus.tier
+              )
+        else { return }
+
+        switch destination {
+        case let .session(technique):
+            let start = SessionStart(sessions: sessions, settings: settings, tier: plus.tier)
+            if let model = start.session(for: technique) {
+                invited = StartedSession(model: model)
+            }
+
+        case let .offer(technique):
+            locked = technique
+        }
     }
 
     private var roots: AppRoots {

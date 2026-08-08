@@ -32,6 +32,20 @@ struct OndApp: App {
     /// than to any screen, and because this is where the identity already is.
     private let watch: WatchLink
 
+    /// Where a tapped notification's request waits until there is a screen to
+    /// answer it.
+    ///
+    /// A plain `let` rather than `@State`, like the rest of what is composed
+    /// here and outlives every screen: the scene reads it through `AppChrome`,
+    /// and `@Observable` is what makes that a tracked read whichever way it is
+    /// held.
+    private let router = NotificationRouter()
+
+    /// Held for its lifetime and read by nothing: `UNUserNotificationCenter`
+    /// keeps only a weak reference to its delegate, so the property is what
+    /// stops a tapped reminder arriving at a deallocated object.
+    private let notifications: NotificationDelegate
+
     /// In the environment rather than passed down, because the cue picker on the
     /// detail screen and the session that reads the setting are not adjacent.
     @State private var settings = SessionSettings()
@@ -111,6 +125,8 @@ struct OndApp: App {
 
         let schedules = ScheduleStore(notifier: NotificationScheduler())
         _schedules = State(wrappedValue: schedules)
+
+        notifications = NotificationDelegate.installed(routing: router)
 
         let techniques = CachedTechniqueRepository(
             caching: TechniqueRepository(baseURL: baseURL, identity: identity)
@@ -233,7 +249,8 @@ struct OndApp: App {
                 sessions: recorder,
                 journey: journey,
                 profiles: profiles,
-                foundations: foundations
+                foundations: foundations,
+                router: router
             )
             .tint(Theme.Accent.brand)
             // The palette resolves per appearance through the asset catalogue,

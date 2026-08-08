@@ -41,6 +41,10 @@ struct NotificationScheduler: ScheduleNotifying {
         content.title = schedule.techniqueName
         content.body = "Your \(schedule.timeLabel) practice is ready when you are."
         content.sound = .default
+        // Self-describing, so the tap opens the exercise the reminder named
+        // rather than whichever exercise the schedule points at by then. See
+        // `NotificationPayload`.
+        content.userInfo = NotificationPayload(techniqueSlug: schedule.techniqueSlug).userInfo
 
         var components = DateComponents()
         components.weekday = day.rawValue
