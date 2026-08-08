@@ -28,8 +28,8 @@ use sqlx::PgPool;
 use tonic::Status;
 use uuid::Uuid;
 
-use crate::obs;
 use crate::state::AppState;
+use crate::{obs, throttle};
 
 /// The header every client sends its anonymous id in.
 ///
@@ -61,6 +61,13 @@ pub struct UserId(pub Uuid);
 /// because "first sight" is literally the first RPC, whichever one that is: an
 /// app that onboards offline and only ever lists techniques still has a row
 /// waiting when its profile finally syncs.
+///
+/// A well-formed header is a claim anybody can make, though, and a fresh one
+/// each time is a `users` row each time. So creating a row is charged against
+/// `throttle::Throttle::spend_new_identity`, and a caller over that budget is
+/// refused *instead of* being written. Merely being an identity stays free: an
+/// established client's row already exists, so the branch that spends never
+/// runs for them.
 pub async fn resolve(
     State(state): State<Arc<AppState>>,
     mut request: Request,
@@ -81,15 +88,32 @@ pub async fn resolve(
         return Status::unauthenticated(format!("`{USER_ID_HEADER}` must be a UUID")).into_http();
     };
 
-    // Before the upsert, not after: everything this request logs from here on —
-    // the failure below, each feature's `From<…> for Status`, and the layer's
-    // own completion line — is only attributable to a person once the span
-    // carries them.
+    // Before the database work, not after: everything this request logs from
+    // here on — the failures below, each feature's `From<…> for Status`, and the
+    // layer's own completion line — is only attributable to a person once the
+    // span carries them.
     obs::record_user_id(user_id);
 
-    if let Err(error) = ensure_user(&state.pool, user_id).await {
-        tracing::error!(%error, "failed to record the calling user");
-        return Status::internal("internal error").into_http();
+    match known_user(&state.pool, user_id).await {
+        Err(error) => {
+            tracing::error!(%error, "failed to look up the calling user");
+            return Status::internal("internal error").into_http();
+        }
+        Ok(true) => {}
+        Ok(false) => {
+            if !state
+                .throttle
+                .spend_new_identity(throttle::client_key(request.headers()))
+            {
+                tracing::warn!("refused a request creating an identity over its rate limit");
+                return throttle::refused();
+            }
+
+            if let Err(error) = create_user(&state.pool, user_id).await {
+                tracing::error!(%error, "failed to record the calling user");
+                return Status::internal("internal error").into_http();
+            }
+        }
     }
 
     request.extensions_mut().insert(UserId(user_id));
@@ -111,17 +135,39 @@ pub fn require<T>(request: &tonic::Request<T>) -> Result<UserId, Status> {
         .ok_or_else(|| Status::unauthenticated(format!("`{USER_ID_HEADER}` is required")))
 }
 
-/// Creates the caller's row if this is the first time we have seen them.
+/// Whether we have seen this caller before.
+///
+/// Split out from the insert, and asked first, because the budget that rations
+/// new identities has to be consulted *before* anything is written — a check
+/// after the fact caps nothing, since the row it would have refused already
+/// exists. This is what turns the write on the path of every identified request
+/// into a primary-key lookup on the path of every *returning* one, which is the
+/// overwhelming majority.
+///
+/// A concurrent pair of first sights can both read `false` and both spend from
+/// the budget. That costs one unit of allowance, not a second row: the insert
+/// below still declines the conflict.
+async fn known_user(pool: &PgPool, user_id: Uuid) -> Result<bool, sqlx::Error> {
+    let row = sqlx::query_scalar!("SELECT 1 FROM users WHERE id = $1", user_id)
+        .fetch_optional(pool)
+        .await?;
+
+    Ok(row.is_some())
+}
+
+/// Records a caller we have not seen before.
 ///
 /// `DO NOTHING` rather than `DO UPDATE`: every profile column has a default that
 /// says "they have not answered", and an upsert that touched them would let a
-/// stray RPC reset a profile back to empty.
+/// stray RPC reset a profile back to empty. It also absorbs the race
+/// [`known_user`] describes.
 ///
-/// This is a write on the path of every identified request, including the public
-/// catalogue's. Deliberate at V1 scale — a client makes a handful of calls per
-/// launch — and the fix when it stops being free is a bounded set of seen ids in
-/// `AppState`, not moving the insert into the one handler that needs the row.
-async fn ensure_user(pool: &PgPool, user_id: Uuid) -> Result<(), sqlx::Error> {
+/// The write stays here rather than moving into the one handler that needs a
+/// row, because "first sight" is the first RPC whichever one that is: an app
+/// that onboards offline and only ever lists techniques still has a row waiting
+/// when its profile finally syncs. What changed is not where it happens but who
+/// is allowed to cause it.
+async fn create_user(pool: &PgPool, user_id: Uuid) -> Result<(), sqlx::Error> {
     sqlx::query!(
         "INSERT INTO users (id) VALUES ($1) ON CONFLICT (id) DO NOTHING",
         user_id
