@@ -25,8 +25,7 @@ struct CountdownView: View {
             }
 
             Text("\(count)")
-                .font(.system(size: 96, design: .rounded).weight(.light))
-                .monospacedDigit()
+                .displayNumeral(size: 96, design: .rounded)
                 .contentTransition(.numericText(countsDown: true))
                 .animation(.easeInOut(duration: 0.3), value: count)
         }
