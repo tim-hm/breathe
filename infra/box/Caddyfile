@@ -34,6 +34,8 @@ ondbreathe.app {
 	handle {
 		root * /srv/web
 
+		encode zstd gzip
+
 		# Extensionless URLs, because the app ships them as literals:
 		# `LegalLinks.privacyPolicy` is `https://ondbreathe.app/privacy`, and
 		# App Review rejects a paywall whose privacy link 404s. `file_server`
