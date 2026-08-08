@@ -33,6 +33,16 @@ struct RootMenuView: View {
             } label: {
                 Label("Settings", systemImage: "gearshape")
             }
+
+            // The fourth row exists only for as long as discreet mode's two
+            // device questions are open; see `DiscreetSpikeView`.
+            #if DEBUG
+                NavigationLink {
+                    DiscreetSpikeView(catalogue: catalogue)
+                } label: {
+                    Label("Discreet spike", systemImage: "stopwatch")
+                }
+            #endif
         }
         .navigationTitle("önd")
     }
