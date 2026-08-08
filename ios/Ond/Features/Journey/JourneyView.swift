@@ -48,7 +48,7 @@ struct JourneyView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink {
-                        SettingsView(catalogue: catalogue)
+                        SettingsView(catalogue: catalogue, profiles: profiles)
                     } label: {
                         Label("Settings", systemImage: "gearshape")
                     }
