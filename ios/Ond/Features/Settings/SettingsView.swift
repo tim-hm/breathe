@@ -9,6 +9,11 @@ import SwiftUI
 /// the stack it draws its title and its back button in is Journey's, which is
 /// also what lets `SchedulesView` push one deeper from here.
 ///
+/// The profile link leads the screen because it is the one row about the person
+/// rather than about the app: onboarding asked why they were here and then never
+/// asked again, and the answers it took are the ones most likely to have gone
+/// stale. It sits above Appearance for that reason and no other.
+///
 /// The subscription row is a reversal. It used to be offered only where the
 /// reason to buy was already on screen — a locked exercise, or the assistant
 /// strip that named one — on the theory that a Settings row would be an entry
@@ -29,6 +34,11 @@ import SwiftUI
 struct SettingsView: View {
     let catalogue: TechniqueListModel
 
+    /// The onboarding answers, to edit. A parameter like `catalogue` rather than
+    /// an environment value, because the screen that pushes this one already
+    /// holds the store for the leaderboard card beside the gear.
+    let profiles: ProfileStore
+
     /// Schedules live behind a link here rather than a tab: set once, edited
     /// rarely, and the notification tray is their daily face. From the
     /// environment for the reason `settings` is: this screen is two pushes below
@@ -47,6 +57,17 @@ struct SettingsView: View {
         @Bindable var health = LiveHealth.model
 
         List {
+            Section {
+                NavigationLink("Profile") {
+                    ProfileView(profiles: profiles)
+                }
+            } footer: {
+                Text("What you told us when you started — why you're here, how "
+                    + "much we explain as you go, and what your coach knows "
+                    + "about you. Change any of it whenever you like.")
+            }
+            .listRowBackground(Theme.Surface.raised)
+
             Section {
                 Picker("Appearance", selection: $settings.appearance) {
                     ForEach(Appearance.allCases) { appearance in
