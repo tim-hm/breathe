@@ -179,6 +179,14 @@ targets:
         # rejects the bundle outright if it does not hold.
         PRODUCT_BUNDLE_IDENTIFIER: xyz.holmie.ond.watchkitapp
         GENERATE_INFOPLIST_FILE: YES
+        # Names the appiconset actool compiles for this target, which is what
+        # writes CFBundleIconName into the watch bundle's Info.plist. Without
+        # the key App Store Connect rejects the upload (ITMS-90713) — during
+        # processing, before the build can be offered to a single TestFlight
+        # tester, and against the embedded watch bundle as much as the host.
+        # A green `xcodebuild archive` says nothing about it: that check runs
+        # on Apple's side once the binary has been delivered.
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_CFBundleDisplayName: önd
     # Same generated-not-committed arrangement as the phone target's.
     entitlements:
