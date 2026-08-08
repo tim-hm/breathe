@@ -8,10 +8,15 @@
   --line: #e3e8e6;
   --accent: #397a6e;
   /* The accent softened towards the ground: the exhale, on the technique
-     figures. The app mixes the same 45% at runtime; here it is resolved once
-     per appearance, because CSS has no reason to compute what a token can
-     state. */
-  --accent-soft: #8bb3ab;
+     figures. Resolved once per appearance rather than computed, because CSS has
+     no reason to derive what a token can state.
+
+     A 20% mix, not the 45% the app takes at runtime (OndStyle/FigureShape.swift)
+     and the dark value below keeps: white runs out of room first. 45% measures
+     2.30:1 here, under WCAG 1.4.11's 3:1 floor for a stroke that carries
+     meaning; 20% lands at 3.40:1, about the 3.33:1 the dark value already
+     holds. */
+  --accent-soft: #61958b;
   --orb: #64b0a2;
   /* The orb and captions shift to this during the two holds, and the figures
      stroke their holds with it. */
