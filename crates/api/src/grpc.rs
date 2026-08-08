@@ -118,7 +118,6 @@ mod tests {
                 environment,
                 database_url: DATABASE_URL.to_owned(),
                 port: 18100,
-                openrouter_api_key: None,
             },
             Arc::new(DisabledModelClient),
             Arc::new(AppStoreVerifier),

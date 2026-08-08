@@ -4,9 +4,9 @@
 //! The usual three layers, plus two of this feature's own. `model/` is the seam
 //! a provider sits behind — the trait, the one file that knows which provider it
 //! is, the breaker that stops calling one that keeps failing, and the client
-//! installed when there is no key at all. `fallback` answers without any of
-//! them. That split is what makes everything except `model/openrouter` testable
-//! with no network and no key.
+//! installed when this machine cannot sign for one at all. `fallback` answers
+//! without any of them. That split is what makes everything except
+//! `model/bedrock` testable with no network and no credentials.
 //!
 //! `prompt` and `parse` are deliberately separate: asking for something and
 //! believing the answer are different jobs, and only the second one is

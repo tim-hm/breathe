@@ -42,8 +42,9 @@ async fn main() -> Result<()> {
     tracing::info!("connected to the database");
 
     // The composition root's one real choice: which side of the assistant's
-    // model seam this process runs. Logged there, either way.
-    let assistant = assistant::from_config(&config);
+    // model seam this process runs. Decided by whether AWS credentials resolve,
+    // and logged there either way.
+    let assistant = assistant::install().await;
 
     // No equivalent choice for either Apple seam: the App Store's trust anchor
     // is compiled in and Sign in with Apple's keys are fetched from a fixed

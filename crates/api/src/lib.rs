@@ -21,11 +21,11 @@ mod grpc;
 /// bypasses a feature's public surface" rules out. Adding to this list is a
 /// visible decision.
 pub mod assistant {
+    pub use crate::features::assistant::model::bedrock::BedrockClient;
     pub use crate::features::assistant::model::breaker::GuardedModelClient;
     pub use crate::features::assistant::model::disabled::DisabledModelClient;
-    pub use crate::features::assistant::model::openrouter::OpenRouterClient;
     pub use crate::features::assistant::model::{
-        ChatRole, ChatTurn, ModelClient, ModelError, ModelRequest, ModelStream, from_config,
+        ChatRole, ChatTurn, ModelClient, ModelError, ModelRequest, ModelStream, install,
     };
     pub use crate::features::assistant::types::daily_model_calls;
 }

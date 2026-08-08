@@ -1,19 +1,19 @@
 //! The seam every language model sits behind.
 //!
-//! One trait, three implementations: `super::openrouter` calls a provider,
+//! One trait, three implementations: `super::bedrock` calls a provider,
 //! [`DisabledModelClient`] calls nothing, and the integration tests script one.
 //! Everything else in this feature — quota, circuit breaker, validation,
 //! fallback — is written against the trait, so all of it is exercised without a
-//! network call and the only untested code is the thin layer that builds an
-//! HTTP body.
+//! network call and the only untested code is the thin layer that builds a
+//! request body.
 //!
 //! The vocabulary is deliberately not a provider's. A `ModelRequest` is a
-//! cacheable prefix, an instruction, and a ceiling; how that becomes a
-//! chat-completions call is `openrouter`'s business.
+//! cacheable prefix, an instruction, and a ceiling; how that becomes a Messages
+//! API call is `bedrock`'s business.
 
+pub mod bedrock;
 pub mod breaker;
 pub mod disabled;
-pub mod openrouter;
 
 use std::pin::Pin;
 use std::sync::Arc;
@@ -21,10 +21,9 @@ use std::time::Duration;
 
 use tokio_stream::Stream;
 
+use self::bedrock::BedrockClient;
 use self::breaker::GuardedModelClient;
 use self::disabled::DisabledModelClient;
-use self::openrouter::OpenRouterClient;
-use crate::config::Config;
 
 /// Text arriving a piece at a time, in order.
 ///
@@ -155,40 +154,40 @@ fn millis(duration: Duration) -> u64 {
 ///
 /// Two outcomes, and both are normal:
 ///
-/// - **A key is configured** — `OpenRouter`, behind the circuit breaker.
-/// - **No key** — [`DisabledModelClient`], which is not a degraded mode so much
-///   as the app's offline-first promise applied at boot: every RPC still
+/// - **AWS credentials resolve** — Bedrock, behind the circuit breaker. On the
+///   box those credentials are the instance profile, reached over the metadata
+///   endpoint; on a developer's machine they are whatever `AWS_PROFILE` names.
+/// - **They do not** — [`DisabledModelClient`], which is not a degraded mode so
+///   much as the app's offline-first promise applied at boot: every RPC still
 ///   answers, from the rules, flagged `FALLBACK`. That is what lets a fresh
-///   clone run `mise run dev` and the integration tests run in CI with no
-///   secret at all.
+///   clone run `mise run dev` and the integration tests run in CI with no AWS
+///   identity at all.
+///
+/// Takes no configuration because there is none to take — region and model are
+/// constants, and the credentials are found rather than supplied. It is async
+/// only because finding them is.
 ///
 /// One log line either way, because "the assistant is quiet today" is otherwise
-/// indistinguishable from "the key is missing" from outside the process.
-pub fn from_config(config: &Config) -> Arc<dyn ModelClient> {
-    let Some(key) = config.openrouter_api_key.as_deref() else {
-        tracing::info!(
-            feature = "assistant",
-            "OPENROUTER_API_KEY is not set — answering from the rule-based fallback"
-        );
-        return Arc::new(DisabledModelClient);
-    };
-
-    let client = match OpenRouterClient::new(key) {
-        Ok(client) => client,
+/// indistinguishable from "this machine cannot sign for Bedrock" from outside
+/// the process.
+pub async fn install() -> Arc<dyn ModelClient> {
+    match BedrockClient::connect().await {
+        Ok(client) => {
+            tracing::info!(
+                feature = "assistant",
+                model = crate::config::BEDROCK_MODEL_ID,
+                region = crate::config::BEDROCK_REGION,
+                "the assistant is live"
+            );
+            Arc::new(GuardedModelClient::new(Arc::new(client)))
+        }
         Err(error) => {
-            tracing::error!(
+            tracing::info!(
                 feature = "assistant",
                 %error,
-                "the HTTP client could not be built — answering from the rule-based fallback"
+                "the assistant cannot reach Bedrock — answering from the rule-based fallback"
             );
-            return Arc::new(DisabledModelClient);
+            Arc::new(DisabledModelClient)
         }
-    };
-
-    tracing::info!(
-        feature = "assistant",
-        model = crate::config::OPENROUTER_MODEL_ID,
-        "the assistant is live"
-    );
-    Arc::new(GuardedModelClient::new(Arc::new(client)))
+    }
 }

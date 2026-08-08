@@ -337,9 +337,6 @@ pub fn build_app_with(
         // Nothing downstream of `AppState` looks at it.
         database_url: String::new(),
         port: 0,
-        // Never read: the model client is supplied directly, so no test can
-        // reach a provider even on a machine where the key is exported.
-        openrouter_api_key: None,
     };
 
     api::build_app(AppState::new(pool, config, assistant, entitlement, account))
