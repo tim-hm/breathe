@@ -6,21 +6,24 @@ import Testing
 
 /// The identity seam, driven through the protocol rather than the Keychain.
 ///
-/// `KeychainUserIdentityStore` itself is deliberately not exercised here: these
-/// tests run on the host through `swift test`, where reaching the real Keychain
-/// means an unsigned process writing to the developer's login keychain. The
-/// protocol exists so everything above it is testable without that, and this is
-/// the half worth pinning — a header that goes missing is invisible until a
-/// scoped RPC fails in the app.
+/// What a store does with an id — minting one, and swapping it on a sign-in —
+/// is `MintedIdentityTests` and `ProvisionedIdentityTests`. This is the half
+/// above the protocol, and it is worth pinning on its own because a header that
+/// goes missing is invisible until a scoped RPC fails in the app.
 @Suite("Anonymous identity")
 struct UserIdentityTests {
-    /// Mints once and remembers, which is the only behaviour anything above the
-    /// protocol depends on.
+    /// Answers with whatever it was handed, which is the only behaviour the
+    /// interceptor depends on. Swapping is not part of that: what a store does
+    /// with one is tested where the swap lives.
     private struct FakeIdentityStore: UserIdentityStore {
         let stored: UUID?
 
         func userId() -> UUID? {
             stored
+        }
+
+        func adopt(_: UUID) -> Bool {
+            false
         }
     }
 

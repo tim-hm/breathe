@@ -45,7 +45,7 @@ public final class WatchHandoffInbox {
     /// Everything here is idempotent: the phone re-sends on every foreground, so
     /// the overwhelmingly common call is one that changes nothing.
     public func adopt(_ handoff: WatchHandoff) {
-        if identity.provision(handoff.userId) {
+        if identity.adopt(handoff.userId) {
             Self.logger.notice("adopted the phone's identity")
         }
         userId = identity.userId()

@@ -22,6 +22,7 @@ final class FakeStorage: IdentityStorage {
         var id: UUID?
         var reads = 0
         var writes = 0
+        var inserts = 0
     }
 
     private let state = OSAllocatedUnfairLock(initialState: State())
@@ -38,9 +39,24 @@ final class FakeStorage: IdentityStorage {
         state.withLock { $0.writes }
     }
 
+    /// Counted apart from `writes`, because minting and replacing are the two
+    /// things a test about identity most needs to tell apart: one invents a
+    /// person and the other follows one.
+    var inserts: Int {
+        state.withLock { $0.inserts }
+    }
+
     func read() -> UUID? {
         state.withLock {
             $0.reads += 1
+            return $0.id
+        }
+    }
+
+    func insert(_ id: UUID) -> UUID? {
+        state.withLock {
+            $0.inserts += 1
+            $0.id = $0.id ?? id
             return $0.id
         }
     }
@@ -85,7 +101,7 @@ struct ProvisionedIdentityTests {
         let store = ProvisionedUserIdentityStore(storage: FakeStorage())
         let id = UUID()
 
-        #expect(store.provision(id))
+        #expect(store.adopt(id))
         #expect(store.userId() == id)
     }
 
@@ -97,7 +113,7 @@ struct ProvisionedIdentityTests {
         let storage = FakeStorage(holding: id)
         let store = ProvisionedUserIdentityStore(storage: storage)
 
-        #expect(store.provision(id) == false)
+        #expect(store.adopt(id) == false)
         #expect(storage.writes == 0)
     }
 
@@ -110,7 +126,7 @@ struct ProvisionedIdentityTests {
         let store = ProvisionedUserIdentityStore(storage: storage)
         let replacement = UUID()
 
-        #expect(store.provision(replacement))
+        #expect(store.adopt(replacement))
         #expect(store.userId() == replacement)
         #expect(storage.read() == replacement)
     }

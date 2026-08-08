@@ -1,20 +1,6 @@
 import Foundation
 import os
 
-/// Somewhere a handed-over identity is written and read back.
-///
-/// A seam rather than the Keychain directly, so the rule below it — this store
-/// never mints — can be pinned by a test that runs on the host, where reaching
-/// the real Keychain means an unsigned process writing to a developer's login
-/// keychain.
-protocol IdentityStorage: Sendable {
-    func read() -> UUID?
-    /// - Returns: whether the store now holds `id`.
-    func replace(with id: UUID) -> Bool
-}
-
-extension KeychainIdentityItem: IdentityStorage {}
-
 /// The identity on a device that is given one rather than making one up: the
 /// watch, which receives the phone's anonymous id over WatchConnectivity.
 ///
@@ -83,16 +69,23 @@ public final class ProvisionedUserIdentityStore: UserIdentityStore {
     ///
     /// An id that differs from the stored one replaces it, because the phone is
     /// the authority on who this person is — someone who reinstalled the phone
-    /// app arrives with a new id, and a watch that kept the old one would go on
+    /// app, or signed in and had their anonymous identity merged into an older
+    /// one, arrives with a new id, and a watch that kept the old one would go on
     /// syncing to an identity nothing else writes to. Sessions already on the
     /// wrist and not yet acknowledged go up under the new id, which is where the
     /// person's history now lives.
+    ///
+    /// A failed write leaves the identity alone, which is where this parts
+    /// company with the minting store: the phone re-sends its context on every
+    /// foreground, so a wrist that missed one is told again shortly, and staying
+    /// on the last id it could actually store is better than answering with one
+    /// the next launch will not remember.
     ///
     /// - Returns: whether this changed the stored identity — the signal to kick
     ///   a sync, and nothing to do on the every-launch case where the phone
     ///   re-sends the id the watch already holds.
     @discardableResult
-    public func provision(_ id: UUID) -> Bool {
+    public func adopt(_ id: UUID) -> Bool {
         guard userId() != id else { return false }
 
         guard storage.replace(with: id) else {
