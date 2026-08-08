@@ -22,10 +22,13 @@ struct SessionSummaryView: View {
                     .font(.largeTitle.weight(.medium))
                 // Only a completed session gets a second line — the headline
                 // already says everything an ended one needs to hear.
+                //
+                // Primary ink, like everything else on `accentGround(_:)`: the
+                // secondary step measures 3.26:1 against the wash and this line
+                // is `.body`, so it gets no large-text allowance.
                 if record.completed {
                     Text("That's \(technique.name) done.")
                         .font(.body)
-                        .foregroundStyle(Theme.Ink.secondary)
                         .multilineTextAlignment(.center)
                 }
             }

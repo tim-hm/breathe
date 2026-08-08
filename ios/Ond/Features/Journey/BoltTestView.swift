@@ -106,7 +106,7 @@ struct BoltTestView: View {
         TimelineView(.periodic(from: since, by: 1)) { context in
             VStack(spacing: Theme.Spacing.standard) {
                 Text("\(elapsed(from: since, to: context.date))")
-                    .font(.system(size: 72, weight: .light).monospacedDigit())
+                    .displayNumeral(size: 72)
                     .contentTransition(.numericText())
                     .foregroundStyle(Theme.Accent.attend)
 
@@ -122,7 +122,7 @@ struct BoltTestView: View {
     private func result(seconds: Int, isPersonalBest: Bool) -> some View {
         VStack(spacing: Theme.Spacing.standard) {
             Text("\(seconds)s")
-                .font(.system(size: 72, weight: .light).monospacedDigit())
+                .displayNumeral(size: 72)
                 .foregroundStyle(Theme.Accent.attend)
 
             Text(isPersonalBest ? "Your best yet." : "Recorded.")
