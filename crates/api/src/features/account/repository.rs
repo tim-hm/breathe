@@ -165,6 +165,13 @@ async fn claim(
 ///   because `ON CONFLICT` belongs to `INSERT` and this is an `UPDATE`; the rows
 ///   it skips are left on `from` and go with the `ON DELETE CASCADE` below, which
 ///   is the same outcome by a shorter route than deleting them here.
+/// - **`user_techniques`** reparent outright, with no guard. Their ids are
+///   server-minted rather than client-minted, so two rows can never be one
+///   record that arrived twice — and an exercise somebody wrote is the one thing
+///   here that exists nowhere else, so there is nothing to reconstruct if it
+///   goes. This can leave `into` holding more than `MAX_TECHNIQUES`, which is
+///   deliberate: that ceiling gates composing another, and enforcing it here
+///   would mean deleting somebody's work to make a number true.
 /// - **`assistant_usage`** sums on a shared date. It is a spend limit, counted
 ///   per person per UTC day, so keeping `into`'s count would let signing in
 ///   launder whatever `from` had already spent — the same fan-out
@@ -249,6 +256,14 @@ async fn merge(
                WHERE held.user_id = $2
                  AND held.client_score_id = moving.client_score_id
             )",
+        from.0,
+        into
+    )
+    .execute(&mut **tx)
+    .await?;
+
+    sqlx::query!(
+        "UPDATE user_techniques SET user_id = $2 WHERE user_id = $1",
         from.0,
         into
     )

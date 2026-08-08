@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO user_techniques (user_id, name, goal, rounds)\n         VALUES ($1, $2, 'CALM', 1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "82103f8ae1186c2dabd91ea0c22122e561c7c49e1725766726f927f349033ec1"
+}
