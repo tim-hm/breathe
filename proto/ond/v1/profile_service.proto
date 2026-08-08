@@ -128,6 +128,19 @@ enum Gender {
 // Bands by birth decade rather than by age, so a person's band never changes
 // under them and no stored value silently means something different a year
 // later. UNSPECIFIED is a real state: nobody has to answer, and most will not.
+//
+// The youngest band is a published claim, not just a value. It sets the
+// youngest person önd admits to knowingly holding data about, and three things
+// have to carry the same answer: this band, the children's paragraph in
+// web/privacy.html, and the age questions on the App Store Connect
+// questionnaire. App Review reads all three, so moving one without the other
+// two is a rejection.
+//
+// Note which way each band ages. A closed decade only gets older, so once it
+// agrees with the policy it keeps agreeing. BORN_2010_OR_LATER is open
+// downwards and admits a newborn in any year, so it is the only band that can
+// fall out of agreement with nobody having touched it — and no renaming closes
+// it, only removal does.
 enum BirthYearBand {
   BIRTH_YEAR_BAND_UNSPECIFIED = 0;
 
