@@ -1,4 +1,4 @@
-# Formatting, linting, and the one drift check that needs no database — the fast
+# Formatting, linting, and the drift checks that need no database — the fast
 # slice of the gate. Tests, the SQLx cache check, and the generated-Swift drift
 # check stay local (`mise run check`) until CI grows a database and BSR access.
 name: checks
@@ -17,12 +17,14 @@ jobs:
           # check:proto's breaking-change check diffs against `main`'s history,
           # which a shallow clone doesn't carry.
           fetch-depth: 0
-      # A pull_request checkout is a detached HEAD with no local `main`, and
-      # check:proto deliberately fails closed when `main` doesn't resolve.
+      # A pull_request checkout is a detached HEAD with no local `main`, and both
+      # check:proto and check:migrations deliberately fail closed when `main`
+      # doesn't resolve.
       - run: git rev-parse --verify --quiet main || git fetch origin main:main
       - uses: jdx/mise-action@v2
       - run: mise run check:rs
       - run: mise run check:proto
+      - run: mise run check:migrations
       - run: mise run check:text
       - run: mise run check:md
       - run: mise run check:doc-links
