@@ -17,6 +17,11 @@ import SwiftUI
 /// at all. Settings is where everybody looks for "what am I paying for", so
 /// this row now names the tier unconditionally and opens the paywall to
 /// change it.
+///
+/// The two legal links below it repeat the paywall's pair on purpose. App
+/// Review expects both reachable outside a purchase flow, and somebody
+/// deciding whether to trust the app with their breathing history should not
+/// have to open an offer to read what is collected.
 struct SettingsView: View {
     let catalogue: TechniqueListModel
 
@@ -124,6 +129,12 @@ struct SettingsView: View {
                     }
                     .tint(Theme.Accent.brand)
                 }
+            }
+            .listRowBackground(Theme.Surface.raised)
+
+            Section {
+                Link("Privacy", destination: LegalLinks.privacyPolicy)
+                Link("Terms", destination: LegalLinks.termsOfUse)
             }
             .listRowBackground(Theme.Surface.raised)
         }
