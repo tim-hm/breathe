@@ -20,4 +20,5 @@ mod health;
 mod journey;
 mod profile;
 mod technique;
+mod throttle;
 mod user_technique;
