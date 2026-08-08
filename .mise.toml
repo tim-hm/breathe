@@ -264,7 +264,7 @@ description = "Full validation (the gate)"
 # The Rust tasks share one cargo artifact lock, so running them concurrently just
 # stalls on "Blocking waiting for file lock" — they are serialised in `run` while
 # everything genuinely independent fans out through `depends`.
-depends = ["check:proto", "check:generated", "check:text", "check:md", "check:doc-links", "check:deps"]
+depends = ["check:proto", "check:migrations", "check:generated", "check:text", "check:md", "check:doc-links", "check:deps"]
 run = ["mise run check:rs", "mise run check:sqlx", "mise run test:rs", "mise run test:e2e"]
 
 [tasks."check:rs"]
@@ -276,6 +276,85 @@ run = ["cargo fmt -- --check", "cargo clippy --workspace --all-targets -- -D war
 description = "Assert the committed .sqlx cache matches the queries in the tree"
 env = { CARGO_TARGET_DIR = "{{env.CHECK_TARGET_DIR}}" }
 run = "cargo sqlx prepare --workspace --check -- --all-targets"
+
+[tasks."check:migrations"]
+description = "Assert no migration that has landed on main has been edited, renumbered, or reordered"
+dir = "{{config_root}}"
+# `sqlx::migrate!` checksums every migration and stores the checksum on each
+# database that ran it, so editing an applied file — a comment is enough — fails
+# `mise run migrate` against every database that already has it, production
+# included. A fresh database has no stored checksum to disagree with, so the
+# whole gate and every e2e run (each on a disposable `ond_test_<name>`) pass; the
+# first thing to notice is the deploy's `migrate` container, after the image is
+# already on the box.
+#
+# Git is the manifest, rather than the committed checksum file the obvious
+# design would add. A manifest regenerated beside the edit that broke it is a
+# speed bump; "landed upstream" is the property that actually matters — a
+# migration on the remote's main is one production has run — and git already
+# records it, keeps no artefact in step, and needs no database, which is what
+# lets this run in the environment the gate runs in: a fresh clone.
+#
+# `origin/main` before `main` because in a GitButler workspace the local `main`
+# is not kept in step — it currently trails the remote by dozens of PRs, and a
+# stale baseline would quietly unfreeze migrations that have long since shipped.
+# Neither resolving is a failure rather than a skip, for check:proto's reason: a
+# skip-on-missing branch also skips on the detached-HEAD CI checkout and the
+# shallow clone, which are exactly where an unreviewed edit slips through.
+run = '''
+dir=crates/migrate/migrations
+
+if git rev-parse --verify --quiet origin/main >/dev/null; then
+  landed=origin/main
+elif git rev-parse --verify --quiet main >/dev/null; then
+  landed=main
+else
+  echo 'check:migrations: cannot resolve `origin/main` or `main`, refusing to skip the check' >&2
+  exit 1
+fi
+
+applied=$(git ls-tree --name-only "$landed" -- "$dir/" | grep '\.sql$' | LC_ALL=C sort)
+if [ -z "$applied" ]; then
+  echo "check:migrations: $landed carries no migrations, which cannot be right" >&2
+  exit 1
+fi
+
+if ! git diff --quiet "$landed" -- $applied; then
+  echo "check:migrations: a migration already applied on $landed has changed:" >&2
+  git diff --name-status "$landed" -- $applied | sed 's/^/  /' >&2
+  echo 'sqlx checksums every applied migration, so editing one — a comment included — breaks' >&2
+  echo '`mise run migrate` against every database that has run it, production among them.' >&2
+  echo 'Restore the file and put the change in a new migration.' >&2
+  exit 1
+fi
+
+present=$(printf '%s\n' "$dir"/*.sql | LC_ALL=C sort)
+
+misnamed=$(printf '%s\n' "$present" | grep -Ev "^$dir/[0-9]{4}_[a-z0-9_]+\.sql$" || true)
+if [ -n "$misnamed" ]; then
+  echo 'check:migrations: every migration must be named `NNNN_lower_snake_case.sql`:' >&2
+  printf '  %s\n' $misnamed >&2
+  echo 'The four zero-padded digits are what make filename order equal the order sqlx applies them in.' >&2
+  exit 1
+fi
+
+# Sound only because of the naming check above: with a uniform four-digit prefix,
+# comparing filenames is comparing the versions sqlx sorts on.
+highest=$(printf '%s\n' "$applied" | tail -n 1)
+for file in $present; do
+  if [ "$file" \> "$highest" ]; then
+    continue
+  fi
+  if printf '%s\n' "$applied" | grep -Fxq "$file"; then
+    continue
+  fi
+  echo "check:migrations: $file sorts at or below ${highest##*/}, which $landed has already applied." >&2
+  echo 'A new migration has to sort after every landed one. Slotting one in below the high-water mark' >&2
+  echo 'changes the order sqlx applies them in, and a database that has already run the landed set can' >&2
+  echo 'never reproduce that order.' >&2
+  exit 1
+done
+'''
 
 [tasks."check:proto"]
 description = "Lint the protobuf contract and check it for breaking changes against main"
