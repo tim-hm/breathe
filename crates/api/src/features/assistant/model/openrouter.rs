@@ -6,10 +6,11 @@
 //! `config.rs`.
 //!
 //! `OpenAI`-shaped request and response, which is what `OpenRouter` serves for
-//! every model it routes to. The one provider-specific detail is
-//! `cache_control`, which `OpenRouter` forwards to Anthropic models: it marks the
-//! end of the prefix that should be cached, and it is why `ModelRequest` splits
-//! the prompt in two rather than handing over one string.
+//! every model it routes to. Two fields are not part of that shape:
+//! `cache_control`, which `OpenRouter` forwards to Anthropic models to mark the
+//! end of the prefix that should be cached — and it is why `ModelRequest` splits
+//! the prompt in two rather than handing over one string — and `provider`, which
+//! `OpenRouter` reads itself to choose what it routes to.
 
 use std::time::{Duration, Instant};
 
@@ -86,67 +87,18 @@ impl OpenRouterClient {
     /// Sends one chat-completions request.
     ///
     /// Shared by both trait methods because they differ only in `stream` and in
-    /// what they do with the body — and because the auth headers, the model id,
-    /// and the cache boundary must not be able to drift apart between the two.
+    /// what they do with the body — and because the auth headers and the body
+    /// itself must not be able to drift apart between the two.
     async fn post(
         &self,
         request: &ModelRequest,
         streaming: bool,
     ) -> Result<reqwest::Response, ModelError> {
-        let mut messages = vec![
-            Message {
-                role: "system",
-                content: vec![Part {
-                    kind: "text",
-                    text: &request.cacheable_prefix,
-                    // Marks everything up to here as the cacheable prefix.
-                    // On an Anthropic model OpenRouter passes this through
-                    // verbatim; a provider that does not understand it
-                    // ignores the field, so this is safe on every route.
-                    cache_control: Some(CacheControl { kind: "ephemeral" }),
-                }],
-            },
-            Message {
-                role: "user",
-                content: vec![Part {
-                    kind: "text",
-                    text: &request.instruction,
-                    cache_control: None,
-                }],
-            },
-        ];
-
-        // The conversation as genuinely attributed speech: each turn is its
-        // own user or assistant message, never a transcript serialised into
-        // the instruction. A provider treats an assistant message as words the
-        // model already said, which is what makes an instruction smuggled into
-        // one land as somebody's speech rather than as the caller's authority.
-        // Consecutive same-role messages are legal on this endpoint, so the
-        // instruction message above and a leading person turn need no glue.
-        messages.extend(request.turns.iter().map(|turn| Message {
-            role: match turn.role {
-                ChatRole::Person => "user",
-                ChatRole::Coach => "assistant",
-            },
-            content: vec![Part {
-                kind: "text",
-                text: &turn.text,
-                cache_control: None,
-            }],
-        }));
-
-        let body = ChatRequest {
-            model: config::OPENROUTER_MODEL_ID,
-            max_tokens: request.max_tokens,
-            stream: streaming,
-            messages,
-        };
-
         let mut call = self
             .http
             .post(&self.endpoint)
             .bearer_auth(&self.api_key)
-            .json(&body);
+            .json(&chat_request(request, streaming));
         if !streaming {
             call = call.timeout(REQUEST_TIMEOUT);
         }
@@ -392,12 +344,102 @@ fn parse_event(line: &str) -> Event {
         .map_or(Event::Ignored, Event::Text)
 }
 
+/// Builds the body for one call, borrowing the prompt rather than copying it.
+///
+/// A function rather than inline in [`OpenRouterClient::post`] so that a test
+/// can pin the JSON the send actually puts on the wire. Asserting on a body
+/// assembled by the test instead would pass happily while production sent
+/// something else.
+fn chat_request(request: &ModelRequest, streaming: bool) -> ChatRequest<'_> {
+    let mut messages = vec![
+        Message {
+            role: "system",
+            content: vec![Part {
+                kind: "text",
+                text: &request.cacheable_prefix,
+                // Marks everything up to here as the cacheable prefix.
+                // On an Anthropic model OpenRouter passes this through
+                // verbatim; a provider that does not understand it
+                // ignores the field, so this is safe on every route.
+                cache_control: Some(CacheControl { kind: "ephemeral" }),
+            }],
+        },
+        Message {
+            role: "user",
+            content: vec![Part {
+                kind: "text",
+                text: &request.instruction,
+                cache_control: None,
+            }],
+        },
+    ];
+
+    // The conversation as genuinely attributed speech: each turn is its own
+    // user or assistant message, never a transcript serialised into the
+    // instruction. A provider treats an assistant message as words the model
+    // already said, which is what makes an instruction smuggled into one land
+    // as somebody's speech rather than as the caller's authority. Consecutive
+    // same-role messages are legal on this endpoint, so the instruction message
+    // above and a leading person turn need no glue.
+    messages.extend(request.turns.iter().map(|turn| Message {
+        role: match turn.role {
+            ChatRole::Person => "user",
+            ChatRole::Coach => "assistant",
+        },
+        content: vec![Part {
+            kind: "text",
+            text: &turn.text,
+            cache_control: None,
+        }],
+    }));
+
+    ChatRequest {
+        model: config::OPENROUTER_MODEL_ID,
+        max_tokens: request.max_tokens,
+        stream: streaming,
+        provider: DATA_POLICY,
+        messages,
+    }
+}
+
 #[derive(Serialize)]
 struct ChatRequest<'a> {
     model: &'static str,
     max_tokens: i32,
     stream: bool,
+    provider: DataPolicy,
     messages: Vec<Message<'a>>,
+}
+
+/// The policy every call carries. A constant rather than a parameter: there is
+/// no call this app makes that should permit either.
+const DATA_POLICY: DataPolicy = DataPolicy {
+    data_collection: "deny",
+    zdr: true,
+};
+
+/// Denies the two things that would otherwise happen to what a person types
+/// here: being trained on, and being kept.
+///
+/// Sent per request because the alternative is the account default, which lives
+/// in a console this code cannot read and can be changed without anything here
+/// noticing. A request narrows what the account permits and never widens it, so
+/// sending this costs nothing when the account already denies both and is the
+/// whole protection when it does not.
+///
+/// `OpenRouter` names these `provider.data_collection` and `provider.zdr` in its
+/// provider-routing documentation as of 2026-08-08 — recorded because a policy
+/// serialised under a field the API has since renamed is silently no policy at
+/// all, and only the name it had on the day tells the next reader that.
+///
+/// Both narrow routing to the endpoints that qualify, so a model with none has
+/// nowhere left to go. `GET /api/v1/endpoints/zdr` lists them, and needs no key.
+#[derive(Serialize)]
+struct DataPolicy {
+    /// `"deny"`: no provider that collects what is sent, or trains on it.
+    data_collection: &'static str,
+    /// Zero data retention — nothing kept at rest once the call is answered.
+    zdr: bool,
 }
 
 #[derive(Serialize)]
@@ -537,6 +579,32 @@ struct Delta {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Dropped, renamed, or set on one path only, the policy fails open: the
+    /// call simply runs under whatever the account default happens to be, and
+    /// nothing about that is visible from here. Pinned on the serialised body
+    /// because the JSON is what `OpenRouter` reads, and on both paths because
+    /// the streaming one differs from the other by a single flag.
+    #[test]
+    fn every_request_denies_training_and_retention() {
+        let request = ModelRequest {
+            cacheable_prefix: "the catalogue".to_owned(),
+            instruction: "a profile".to_owned(),
+            turns: vec![],
+            max_tokens: 64,
+        };
+
+        for streaming in [false, true] {
+            let body = serde_json::to_value(chat_request(&request, streaming))
+                .expect("the request body serialises");
+
+            assert_eq!(
+                body["provider"],
+                serde_json::json!({ "data_collection": "deny", "zdr": true }),
+                "the provider policy as sent with stream={streaming}"
+            );
+        }
+    }
 
     /// The three shapes every stream carries, and the one that must not be
     /// mistaken for text: `[DONE]` decodes as JSON never, and a frame with no
