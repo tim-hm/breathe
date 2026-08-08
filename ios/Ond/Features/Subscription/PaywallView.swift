@@ -189,6 +189,18 @@ struct PaywallView: View {
                     .multilineTextAlignment(.center)
             }
 
+            // The one purchase failure worth a line on screen, because it is the
+            // one a person cannot read from the button: nothing happened, and
+            // trying again will not change that. Says what it cost rather than
+            // why it failed — the cause is the developer's, and the log carries
+            // it.
+            if store.isUnavailable {
+                Text("These aren't on sale right now. Nothing was charged.")
+                    .font(.footnote)
+                    .foregroundStyle(Theme.Ink.secondary)
+                    .multilineTextAlignment(.center)
+            }
+
             Text("Renews monthly. Cancel any time in Settings.")
                 .font(.caption)
                 .foregroundStyle(Theme.Ink.tertiary)

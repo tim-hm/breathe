@@ -542,10 +542,44 @@ dir = "{{config_root}}/ios"
 # looked at, and naming one here would tie the task to the machine that wrote it.
 # The product directory is asked of xcodebuild rather than assumed, because
 # DerivedData's path is a hash of the project's location.
+#
+# The StoreKit step is the difference between this task and Xcode's Run action.
+# `storeKitConfiguration` in ios/project.yml is a property of the *scheme*, and a
+# scheme is something only Xcode runs — `simctl launch` knows nothing about one,
+# so without this the app resolves no products, every purchase fails as
+# `productUnavailable`, and the catalogue stays locked however many times
+# somebody presses Get. Xcode does the same copy under the name "StoreKit
+# Configuration sync"; the destination is storekitd's own container, keyed by
+# bundle id, which is why the group is looked up by identifier rather than by a
+# path holding a per-simulator UUID. Fails loudly if the container is not where
+# it was, because the whole point of the step is that its absence was silent.
 run = '''
   products=$(xcodebuild -project Ond.xcodeproj -scheme Ond \
     -destination 'generic/platform=iOS Simulator' -showBuildSettings 2>/dev/null \
     | awk -F' = ' '/ BUILT_PRODUCTS_DIR /{print $2; exit}')
+
+  data=$(xcrun simctl getenv booted SIMULATOR_SHARED_RESOURCES_DIRECTORY)
+  group=""
+  for candidate in "$data"/Containers/Shared/AppGroup/*/; do
+    identifier=$(plutil -extract MCMMetadataIdentifier raw -o - \
+      "$candidate/.com.apple.mobile_container_manager.metadata.plist" 2>/dev/null)
+    if [ "$identifier" = "group.com.apple.storekit" ]; then
+      group=$candidate
+      break
+    fi
+  done
+  if [ -z "$group" ]; then
+    echo "no group.com.apple.storekit container on the booted simulator" >&2
+    exit 1
+  fi
+
+  configuration="$group/Documents/Persistence/Octane/xyz.holmie.ond"
+  mkdir -p "$configuration"
+  cp Ond/Ond.storekit "$configuration/Configuration.storekit"
+  # storekitd holds the configuration it read at launch, so a first sync or a
+  # changed price reaches the app only after it re-reads this file.
+  xcrun simctl spawn booted launchctl kickstart -k system/com.apple.storekitd >/dev/null 2>&1
+
   xcrun simctl install booted "$products/Ond.app"
   xcrun simctl launch booted xyz.holmie.ond
 '''

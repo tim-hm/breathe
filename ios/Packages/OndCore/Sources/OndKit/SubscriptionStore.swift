@@ -66,6 +66,17 @@ public final class SubscriptionStore {
         /// back to `idle` — the buttons come back to life while somebody else
         /// decides.
         case awaitingApproval
+        /// The App Store had no product to sell under the ids this build asks
+        /// for, so there was nothing to buy and nothing was charged.
+        ///
+        /// Kept apart from the other failures because it is the one that is
+        /// never the person's doing and never clears itself: on a device it
+        /// means the product is not approved in App Store Connect yet, and in
+        /// the simulator it means the run never got the `StoreKit`
+        /// configuration — which only Xcode's Run action and `mise run ios:sim`
+        /// supply. Folded into the silent branch below, it presented as a
+        /// button that did nothing, twice, and cost a debugging session.
+        case unavailable
     }
 
     public private(set) var purchaseState: PurchaseState = .idle
@@ -82,6 +93,12 @@ public final class SubscriptionStore {
     /// looking as though the button did nothing.
     public var isAwaitingApproval: Bool {
         purchaseState == .awaitingApproval
+    }
+
+    /// Whether this build has anything to sell, so the paywall can say that
+    /// nothing was charged rather than leaving a pressed button unexplained.
+    public var isUnavailable: Bool {
+        purchaseState == .unavailable
     }
 
     private let front: any StoreFront
@@ -195,9 +212,23 @@ public final class SubscriptionStore {
             case .cancelled:
                 purchaseState = .idle
             }
+        } catch StoreFrontError.productUnavailable {
+            purchaseState = .unavailable
+            // At `error`, unlike everything else this store logs: it is the one
+            // failure that stays broken until somebody changes something, and
+            // the pointer is what turns a dead button back into a minute's work.
+            Self.logger
+                .error(
+                    """
+                    nothing on sale: no product for \
+                    \(tier.productIdentifier ?? "-", privacy: .public). \
+                    In the simulator, launch through `mise run ios:sim` — a bare \
+                    `simctl launch` applies no StoreKit configuration.
+                    """
+                )
         } catch {
             purchaseState = .idle
-            // Not surfaced. Every failure here is either the person's own
+            // Not surfaced. What is left here is either the person's own
             // cancellation dressed differently or an App Store outage, and a
             // paywall that shows a technical error has already lost the sale it
             // was there for.
